@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>GPS Tracker</title>
+  <link rel="manifest" href="/manifest.json">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f23; color: #e0e0e0; min-height: 100vh; }
+    #map { position: absolute; top: 0; bottom: 0; left: 0; right: 320px; }
+    @media (max-width: 768px) {
+      #map { right: 0; bottom: 50%; }
+      .sidebar { top: 50%; width: 100%; }
+    }
+    .sidebar {
+      position: absolute; top: 0; right: 0; width: 320px; height: 100%;
+      background: #1a1a2e; padding: 20px; overflow-y: auto;
+      border-left: 1px solid #16213e;
+    }
+    .sidebar h1 {
+      font-size: 1.2rem; color: #e94560; margin-bottom: 5px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .sidebar .subtitle { font-size: 0.8rem; color: #888; margin-bottom: 14px; }
+
+    .live-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.5px;
+      padding: 5px 10px; border-radius: 20px; margin-bottom: 20px;
+      background: #16213e; color: #666; transition: all 0.3s;
+    }
+    .live-badge .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #666; transition: background 0.3s;
+    }
+    .live-badge.on { color: #4ecca3; }
+    .live-badge.on .dot { background: #4ecca3; box-shadow: 0 0 8px #4ecca3; animation: blink 1.6s ease-in-out infinite; }
+    .live-badge.off { color: #e94560; }
+    .live-badge.off .dot { background: #e94560; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    .status-card {
+      background: #16213e; border-radius: 12px; padding: 16px; margin-bottom: 16px;
+      border: 1px solid #0f3460;
+    }
+    .status-card .label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+    .status-card .value { font-size: 1.1rem; color: #fff; margin-top: 4px; font-weight: 600; }
+    .status-card .value.online { color: #4ecca3; }
+    .status-card .value.offline { color: #e94560; }
+    .status-card .last-seen { font-size: 0.7rem; color: #666; margin-top: 6px; }
+
+    .stats-row { display: flex; justify-content: space-between; margin-top: 14px; }
+    .stats-row .stat { text-align: center; flex: 1; }
+    .stats-row .stat .num { font-size: 1.15rem; color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stats-row .stat .lbl { font-size: 0.62rem; color: #888; text-transform: uppercase; margin-top: 2px; letter-spacing: 0.5px; }
+
+    .coord-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;
+    }
+    .coord-item { background: #16213e; border-radius: 8px; padding: 12px; }
+    .coord-item .label { font-size: 0.7rem; color: #888; text-transform: uppercase; }
+    .coord-item .value { font-size: 0.9rem; color: #fff; margin-top: 2px; font-family: monospace; }
+    .section-title { font-size: 0.85rem; color: #e94560; margin: 20px 0 10px; font-weight: 600; }
+    .device-list { margin-bottom: 16px; }
+    .device-item {
+      background: #16213e; border-radius: 8px; padding: 10px 12px; margin-bottom: 6px;
+      cursor: pointer; transition: background 0.2s; display: flex; justify-content: space-between; align-items: center;
+    }
+    .device-item:hover { background: #0f3460; }
+    .device-item.active { border-left: 3px solid #e94560; }
+    .device-item .name { font-size: 0.9rem; color: #fff; }
+    .device-item .time { font-size: 0.7rem; color: #666; }
+    .device-item .badge {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+    .badge.online { background: #4ecca3; }
+    .badge.offline { background: #e94560; }
+    .token-box {
+      background: #0f3460; border-radius: 8px; padding: 10px; margin-top: 10px; word-break: break-all;
+      font-family: monospace; font-size: 0.75rem; cursor: pointer; position: relative;
+    }
+    .token-box:hover { background: #1a3a6e; }
+    .token-box .copy-hint { position: absolute; top: 4px; right: 8px; font-size: 0.65rem; color: #888; }
+    .btn {
+      background: #e94560; color: #fff; border: none; padding: 10px 20px; border-radius: 8px;
+      font-size: 0.85rem; cursor: pointer; width: 100%; font-weight: 600; transition: background 0.2s;
+    }
+    .btn:hover { background: #d63851; }
+    .btn.secondary { background: #0f3460; margin-top: 8px; }
+    .btn.secondary:hover { background: #1a4266; }
+    .accuracy-bar {
+      height: 4px; background: #0f3460; border-radius: 2px; margin-top: 8px; overflow: hidden;
+    }
+    .accuracy-bar .fill {
+      height: 100%; border-radius: 2px; transition: width 0.5s;
+      background: linear-gradient(90deg, #4ecca3, #e9c46a, #e94560);
+    }
+    .empty-state { text-align: center; padding: 40px 20px; color: #666; }
+    .empty-state .icon { font-size: 2rem; margin-bottom: 10px; }
+
+    /* --- Live marker --- */
+    .device-marker { width: 46px; height: 46px; position: relative; }
+    .device-marker .radar {
+      position: absolute; inset: 0; margin: auto; width: 46px; height: 46px;
+      border-radius: 50%; background: rgba(233, 69, 96, 0.35);
+      animation: radar 2s ease-out infinite;
+    }
+    @keyframes radar {
+      0% { transform: scale(0.3); opacity: 0.9; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+    .device-marker .core {
+      position: absolute; top: 50%; left: 50%; width: 18px; height: 18px;
+      margin: -9px 0 0 -9px; border-radius: 50%; background: #e94560;
+      border: 3px solid #fff; box-shadow: 0 0 14px rgba(233, 69, 96, 0.9);
+      z-index: 2;
+    }
+    .device-marker .heading {
+      position: absolute; top: 50%; left: 50%; width: 0; height: 0;
+      margin-top: -26px; margin-left: -7px;
+      border-left: 7px solid transparent; border-right: 7px solid transparent;
+      border-bottom: 12px solid #e94560;
+      filter: drop-shadow(0 0 4px rgba(233, 69, 96, 0.9));
+      z-index: 1; transition: opacity 0.2s;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="sidebar" id="sidebar">
+    <h1>📍 GPS Tracker</h1>
+    <div class="subtitle">Rastreo en tiempo real</div>
+    <div class="live-badge off" id="live-badge">
+      <span class="dot"></span>
+      <span id="live-text">Conectando...</span>
+    </div>
+
+    <div id="no-device" class="empty-state">
+      <div class="icon">📱</div>
+      <p>No hay dispositivos registrados</p>
+      <button class="btn" onclick="registerDevice()">Registrar dispositivo</button>
+    </div>
+
+    <div id="device-section" style="display:none">
+      <div class="status-card">
+        <div class="label">Estado</div>
+        <div class="value offline" id="status-text">Esperando datos...</div>
+        <div class="accuracy-bar"><div class="fill" id="accuracy-fill" style="width:0%"></div></div>
+        <div class="last-seen" id="last-seen"></div>
+
+        <div class="stats-row">
+          <div class="stat">
+            <div class="num" id="speed-stat">--</div>
+            <div class="lbl">km/h</div>
+          </div>
+          <div class="stat">
+            <div class="num" id="distance-stat">--</div>
+            <div class="lbl">recorrido</div>
+          </div>
+          <div class="stat">
+            <div class="num" id="points-stat">--</div>
+            <div class="lbl">puntos</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="coord-grid">
+        <div class="coord-item">
+          <div class="label">Latitud</div>
+          <div class="value" id="lat-display">--</div>
+        </div>
+        <div class="coord-item">
+          <div class="label">Longitud</div>
+          <div class="value" id="lng-display">--</div>
+        </div>
+        <div class="coord-item">
+          <div class="label">Precisión</div>
+          <div class="value" id="accuracy-display">--</div>
+        </div>
+        <div class="coord-item">
+          <div class="label">Batería</div>
+          <div class="value" id="battery-display">--</div>
+        </div>
+      </div>
+
+      <div class="section-title">Dispositivos</div>
+      <div class="device-list" id="device-list"></div>
+
+      <div class="section-title">Token de acceso</div>
+      <div class="token-box" id="token-display" onclick="copyToken()">
+        <span id="token-text">---</span>
+        <span class="copy-hint">📋 copiar</span>
+      </div>
+
+      <button class="btn secondary" onclick="registerDevice()">+ Nuevo dispositivo</button>
+    </div>
+  </div>
+
+  <script>
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+      center: [-78.5, -0.2],
+      zoom: 14
+    });
+    map.addControl(new maplibregl.NavigationControl());
+
+    let marker = null;
+    let trailSource = null;
+    let currentDeviceId = parseInt(localStorage.getItem('deviceId')) || null;
+    let token = localStorage.getItem('deviceToken');
+    let lastFix = null;      // { lat, lng, timestamp } — last confirmed location
+    let lastSeenAt = null;   // Date of last update, for the ticking "hace Xs"
+    let animFrame = null;
+    let totalDistanceKm = 0;
+    let pointCount = 0;
+
+    async function api(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['X-Device-Token'] = token;
+      const res = await fetch(path, { ...options, headers });
+      return res.json();
+    }
+
+    // --- Realtime via Socket.IO (push instead of polling) ---
+    const socket = io();
+    const liveBadge = document.getElementById('live-badge');
+    const liveText = document.getElementById('live-text');
+
+    socket.on('connect', () => {
+      liveBadge.className = 'live-badge on';
+      liveText.textContent = 'En vivo';
+    });
+    socket.on('disconnect', () => {
+      liveBadge.className = 'live-badge off';
+      liveText.textContent = 'Desconectado';
+    });
+    socket.on('connect_error', () => {
+      liveBadge.className = 'live-badge off';
+      liveText.textContent = 'Sin conexión';
+    });
+    socket.on('new_location', payload => {
+      if (!currentDeviceId || payload.deviceId !== currentDeviceId) return;
+      applyLocation(payload.location, true);
+    });
+
+    async function registerDevice() {
+      const name = prompt('Nombre del dispositivo:', 'Mi Android');
+      if (!name) return;
+      const data = await api('/api/devices/register', {
+        method: 'POST', body: JSON.stringify({ name })
+      });
+      if (data.token) {
+        token = data.token;
+        localStorage.setItem('deviceToken', token);
+        currentDeviceId = data.id;
+        localStorage.setItem('deviceId', data.id);
+        showDeviceInfo();
+        fetchData();
+      }
+    }
+
+    async function selectDevice(id, t) {
+      currentDeviceId = id;
+      token = t;
+      localStorage.setItem('deviceToken', t);
+      localStorage.setItem('deviceId', id);
+      resetTrip();
+      showDeviceInfo();
+      fetchData();
+    }
+
+    function resetTrip() {
+      totalDistanceKm = 0;
+      pointCount = 0;
+      lastFix = null;
+    }
+
+    function showDeviceInfo() {
+      document.getElementById('no-device').style.display = 'none';
+      document.getElementById('device-section').style.display = 'block';
+    }
+
+    async function fetchData() {
+      const latest = await api('/api/location/latest');
+      const devices = await api('/api/devices');
+      updateDeviceList(devices);
+
+      if (!currentDeviceId && devices.length > 0) {
+        const match = devices.find(d => d.token === token);
+        if (match) { currentDeviceId = match.id; localStorage.setItem('deviceId', match.id); }
+      }
+
+      if (!latest || latest.error) {
+        document.getElementById('status-text').textContent = 'Sin datos';
+        document.getElementById('status-text').className = 'value offline';
+        return;
+      }
+
+      const history = await api('/api/location/history?limit=500');
+      if (Array.isArray(history) && history.length > 0) {
+        primeTripFromHistory(history);
+        updateTrail(history);
+      }
+      applyLocation(latest, false);
+    }
+
+    function primeTripFromHistory(history) {
+      const asc = history.slice().reverse();
+      totalDistanceKm = 0;
+      for (let i = 1; i < asc.length; i++) {
+        totalDistanceKm += haversineKm(asc[i - 1], asc[i]);
+      }
+      pointCount = asc.length;
+      lastFix = asc[asc.length - 1]
+        ? { lat: asc[asc.length - 1].latitude, lng: asc[asc.length - 1].longitude, timestamp: asc[asc.length - 1].timestamp }
+        : null;
+    }
+
+    function haversineKm(a, b) {
+      const R = 6371;
+      const toRad = d => (d * Math.PI) / 180;
+      const dLat = toRad(b.latitude - a.latitude);
+      const dLon = toRad(b.longitude - a.longitude);
+      const lat1 = toRad(a.latitude);
+      const lat2 = toRad(b.latitude);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    function computeBearing(lat1, lon1, lat2, lon2) {
+      const toRad = d => (d * Math.PI) / 180;
+      const toDeg = r => (r * 180) / Math.PI;
+      const dLon = toRad(lon2 - lon1);
+      const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+      const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+        Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+      return (toDeg(Math.atan2(y, x)) + 360) % 360;
+    }
+
+    // Applies a location update: refreshes stats, ticks the trip odometer,
+    // extends the trail and smoothly glides the marker to the new fix.
+    function applyLocation(loc, isRealtimePush) {
+      lastSeenAt = new Date();
+      updateCoords(loc);
+
+      let bearing = loc.bearing;
+      let speedKmh = loc.speed != null ? loc.speed * 3.6 : null;
+
+      if (lastFix) {
+        const distKm = haversineKm(
+          { latitude: lastFix.lat, longitude: lastFix.lng },
+          { latitude: loc.latitude, longitude: loc.longitude }
+        );
+        if (isRealtimePush) totalDistanceKm += distKm;
+
+        if (bearing == null && distKm > 0.001) {
+          bearing = computeBearing(lastFix.lat, lastFix.lng, loc.latitude, loc.longitude);
+        }
+        if (speedKmh == null && isRealtimePush) {
+          const dtHours = (new Date() - new Date(lastFix.timestamp + 'Z')) / 3.6e6;
+          if (dtHours > 0) speedKmh = distKm / dtHours;
+        }
+      }
+      if (isRealtimePush) pointCount++;
+
+      document.getElementById('speed-stat').textContent = speedKmh != null ? speedKmh.toFixed(0) : '--';
+      document.getElementById('distance-stat').textContent = totalDistanceKm >= 1
+        ? totalDistanceKm.toFixed(1) + 'km'
+        : Math.round(totalDistanceKm * 1000) + 'm';
+      document.getElementById('points-stat').textContent = pointCount || '--';
+
+      moveMarker(loc.latitude, loc.longitude, bearing);
+      if (isRealtimePush) extendTrail(loc.latitude, loc.longitude);
+
+      lastFix = { lat: loc.latitude, lng: loc.longitude, timestamp: loc.timestamp || new Date().toISOString() };
+    }
+
+    function updateCoords(loc) {
+      document.getElementById('status-text').textContent = 'En línea';
+      document.getElementById('status-text').className = 'value online';
+
+      document.getElementById('lat-display').textContent = loc.latitude.toFixed(6);
+      document.getElementById('lng-display').textContent = loc.longitude.toFixed(6);
+
+      const acc = loc.accuracy || 0;
+      const accText = acc < 1 ? '<1m' : acc.toFixed(0) + 'm';
+      document.getElementById('accuracy-display').textContent = accText;
+
+      const accPct = Math.min(100, (acc / 100) * 100);
+      document.getElementById('accuracy-fill').style.width = (100 - accPct) + '%';
+
+      const bat = loc.battery;
+      document.getElementById('battery-display').textContent =
+        bat != null ? Math.round(bat) + '%' : '--';
+    }
+
+    function createMarkerEl() {
+      const el = document.createElement('div');
+      el.className = 'device-marker';
+      el.innerHTML = `
+        <div class="radar"></div>
+        <div class="heading" id="marker-heading" style="opacity:0"></div>
+        <div class="core"></div>
+      `;
+      return el;
+    }
+
+    // Smoothly glides the marker (and map center) from its current spot to
+    // the new fix instead of snapping — this is what sells the "live" feel.
+    function moveMarker(lat, lng, bearing) {
+      const to = [lng, lat];
+
+      if (!marker) {
+        marker = new maplibregl.Marker({ element: createMarkerEl(), rotationAlignment: 'map' })
+          .setLngLat(to)
+          .addTo(map);
+        map.flyTo({ center: to, zoom: 15, duration: 1200 });
+        if (bearing != null) setMarkerHeading(bearing);
+        return;
+      }
+
+      if (bearing != null) setMarkerHeading(bearing);
+
+      const from = marker.getLngLat();
+      const fromArr = [from.lng, from.lat];
+      if (animFrame) cancelAnimationFrame(animFrame);
+
+      const duration = 900;
+      const start = performance.now();
+      const step = now => {
+        const t = Math.min(1, (now - start) / duration);
+        const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        const lng2 = fromArr[0] + (to[0] - fromArr[0]) * ease;
+        const lat2 = fromArr[1] + (to[1] - fromArr[1]) * ease;
+        marker.setLngLat([lng2, lat2]);
+        if (t < 1) {
+          animFrame = requestAnimationFrame(step);
+        } else {
+          animFrame = null;
+        }
+      };
+      animFrame = requestAnimationFrame(step);
+      map.easeTo({ center: to, duration });
+    }
+
+    function setMarkerHeading(bearing) {
+      const el = document.getElementById('marker-heading');
+      if (!el) return;
+      el.style.opacity = '1';
+      el.style.transform = `rotate(${bearing}deg)`;
+    }
+
+    function updateTrail(history) {
+      const coords = history.slice().reverse().map(l => [l.longitude, l.latitude]);
+      const geojson = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } };
+
+      if (trailSource) {
+        trailSource.setData(geojson);
+      } else if (map.isStyleLoaded()) {
+        addTrailLayers(geojson);
+      } else {
+        map.once('load', () => addTrailLayers(geojson));
+      }
+    }
+
+    function extendTrail(lat, lng) {
+      if (!trailSource) return;
+      const data = trailSource._data || trailSource.serialize().data;
+      const coords = (data.geometry.coordinates || []).concat([[lng, lat]]);
+      trailSource.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } });
+    }
+
+    function addTrailLayers(geojson) {
+      if (map.getSource('trail')) return;
+      map.addSource('trail', { type: 'geojson', data: geojson, lineMetrics: true });
+
+      // Soft glow underneath the main line for a "premium" look
+      map.addLayer({
+        id: 'trail-glow',
+        type: 'line',
+        source: 'trail',
+        paint: {
+          'line-color': '#e94560',
+          'line-width': 10,
+          'line-blur': 6,
+          'line-opacity': 0.25
+        }
+      });
+      map.addLayer({
+        id: 'trail-layer',
+        type: 'line',
+        source: 'trail',
+        paint: {
+          'line-gradient': [
+            'interpolate', ['linear'], ['line-progress'],
+            0, '#0f3460',
+            1, '#e94560'
+          ],
+          'line-width': 3.5,
+          'line-opacity': 0.9
+        }
+      });
+      trailSource = map.getSource('trail');
+    }
+
+    function updateDeviceList(devices) {
+      const el = document.getElementById('device-list');
+      el.innerHTML = devices.map(d => {
+        const isActive = d.token === token;
+        const time = d.latest ? formatTime(d.latest.timestamp) : '--';
+        const lat = d.latest ? d.latest.latitude.toFixed(4) : '--';
+        const lng = d.latest ? d.latest.longitude.toFixed(4) : '--';
+        return `
+          <div class="device-item ${isActive ? 'active' : ''}" onclick="selectDevice(${d.id}, '${d.token}')">
+            <div>
+              <div class="name">${d.name}</div>
+              <div style="font-size:0.7rem;color:#666">${lat}, ${lng}</div>
+            </div>
+            <div style="text-align:right">
+              <span class="badge ${d.latest ? 'online' : 'offline'}"></span>
+              <div class="time">${time}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function copyToken() {
+      const t = document.getElementById('token-text').textContent;
+      navigator.clipboard.writeText(t);
+      document.querySelector('.copy-hint').textContent = '✅ copiado';
+      setTimeout(() => { document.querySelector('.copy-hint').textContent = '📋 copiar'; }, 2000);
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts + 'Z');
+      const now = new Date();
+      const diff = (now - d) / 1000;
+      if (diff < 60) return 'ahora';
+      if (diff < 3600) return Math.floor(diff / 60) + 'min';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+      return d.toLocaleDateString();
+    }
+
+    function setTokenDisplay() {
+      if (token) {
+        document.getElementById('token-text').textContent = token;
+        document.getElementById('token-display').style.display = 'block';
+      }
+    }
+
+    // Ticking "última actualización hace Xs" independent of data fetches
+    setInterval(() => {
+      const el = document.getElementById('last-seen');
+      if (!lastSeenAt || !el) return;
+      const diff = Math.floor((new Date() - lastSeenAt) / 1000);
+      el.textContent = diff < 5 ? 'actualizado ahora' : `actualizado hace ${diff}s`;
+    }, 1000);
+
+    // Init
+    if (token) {
+      showDeviceInfo();
+      setTokenDisplay();
+      fetchData();
+      setInterval(fetchData, 20000); // resync de respaldo; el push en vivo va por socket.io
+    } else {
+      registerDevice();
+      setInterval(fetchData, 20000);
+    }
+  </script>
+</body>
+</html>
