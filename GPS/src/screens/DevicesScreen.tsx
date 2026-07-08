@@ -15,23 +15,10 @@ import Header from '../components/Header';
 import StatCard from '../components/StatCard';
 import StatusDot from '../components/StatusDot';
 import { colors, spacing, radius, shadows } from '../theme';
-
-interface Device {
-  id: number;
-  name: string;
-  token: string;
-  created_at: string;
-  latest?: {
-    latitude: number;
-    longitude: number;
-    timestamp: string;
-    battery?: number;
-    speed?: number;
-  };
-}
+import type { DeviceInfo } from '../api';
 
 interface DevicesScreenProps {
-  devices: Device[];
+  devices: DeviceInfo[];
   activeToken: string | null;
   onSelectDevice: (id: number, token: string) => void;
   onRegisterDevice: (name: string) => Promise<void>;

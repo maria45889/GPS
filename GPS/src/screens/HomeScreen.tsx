@@ -16,7 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 interface HomeScreenProps {
   checking: boolean;
   connected: boolean;
-  onConnect: () => void;
+  onConnect: (serverUrl: string) => void;
 }
 
 export default function HomeScreen({ checking, connected, onConnect }: HomeScreenProps) {
@@ -24,7 +24,7 @@ export default function HomeScreen({ checking, connected, onConnect }: HomeScree
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
-  const [serverUrl, setServerUrl] = useState('http://192.168.100.174:3000');
+  const [serverUrl, setServerUrl] = useState('http://10.19.45.68:3000');
   const [deviceName, setDeviceNameState] = useState('Mi Dispositivo');
   const [token, setTokenState] = useState('');
   const [showToken, setShowToken] = useState(false);
@@ -71,7 +71,7 @@ export default function HomeScreen({ checking, connected, onConnect }: HomeScree
       if (token) {
         await AsyncStorage.setItem('DEVICE_TOKEN', token);
       }
-      onConnect();
+      onConnect(serverUrl);
     } catch (e) {
       console.warn(e);
     }

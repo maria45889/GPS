@@ -79,6 +79,13 @@
     }
     .badge.online { background: #4ecca3; }
     .badge.offline { background: #e94560; }
+    .device-item .delete-btn {
+      background: #e94560; color: #fff; border: none; border-radius: 4px;
+      width: 24px; height: 24px; font-size: 12px; cursor: pointer;
+      margin-left: 8px; display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    .device-item .delete-btn:hover { background: #d63851; }
     .token-box {
       background: #0f3460; border-radius: 8px; padding: 10px; margin-top: 10px; word-break: break-all;
       font-family: monospace; font-size: 0.75rem; cursor: pointer; position: relative;
@@ -103,9 +110,9 @@
     .empty-state .icon { font-size: 2rem; margin-bottom: 10px; }
 
     /* --- Live marker --- */
-    .device-marker { width: 46px; height: 46px; position: relative; }
+    .device-marker { width: 50px; height: 50px; position: relative; display: flex; align-items: center; justify-content: center; }
     .device-marker .radar {
-      position: absolute; inset: 0; margin: auto; width: 46px; height: 46px;
+      position: absolute; inset: 0; margin: auto; width: 50px; height: 50px;
       border-radius: 50%; background: rgba(233, 69, 96, 0.35);
       animation: radar 2s ease-out infinite;
     }
@@ -113,15 +120,19 @@
       0% { transform: scale(0.3); opacity: 0.9; }
       100% { transform: scale(1.6); opacity: 0; }
     }
-    .device-marker .core {
-      position: absolute; top: 50%; left: 50%; width: 18px; height: 18px;
-      margin: -9px 0 0 -9px; border-radius: 50%; background: #e94560;
-      border: 3px solid #fff; box-shadow: 0 0 14px rgba(233, 69, 96, 0.9);
+    .device-marker .phone-icon {
+      font-size: 32px;
       z-index: 2;
+      filter: drop-shadow(0 0 8px rgba(233, 69, 96, 0.9));
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
     }
     .device-marker .heading {
       position: absolute; top: 50%; left: 50%; width: 0; height: 0;
-      margin-top: -26px; margin-left: -7px;
+      margin-top: -28px; margin-left: -7px;
       border-left: 7px solid transparent; border-right: 7px solid transparent;
       border-bottom: 12px solid #e94560;
       filter: drop-shadow(0 0 4px rgba(233, 69, 96, 0.9));
@@ -274,6 +285,50 @@
       fetchData();
     }
 
+    async function deleteDevice(id, deviceToken) {
+      if (!confirm('¿Estás seguro de que quieres eliminar este dispositivo? Esta acción también eliminará todo su historial de ubicaciones.')) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/devices/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          // Si eliminamos el dispositivo actual, limpiar selección
+          if (id === currentDeviceId) {
+            currentDeviceId = null;
+            token = null;
+            localStorage.removeItem('deviceToken');
+            localStorage.removeItem('deviceId');
+            document.getElementById('device-section').style.display = 'none';
+            document.getElementById('no-device').style.display = 'block';
+            // Limpiar mapa
+            if (marker) {
+              marker.remove();
+              marker = null;
+            }
+            if (trailSource) {
+              map.removeLayer('trail-layer');
+              map.removeLayer('trail-glow');
+              map.removeSource('trail');
+              trailSource = null;
+            }
+          }
+          // Recargar lista de dispositivos
+          fetchData();
+        } else {
+          alert('Error al eliminar el dispositivo');
+        }
+      } catch (err) {
+        console.error('Error al eliminar dispositivo:', err);
+        alert('Error al eliminar el dispositivo');
+      }
+    }
+
     function resetTrip() {
       totalDistanceKm = 0;
       pointCount = 0;
@@ -405,7 +460,7 @@
       el.innerHTML = `
         <div class="radar"></div>
         <div class="heading" id="marker-heading" style="opacity:0"></div>
-        <div class="core"></div>
+        <div class="phone-icon">📱</div>
       `;
       return el;
     }
@@ -516,14 +571,15 @@
         const lat = d.latest ? d.latest.latitude.toFixed(4) : '--';
         const lng = d.latest ? d.latest.longitude.toFixed(4) : '--';
         return `
-          <div class="device-item ${isActive ? 'active' : ''}" onclick="selectDevice(${d.id}, '${d.token}')">
-            <div>
+          <div class="device-item ${isActive ? 'active' : ''}">
+            <div onclick="selectDevice(${d.id}, '${d.token}')" style="flex:1">
               <div class="name">${d.name}</div>
               <div style="font-size:0.7rem;color:#666">${lat}, ${lng}</div>
             </div>
-            <div style="text-align:right">
+            <div style="text-align:right;display:flex;align-items:center">
               <span class="badge ${d.latest ? 'online' : 'offline'}"></span>
               <div class="time">${time}</div>
+              <button class="delete-btn" onclick="deleteDevice(${d.id}, '${d.token}')" title="Eliminar dispositivo">×</button>
             </div>
           </div>
         `;

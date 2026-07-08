@@ -25,4 +25,15 @@ router.get('/:id', async (req, res) => {
   res.json({ ...device, latest });
 });
 
+// DELETE /api/devices/:id — eliminar dispositivo
+router.delete('/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const success = await db.deleteDevice(id);
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: 'no encontrado' });
+  }
+});
+
 module.exports = router;

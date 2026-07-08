@@ -7,7 +7,7 @@ import {
   isTrackingEnabled as wasTrackingBefore,
   getDeviceName,
 } from './src/storage';
-import {registerDevice, fetchDevices as apiFetchDevices, fetchLatestLocation, fetchLocationHistory} from './src/api';
+import {registerDevice, fetchDevices as apiFetchDevices, fetchLatestLocation, fetchLocationHistory, setApiBase, initApiBase} from './src/api';
 import type {LocationData, DeviceInfo} from './src/api';
 
 import SideDrawer from './src/components/SideDrawer';
@@ -41,6 +41,10 @@ function App(): React.JSX.Element {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    initApiBase();
   }, []);
 
   async function initApp() {
@@ -93,9 +97,12 @@ function App(): React.JSX.Element {
     }
   }
 
-  const connectToServer = useCallback(async () => {
+  const connectToServer = useCallback(async (serverUrl?: string) => {
     setChecking(true);
     try {
+      if (serverUrl) {
+        await setApiBase(serverUrl);
+      }
       let token = await getToken();
       if (!token) {
         const name = deviceName.trim() || 'Mi Android';
@@ -147,7 +154,7 @@ function App(): React.JSX.Element {
   const handleSaveDeviceName = useCallback(async (name: string) => {
     setDeviceName(name);
     await storeDeviceName(name);
-  }, []);
+  }, [storeDeviceName]);
 
   const handleClearData = useCallback(async () => {
     await clearAll();
@@ -178,7 +185,7 @@ function App(): React.JSX.Element {
       <HomeScreen
         checking={checking}
         connected={connected}
-        onConnect={connectToServer}
+        onConnect={(serverUrl) => connectToServer(serverUrl)}
       />
     );
   }

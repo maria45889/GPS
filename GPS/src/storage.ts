@@ -6,6 +6,7 @@ const KEYS = {
   DEVICE_NAME: '@gps_tracker/device_name',
   TRACKING_ENABLED: '@gps_tracker/tracking_enabled',
   PENDING_LOCATIONS: '@gps_tracker/pending_locations',
+  SERVER_URL: '@gps_tracker/server_url',
 };
 
 export async function getToken(): Promise<string | null> {
@@ -56,4 +57,12 @@ export async function getPendingLocations(): Promise<any[]> {
 
 export async function savePendingLocations(locations: any[]): Promise<void> {
   await AsyncStorage.setItem(KEYS.PENDING_LOCATIONS, JSON.stringify(locations));
+}
+
+export async function getServerUrl(): Promise<string | null> {
+  return AsyncStorage.getItem(KEYS.SERVER_URL);
+}
+
+export async function setServerUrl(url: string): Promise<void> {
+  return AsyncStorage.setItem(KEYS.SERVER_URL, url);
 }

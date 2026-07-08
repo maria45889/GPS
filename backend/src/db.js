@@ -169,6 +169,19 @@ async function getDeviceById(id) {
   return row;
 }
 
+async function deleteDevice(id) {
+  await initDb();
+  
+  // Primero eliminar las ubicaciones asociadas
+  db.run('DELETE FROM locations WHERE device_id = ?', [id]);
+  
+  // Luego eliminar el dispositivo
+  db.run('DELETE FROM devices WHERE id = ?', [id]);
+  
+  saveDb();
+  return true;
+}
+
 module.exports = {
   registerDevice,
   getDeviceByToken,
@@ -177,4 +190,5 @@ module.exports = {
   getLocationHistory,
   getAllDevices,
   getDeviceById,
+  deleteDevice,
 };

@@ -1,4 +1,24 @@
-import { API_BASE } from '@env';
+import { getServerUrl } from './storage';
+
+let API_BASE = 'http://10.19.45.68:3000';
+
+// Función para actualizar la URL base del API
+export function setApiBase(url: string) {
+  API_BASE = url;
+}
+
+// Función para obtener la URL base actual
+export function getApiBase(): string {
+  return API_BASE;
+}
+
+// Inicializar la URL desde el almacenamiento
+export async function initApiBase() {
+  const url = await getServerUrl();
+  if (url) {
+    API_BASE = url;
+  }
+}
 
 export interface LocationPayload {
   latitude: number;
@@ -30,7 +50,7 @@ export interface LocationData {
   speed?: number;
   bearing?: number;
   battery?: number;
-  timestamp?: string;
+  timestamp: string;
 }
 
 export async function registerDevice(name: string): Promise<RegisterResponse> {

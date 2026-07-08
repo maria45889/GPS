@@ -1,7 +1,7 @@
 import BackgroundService from 'react-native-background-actions';
 import Geolocation from '@react-native-community/geolocation';
 import DeviceInfo from 'react-native-device-info';
-import {sendLocation, LocationPayload} from './api';
+import {sendLocation, LocationPayload, initApiBase} from './api';
 import {
   getToken,
   getDeviceId,
@@ -91,6 +91,7 @@ async function ensureDeviceRegistered(): Promise<string> {
 }
 
 async function trackingTask(taskData?: {delay?: number}) {
+  await initApiBase();
   const token = await ensureDeviceRegistered();
 
   if (trackingTimer) {

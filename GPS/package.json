@@ -13,7 +13,6 @@
     "@react-native-community/geolocation": "^3.4.0",
     "react": "18.3.1",
     "react-native": "0.76.6",
-    "react-native-background-actions": "^4.0.1",
     "react-native-device-info": "^13.0.1",
     "react-native-vector-icons": "^10.3.0",
     "react-native-webview": "^14.0.1"
