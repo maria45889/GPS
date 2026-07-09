@@ -12,6 +12,11 @@ android {
     namespace = "com.gpstracker"
     compileSdk = rootProject.ext.compileSdkVersion
 
+    packagingOptions {
+        pickFirst '**/libjsc.so'
+        pickFirst '**/libc++_shared.so'
+    }
+
     defaultConfig {
         applicationId = "com.gpstracker"
         minSdk = rootProject.ext.minSdkVersion
@@ -37,6 +42,16 @@ android {
 }
 
 dependencies {
+    implementation project(':react-native-async-storage_async-storage')
+    implementation project(':react-native-community_geolocation')
+    implementation project(':react-native-device-info')
+    implementation project(':react-native-vector-icons')
+    implementation project(':react-native-webview')
     implementation("com.facebook.react:react-android")
-    implementation("com.facebook.react:hermes-android")
+
+    if (hermesEnabled.toBoolean()) {
+        implementation("com.facebook.react:hermes-android")
+    } else {
+        implementation("org.webkit:android-jsc:+")
+    }
 }

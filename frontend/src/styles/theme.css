@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+:root {
+  --background: 230 25% 7%;
+  --background-hex: #080a14;
+  --card: 230 20% 12%;
+  --card-hex: #111428;
+  --primary: 170 90% 45%;
+  --primary-hex: #00f5d4;
+  --primary-glow: rgba(0, 245, 212, 0.15);
+  --accent-teal: 180 100% 40%;
+  --accent-teal-hex: #00b4d8;
+  --danger: 355 90% 60%;
+  --danger-hex: #ff4757;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.15);
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-hover: rgba(255, 255, 255, 0.06);
+}
+
+body {
+  background-color: var(--background-hex);
+  color: #f3f4f6;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom Scrollbar for sleek UI */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.01);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Radar pulse animation */
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.3);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.radar-anim {
+  animation: radar-pulse 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Pulse animation for active dot */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.95);
+  }
+}
+
+.pulse-slow {
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+/* Custom transitions and glassmorphism utilities */
+.glass-panel {
+  background: rgba(17, 20, 40, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--border-light);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* Hide default MapLibre/Leaflet control borders */
+.maplibregl-ctrl-group {
+  border: 1px solid var(--border) !important;
+  background-color: rgba(17, 20, 40, 0.85) !important;
+  backdrop-filter: blur(8px) !important;
+  box-shadow: none !important;
+}
+
+.maplibregl-ctrl-group button {
+  border-bottom: 1px solid var(--border) !important;
+  color: #fff !important;
+}
+
+.maplibregl-ctrl-group button span {
+  filter: invert(1);
+}
+
+.maplibregl-ctrl-group button:last-child {
+  border-bottom: none !important;
+}
