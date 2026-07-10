@@ -191,7 +191,7 @@ export default function App() {
 
   return (
     <Router>
-      <DashboardLayout serverStatus={serverStatus} deviceName={deviceName}>
+      <DashboardLayout serverStatus={serverStatus} deviceName={deviceName} onClearData={handleClearData}>
         <Routes>
           <Route 
             path="/" 

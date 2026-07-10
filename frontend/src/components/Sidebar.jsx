@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
-export default function Sidebar({ serverStatus }) {
+export default function Sidebar({ serverStatus, onClearData }) {
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -72,7 +72,11 @@ export default function Sidebar({ serverStatus }) {
         </div>
 
         {/* Logout */}
-        <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-400 hover:text-white hover:bg-red-500/10 border border-transparent hover:border-red-500/10 transition-all group">
+        <button
+          type="button"
+          onClick={onClearData}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-400 hover:text-white hover:bg-red-500/10 border border-transparent hover:border-red-500/10 transition-all group"
+        >
           <LogOut size={18} className="transition-transform group-hover:translate-x-1" />
           <span>Salir</span>
         </button>

@@ -13,7 +13,10 @@ export function getLocalDeviceName() {
 }
 
 export function getLocalServerUrl() {
-  return localStorage.getItem('serverUrl') || 'http://localhost:3000';
+  const storedUrl = localStorage.getItem('serverUrl');
+  if (storedUrl) return storedUrl;
+
+  return import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
 }
 
 function normalizeServerUrl(url) {

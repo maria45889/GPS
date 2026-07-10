@@ -1,7 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 
-export default function DashboardLayout({ children, activeScreen, onSelectScreen, serverStatus }) {
+export default function DashboardLayout({ children, activeScreen, onSelectScreen, serverStatus, onClearData }) {
   return (
     <div className="w-screen h-screen flex bg-[#05060f] overflow-hidden text-white">
       {/* Sidebar - Fixed on the left */}
@@ -9,6 +9,7 @@ export default function DashboardLayout({ children, activeScreen, onSelectScreen
         activeScreen={activeScreen} 
         onSelectScreen={onSelectScreen} 
         serverStatus={serverStatus}
+        onClearData={onClearData}
       />
 
       {/* Main Content Area */}
