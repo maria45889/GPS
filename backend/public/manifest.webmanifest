@@ -1,0 +1,1 @@
+{"name":"GPS Tracker","short_name":"Tracker","description":"Dashboard de rastreo GPS en tiempo real","start_url":"/","display":"standalone","background_color":"#080a14","theme_color":"#080a14","lang":"en","scope":"/","icons":[{"src":"/favicon.svg","sizes":"192x192","type":"image/svg+xml"},{"src":"/favicon.svg","sizes":"512x512","type":"image/svg+xml"}]}

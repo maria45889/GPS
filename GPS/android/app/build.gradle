@@ -1,0 +1,57 @@
+plugins {
+  id("com.android.application")
+  id("org.jetbrains.kotlin.android")
+  id("com.facebook.react")
+}
+
+react {
+    // Needed for autolinking
+}
+
+android {
+    namespace = "com.gpstracker"
+    compileSdk = rootProject.ext.compileSdkVersion
+
+    packagingOptions {
+        pickFirst '**/libjsc.so'
+        pickFirst '**/libc++_shared.so'
+    }
+
+    defaultConfig {
+        applicationId = "com.gpstracker"
+        minSdk = rootProject.ext.minSdkVersion
+        targetSdk = rootProject.ext.targetSdkVersion
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    buildTypes {
+        debug {
+            signingConfig = signingConfigs.debug
+        }
+        release {
+            minifyEnabled = false
+            shrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+dependencies {
+    implementation project(':react-native-async-storage_async-storage')
+    implementation project(':react-native-community_geolocation')
+    implementation project(':react-native-device-info')
+    implementation project(':react-native-vector-icons')
+    implementation project(':react-native-webview')
+    implementation("com.facebook.react:react-android")
+
+    if (hermesEnabled.toBoolean()) {
+        implementation("com.facebook.react:hermes-android")
+    } else {
+        implementation("org.webkit:android-jsc:+")
+    }
+}
