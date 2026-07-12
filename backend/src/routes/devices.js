@@ -10,10 +10,19 @@ router.post('/register', async (req, res) => {
   res.json(device);
 });
 
-// GET /api/devices — listar dispositivos
+// GET /api/devices — listar dispositivos con última ubicación
 router.get('/', async (req, res) => {
   const devices = await db.getAllDevices();
-  res.json(devices);
+  
+  // Agregar última ubicación para cada dispositivo
+  const devicesWithLocation = await Promise.all(
+    devices.map(async (device) => {
+      const latest = await db.getLatestLocation(device.id);
+      return { ...device, latest };
+    })
+  );
+  
+  res.json(devicesWithLocation);
 });
 
 // GET /api/devices/:id — info de dispositivo

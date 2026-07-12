@@ -34,6 +34,7 @@ export default function App() {
   const [sendBackground, setSendBackground] = useState(getLocalSendBackground());
 
   const pollRef = useRef(null);
+  const registeringRef = useRef(false);
 
   useEffect(() => {
     socketService.connect(setServerStatus);
@@ -50,11 +51,24 @@ export default function App() {
       autoRegister();
     }
 
+    const onAuthInvalid = () => {
+      if (registeringRef.current) return;
+      registeringRef.current = true;
+      setDeviceToken(null);
+      setDeviceId(null);
+      setLocation(null);
+      setHistory([]);
+      if (pollRef.current) clearInterval(pollRef.current);
+      autoRegister().finally(() => { registeringRef.current = false; });
+    };
+    window.addEventListener('auth:invalid', onAuthInvalid);
+
     return () => {
       socketService.disconnect();
       if (pollRef.current) clearInterval(pollRef.current);
       gpsService.stopRealTracking();
       gpsService.stopSimulation();
+      window.removeEventListener('auth:invalid', onAuthInvalid);
     };
   }, []);
 
@@ -83,7 +97,7 @@ export default function App() {
     try {
       const [devs, latest, hist] = await Promise.all([
         api.getDevices().catch(() => []),
-        api.getLatestLocation().catch(() => null),
+        api.getLatestLocationAny().catch(() => null),
         api.getLocationHistory(500).catch(() => [])
       ]);
 

@@ -128,6 +128,20 @@ async function getLatestLocation(deviceId) {
   return row;
 }
 
+async function getLatestLocationAny() {
+  await initDb();
+  const result = db.exec(
+    `SELECT * FROM locations ORDER BY timestamp DESC LIMIT 1`
+  );
+  if (result.length === 0) return null;
+  
+  const columns = result[0].columns;
+  const values = result[0].values[0];
+  const row = {};
+  columns.forEach((col, i) => row[col] = values[i]);
+  return row;
+}
+
 async function getLocationHistory(deviceId, limit = 500, offset = 0) {
   await initDb();
   const result = db.exec(
@@ -187,6 +201,7 @@ module.exports = {
   getDeviceByToken,
   insertLocation,
   getLatestLocation,
+  getLatestLocationAny,
   getLocationHistory,
   getAllDevices,
   getDeviceById,

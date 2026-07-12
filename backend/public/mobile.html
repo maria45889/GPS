@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPS Tracker - Mobile</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #080a14 0%, #0f1220 100%);
+      color: #fff;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 400px;
+      width: 100%;
+      background: rgba(17, 20, 40, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 30px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 5px;
+      background: linear-gradient(135deg, #00f5d4, #00b4d8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header p {
+      font-size: 12px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #9ca3af;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #00f5d4;
+      background: rgba(0, 245, 212, 0.1);
+    }
+
+    input:disabled {
+      background: rgba(255, 255, 255, 0.02);
+      color: #6b7280;
+      cursor: not-allowed;
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status.success {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+
+    .status.error {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .status.idle {
+      background: rgba(107, 114, 128, 0.1);
+      border-color: rgba(107, 114, 128, 0.3);
+      color: #9ca3af;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .status.success .status-dot {
+      background: #10b981;
+    }
+
+    .status.error .status-dot {
+      background: #ef4444;
+    }
+
+    .status.idle .status-dot {
+      background: #6b7280;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: all 0.3s;
+      border: 1px solid transparent;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00f5d4, #00b4d8);
+      color: #000;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0, 245, 212, 0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: #00f5d4;
+      border: 1px solid #00f5d4;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: rgba(0, 245, 212, 0.1);
+    }
+
+    .btn-secondary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .info-box {
+      background: rgba(0, 245, 212, 0.05);
+      border: 1px solid rgba(0, 245, 212, 0.2);
+      border-radius: 10px;
+      padding: 15px;
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+
+    .info-box strong {
+      color: #00f5d4;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #00f5d4;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(0, 245, 212, 0.2);
+      border-top-color: #00f5d4;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>GPS TRACKER</h1>
+      <p>Rastreo en vivo</p>
+    </div>
+
+    <div id="status" class="status idle">
+      <span class="status-dot"></span>
+      <span id="statusText">Listo para registrarse</span>
+    </div>
+
+    <div class="form-group">
+      <label for="deviceName">Nombre del dispositivo</label>
+      <input 
+        type="text" 
+        id="deviceName" 
+        placeholder="Mi teléfono" 
+        value="Mi teléfono"
+      >
+    </div>
+
+    <div class="form-group">
+      <label for="serverUrl">URL del servidor</label>
+      <input 
+        type="text" 
+        id="serverUrl" 
+        placeholder="http://192.168.1.1:3000"
+        value="http://localhost:3000"
+      >
+    </div>
+
+    <div class="button-group">
+      <button class="btn-primary" id="registerBtn">Registrarse</button>
+      <button class="btn-secondary" id="testBtn" disabled>Test GPS</button>
+    </div>
+
+    <div class="form-group" id="simulationGroup" style="display: none;">
+      <label>Modo simulación (lat,lng)</label>
+      <div style="display: flex; gap: 8px;">
+        <input 
+          type="text" 
+          id="simLat" 
+          placeholder="0.0000"
+          style="flex: 1;"
+        >
+        <input 
+          type="text" 
+          id="simLng" 
+          placeholder="-78.0000"
+          style="flex: 1;"
+        >
+      </div>
+    </div>
+
+    <button 
+      class="btn-primary" 
+      id="startBtn" 
+      disabled
+      style="width: 100%; margin-bottom: 20px;"
+    >
+      Iniciar rastreo
+    </button>
+
+    <div class="stats" id="stats" style="display: none;">
+      <div class="stat-card">
+        <div class="stat-label">Latitud</div>
+        <div class="stat-value" id="latValue">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Longitud</div>
+        <div class="stat-value" id="lngValue">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Precisión</div>
+        <div class="stat-value" id="accValue">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Enviados</div>
+        <div class="stat-value" id="countValue">0</div>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>ℹ️ Cómo usar:</strong><br>
+      1. Introduce el nombre del dispositivo<br>
+      2. Verifica la URL del servidor (tu IP:3000)<br>
+      3. Presiona "Registrarse"<br>
+      4. Presiona "Iniciar rastreo"<br>
+      5. ¡Listo! Tu ubicación se enviará cada 10 segundos
+    </div>
+  </div>
+
+  <script>
+    let deviceToken = null;
+    let trackingInterval = null;
+    let sendCount = 0;
+    let useSimulation = false;
+
+    const statusEl = document.getElementById('status');
+    const statusText = document.getElementById('statusText');
+    const deviceNameInput = document.getElementById('deviceName');
+    const serverUrlInput = document.getElementById('serverUrl');
+    const registerBtn = document.getElementById('registerBtn');
+    const testBtn = document.getElementById('testBtn');
+    const startBtn = document.getElementById('startBtn');
+    const statsEl = document.getElementById('stats');
+    const latValue = document.getElementById('latValue');
+    const lngValue = document.getElementById('lngValue');
+    const accValue = document.getElementById('accValue');
+    const countValue = document.getElementById('countValue');
+    const simulationGroup = document.getElementById('simulationGroup');
+    const simLatInput = document.getElementById('simLat');
+    const simLngInput = document.getElementById('simLng');
+
+    function setStatus(message, type = 'idle') {
+      statusEl.className = `status ${type}`;
+      statusText.textContent = message;
+    }
+
+    async function registerDevice() {
+      const name = deviceNameInput.value.trim() || 'Mi teléfono';
+      const serverUrl = serverUrlInput.value.trim();
+
+      if (!serverUrl) {
+        setStatus('❌ Ingresa la URL del servidor', 'error');
+        return;
+      }
+
+      registerBtn.disabled = true;
+      setStatus('Registrando dispositivo...', 'idle');
+
+      try {
+        const response = await fetch(`${serverUrl}/api/devices/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+
+        const data = await response.json();
+
+        if (data.token) {
+          deviceToken = data.token;
+          localStorage.setItem('deviceToken', deviceToken);
+          localStorage.setItem('serverUrl', serverUrl);
+          setStatus(`✓ Registrado como "${data.name}"`, 'success');
+          testBtn.disabled = false;
+          startBtn.disabled = false;
+          statsEl.style.display = 'grid';
+          
+          // Mostrar grupo de simulación
+          simulationGroup.style.display = 'block';
+          simLatInput.value = '-0.2206';
+          simLngInput.value = '-78.5148';
+        } else {
+          setStatus('❌ Error en el registro', 'error');
+        }
+      } catch (err) {
+        setStatus(`❌ Error: ${err.message}`, 'error');
+        // Permitir simulación incluso si hay error de conexión
+        simulationGroup.style.display = 'block';
+        useSimulation = true;
+        testBtn.disabled = false;
+        startBtn.disabled = false;
+        statsEl.style.display = 'grid';
+        setStatus('⚠️ Modo simulación (sin conexión)', 'idle');
+      } finally {
+        registerBtn.disabled = false;
+      }
+    }
+
+    function getSimulatedLocation() {
+      const lat = parseFloat(simLatInput.value) || -0.2206;
+      const lng = parseFloat(simLngInput.value) || -78.5148;
+      
+      // Agregar pequeña variación aleatoria
+      const latVar = (Math.random() - 0.5) * 0.0001;
+      const lngVar = (Math.random() - 0.5) * 0.0001;
+      
+      return {
+        latitude: lat + latVar,
+        longitude: lng + lngVar,
+        accuracy: 5 + Math.random() * 10,
+        altitude: null,
+        speed: Math.random() * 15
+      };
+    }
+
+    function getLocation() {
+      return new Promise((resolve, reject) => {
+        if (useSimulation) {
+          // Usar simulación
+          resolve(getSimulatedLocation());
+          return;
+        }
+
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation no disponible'));
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            resolve({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              accuracy: pos.coords.accuracy,
+              altitude: pos.coords.altitude,
+              speed: pos.coords.speed
+            });
+          },
+          (err) => {
+            // Si falla GPS, usar simulación
+            console.warn('GPS error:', err);
+            resolve(getSimulatedLocation());
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      });
+    }
+
+    async function testGps() {
+      testBtn.disabled = true;
+      setStatus('Obteniendo ubicación...', 'idle');
+
+      try {
+        const location = await getLocation();
+        latValue.textContent = location.latitude.toFixed(4);
+        lngValue.textContent = location.longitude.toFixed(4);
+        accValue.textContent = location.accuracy.toFixed(0) + 'm';
+        setStatus(`✓ Ubicación obtenida (precisión: ${location.accuracy.toFixed(0)}m)`, 'success');
+      } catch (err) {
+        setStatus(`❌ Error: ${err.message}`, 'error');
+      } finally {
+        testBtn.disabled = false;
+      }
+    }
+
+    async function sendLocation() {
+      const serverUrl = localStorage.getItem('serverUrl');
+      
+      try {
+        const location = await getLocation();
+        
+        const response = await fetch(`${serverUrl}/api/location`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-Token': deviceToken
+          },
+          body: JSON.stringify([{
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            altitude: location.altitude,
+            speed: location.speed,
+            battery: 85
+          }])
+        });
+
+        if (response.ok) {
+          sendCount++;
+          countValue.textContent = sendCount;
+          latValue.textContent = location.latitude.toFixed(4);
+          lngValue.textContent = location.longitude.toFixed(4);
+          accValue.textContent = location.accuracy.toFixed(0) + 'm';
+          setStatus(`✓ Ubicación enviada (${sendCount})`, 'success');
+        } else {
+          setStatus('❌ Error al enviar', 'error');
+        }
+      } catch (err) {
+        setStatus(`❌ Error: ${err.message}`, 'error');
+      }
+    }
+
+    function startTracking() {
+      setStatus('🔴 Rastreo activo...', 'success');
+      startBtn.textContent = 'Detener rastreo';
+      startBtn.dataset.tracking = 'true';
+      sendLocation(); // Primera vez inmediata
+
+      trackingInterval = setInterval(sendLocation, 10000); // Cada 10 segundos
+    }
+
+    function stopTracking() {
+      clearInterval(trackingInterval);
+      trackingInterval = null;
+      setStatus('⏸️ Rastreo detenido', 'idle');
+      startBtn.textContent = 'Iniciar rastreo';
+      delete startBtn.dataset.tracking;
+    }
+
+    registerBtn.addEventListener('click', registerDevice);
+    testBtn.addEventListener('click', testGps);
+    startBtn.addEventListener('click', () => {
+      if (startBtn.dataset.tracking) {
+        stopTracking();
+      } else {
+        startTracking();
+      }
+    });
+
+    // Actualizar modo simulación cuando cambian los valores
+    simLatInput.addEventListener('change', () => {
+      useSimulation = true;
+    });
+    simLngInput.addEventListener('change', () => {
+      useSimulation = true;
+    });
+
+    // Restaurar token si existe
+    window.addEventListener('load', () => {
+      // Auto-detectar la URL correcta del servidor
+      const protocol = window.location.protocol;
+      const hostname = window.location.hostname;
+      
+      // Si es localhost, intentar usar la IP local
+      let defaultServerUrl;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // Usar la IP si se accede desde IP, sino localStorage
+        defaultServerUrl = localStorage.getItem('serverUrl') || `${protocol}//192.168.100.174:3000`;
+      } else {
+        defaultServerUrl = `${protocol}//${hostname}:3000`;
+      }
+      
+      const savedToken = localStorage.getItem('deviceToken');
+      const savedUrl = localStorage.getItem('serverUrl');
+      
+      // Usar URL guardada si existe, sino usar la detectada
+      const urlToUse = savedUrl || defaultServerUrl;
+      serverUrlInput.value = urlToUse;
+      
+      if (savedToken) {
+        deviceToken = savedToken;
+        testBtn.disabled = false;
+        startBtn.disabled = false;
+        statsEl.style.display = 'grid';
+        simulationGroup.style.display = 'block';
+        setStatus('✓ Sesión restaurada', 'success');
+      }
+    });
+  </script>
+</body>
+</html>

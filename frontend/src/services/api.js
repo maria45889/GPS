@@ -99,6 +99,11 @@ async function request(path, options = {}) {
     } catch {
       // ignore
     }
+    if (response.status === 401) {
+      localStorage.removeItem('deviceToken');
+      localStorage.removeItem('deviceId');
+      window.dispatchEvent(new CustomEvent('auth:invalid'));
+    }
     throw new Error(`HTTP ${response.status}${errorBody ? `: ${errorBody}` : ''}`);
   }
 
@@ -140,6 +145,11 @@ export const api = {
   // Get latest location of the active device
   async getLatestLocation() {
     return request('/api/location/latest');
+  },
+
+  // Get latest location from ANY device (for dashboard)
+  async getLatestLocationAny() {
+    return request('/api/location/latest-any');
   },
 
   // Get location history of the active device

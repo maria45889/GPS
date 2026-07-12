@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import MapView from '../components/MapView';
+import MapView, { Device, Geofence } from '../components/MapView';
 import Badge from '../components/Badge';
 import BatteryIndicator from '../components/BatteryIndicator';
 import StatusDot from '../components/StatusDot';
@@ -51,6 +51,9 @@ export default function DashboardScreen({
   onOpenDrawer,
 }: DashboardScreenProps) {
   const [cardExpanded, setCardExpanded] = useState(false);
+  const [mapStyle, setMapStyle] = useState<'dark' | 'light' | 'satellite'>('dark');
+  const [showTraffic, setShowTraffic] = useState(false);
+  const [showWeather, setShowWeather] = useState(false);
   const cardAnim = useCardAnimation(cardExpanded);
 
   const lat = location?.latitude ?? -0.22;
@@ -58,13 +61,47 @@ export default function DashboardScreen({
   const speed = location?.speed != null ? (location.speed * 3.6).toFixed(0) : '--';
   const accuracy = location?.accuracy != null ? `${location.accuracy.toFixed(0)}m` : '--';
 
+  // Ejemplo de dispositivos adicionales (puedes venir de props o API)
+  const additionalDevices: Device[] = [
+    {
+      id: 'device-2',
+      name: 'Dispositivo 2',
+      latitude: lat + 0.01,
+      longitude: lng + 0.01,
+      color: '#ff6b6b',
+      battery: 75,
+      speed: 15
+    }
+  ];
+
+  // Ejemplo de geocercas (pueden venir de props o API)
+  const geofences: Geofence[] = [
+    {
+      id: 'geofence-1',
+      name: 'Zona Segura',
+      latitude: lat,
+      longitude: lng,
+      radius: 500,
+      color: '#4ecca3'
+    }
+  ];
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* Mapa */}
       <View style={styles.mapContainer}>
-        <MapView latitude={lat} longitude={lng} locations={history} />
+        <MapView 
+          latitude={lat} 
+          longitude={lng} 
+          locations={history}
+          devices={additionalDevices}
+          geofences={geofences}
+          mapStyle={mapStyle}
+          showTraffic={showTraffic}
+          showWeather={showWeather}
+        />
       </View>
 
       {/* Top Bar Overlay */}
@@ -80,6 +117,28 @@ export default function DashboardScreen({
         </View>
         <TouchableOpacity style={styles.menuBtn} onPress={onRefresh} activeOpacity={0.7}>
           <Icon name="refresh" size={22} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Map Style Controls */}
+      <View style={styles.mapControls}>
+        <TouchableOpacity 
+          style={[styles.mapControlBtn, mapStyle === 'dark' && styles.mapControlBtnActive]} 
+          onPress={() => setMapStyle('dark')}
+        >
+          <Icon name="weather-night" size={18} color={mapStyle === 'dark' ? '#fff' : colors.textDim} />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.mapControlBtn, mapStyle === 'light' && styles.mapControlBtnActive]} 
+          onPress={() => setMapStyle('light')}
+        >
+          <Icon name="white-balance-sunny" size={18} color={mapStyle === 'light' ? '#fff' : colors.textDim} />
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[styles.mapControlBtn, mapStyle === 'satellite' && styles.mapControlBtnActive]} 
+          onPress={() => setMapStyle('satellite')}
+        >
+          <Icon name="satellite" size={18} color={mapStyle === 'satellite' ? '#fff' : colors.textDim} />
         </TouchableOpacity>
       </View>
 
@@ -378,5 +437,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 18,
+  },
+  mapControls: {
+    position: 'absolute',
+    top: spacing.xxl + 70,
+    right: spacing.md,
+    flexDirection: 'column',
+    gap: spacing.sm,
+    zIndex: 10,
+  },
+  mapControlBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(18, 18, 42, 0.85)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapControlBtnActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
 });

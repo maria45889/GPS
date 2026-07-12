@@ -45,9 +45,15 @@ router.post('/', auth, async (req, res) => {
   res.json({ status: 'ok', inserted: results.length });
 });
 
-// GET /api/location/latest — última ubicación
+// GET /api/location/latest — última ubicación del dispositivo autenticado
 router.get('/latest', auth, async (req, res) => {
   const loc = await db.getLatestLocation(req.device.id);
+  res.json(loc || { error: 'sin datos' });
+});
+
+// GET /api/location/latest-any — última ubicación de CUALQUIER dispositivo (para dashboard)
+router.get('/latest-any', async (req, res) => {
+  const loc = await db.getLatestLocationAny();
   res.json(loc || { error: 'sin datos' });
 });
 

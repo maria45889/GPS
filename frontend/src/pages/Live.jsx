@@ -59,25 +59,26 @@ export default function Live({
       </div>
 
       {/* Fullscreen Map Background */}
-      <div className="absolute inset-0 z-10">
-        {location ? (
-          <MapView 
-            latitude={location.latitude} 
-            longitude={location.longitude} 
-            bearing={location.bearing}
-            path={history}
-            showControls={false}
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-slate-500">
-            <Compass className="animate-pulse text-slate-600" size={64} />
-            <p className="text-lg font-medium">Esperando datos de ubicación GPS...</p>
+      <div className="absolute inset-0 z-10 w-full h-full">
+        <MapView 
+          latitude={location?.latitude || -0.2206} 
+          longitude={location?.longitude || -78.5148} 
+          bearing={location?.bearing || null}
+          path={history || []}
+          showControls={false}
+          zoom={14}
+        />
+
+        {!location && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 pointer-events-none text-slate-300">
+            <Compass className="animate-pulse text-teal-400" size={64} />
+            <p className="text-lg font-medium bg-slate-900/90 px-6 py-3 rounded-2xl shadow-2xl border border-teal-500/30">Esperando datos de ubicación GPS...</p>
           </div>
         )}
 
         {/* Map Context Controls (Right Side) */}
         {location && (
-          <div className="absolute right-6 top-[120px] flex flex-col gap-3 z-20 pointer-events-auto">
+          <div className="absolute right-6 top-[120px] flex flex-col gap-3 z-30 pointer-events-auto">
             <button className="w-12 h-12 rounded-xl bg-slate-900/90 backdrop-blur border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all shadow-xl hover:bg-slate-800">
               <Maximize size={20} />
             </button>
