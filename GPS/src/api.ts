@@ -1,6 +1,6 @@
 import { getServerUrl } from './storage';
 
-let API_BASE = 'http://10.19.45.68:3000';
+let API_BASE = 'http://192.168.100.176:3000';
 
 // Función para actualizar la URL base del API
 export function setApiBase(url: string) {
