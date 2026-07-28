@@ -29,13 +29,13 @@ function normalizeServerUrl(url) {
 
 function getApiBaseUrl() {
   if (typeof window === 'undefined') {
-    return 'http://localhost:3000';
+    return 'http://192.168.100.176:3000';
   }
 
   const configured = normalizeServerUrl(getLocalServerUrl());
   if (configured) return configured;
 
-  return window.location.origin || 'http://localhost:3000';
+  return window.location.origin || 'http://192.168.100.176:3000';
 }
 
 function buildApiUrl(path) {

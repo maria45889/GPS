@@ -59,6 +59,17 @@ export async function savePendingLocations(locations: any[]): Promise<void> {
   await AsyncStorage.setItem(KEYS.PENDING_LOCATIONS, JSON.stringify(locations));
 }
 
+// Guardar una ubicación individual con timestamp
+export async function savePendingLocation(location: any): Promise<void> {
+  const pending = await getPendingLocations();
+  const locationWithTimestamp = {
+    ...location,
+    timestamp: location.timestamp || new Date().toISOString(),
+  };
+  pending.push(locationWithTimestamp);
+  await savePendingLocations(pending);
+}
+
 export async function getServerUrl(): Promise<string | null> {
   return AsyncStorage.getItem(KEYS.SERVER_URL);
 }

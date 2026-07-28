@@ -187,7 +187,8 @@ export const gpsService = {
     
     console.log(`Generating demo history for device ${deviceId}...`);
     
-    // Send 15 past coordinates spaced by 5 minutes
+    // Send 15 past coordinates spaced by 5 minutes in parallel for better performance
+    const locations = [];
     for (let i = 0; i < 15; i++) {
       const point = route[i % route.length];
       const timeOffset = (15 - i) * 5 * 60 * 1000; // 5 min interval going backwards
@@ -204,9 +205,10 @@ export const gpsService = {
         timestamp: timestamp
       };
 
-      // Since api.sendLocation sends for the CURRENT active device, we make sure the active token matches.
-      // We will perform direct POST to make sure it gets stored.
-      await api.sendLocation(loc);
+      locations.push(loc);
     }
+
+    // Send all locations in parallel for better performance
+    await Promise.all(locations.map(loc => api.sendLocation(loc)));
   }
 };

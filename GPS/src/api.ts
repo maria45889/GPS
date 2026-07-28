@@ -98,3 +98,19 @@ export async function fetchLocationHistory(token: string, limit = 500): Promise<
   });
   return res.json();
 }
+
+// Sincronizar ubicaciones offline (batch)
+export async function syncOfflineLocations(
+  token: string,
+  locations: LocationPayload[],
+): Promise<{ status: string; synced: number } | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/location/sync`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Device-Token': token,
+    },
+    body: JSON.stringify({ locations }),
+  });
+  return res.json();
+}
