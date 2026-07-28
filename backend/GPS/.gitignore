@@ -1,0 +1,14 @@
+node_modules/
+.gradle/
+build/
+*.apk
+*.aab
+*.hprof
+*.keystore
+!debug.keystore
+.swiftSwift
+xcuserdata/
+Pods/
+*.jks
+.env
+.metro-health-check*
