@@ -1,0 +1,84 @@
+# GPS Tracker App
+
+Aplicación de rastreo GPS con React Native (móvil) y Node.js (backend).
+
+## Estructura del Proyecto
+
+```
+GPS APP/
+├── GPS/              # Aplicación React Native (móvil)
+│   ├── src/
+│   ├── android/
+│   ├── ios/
+│   └── package.json
+└── backend/          # Servidor Node.js (API)
+    ├── src/
+    ├── data/
+    └── package.json
+```
+
+## Instalación y Ejecución
+
+### Backend (Servidor)
+
+1. Navegar al directorio del backend:
+```bash
+cd backend
+```
+
+2. Instalar dependencias:
+```bash
+npm install
+```
+
+3. Iniciar el servidor:
+```bash
+npm start
+```
+El servidor se ejecutará en `http://localhost:3000` por defecto.
+
+### Aplicación Móvil (React Native)
+
+1. Navegar al directorio de la app:
+```bash
+cd GPS
+```
+
+2. Instalar dependencias:
+```bash
+npm install
+```
+
+3. Iniciar Metro bundler:
+```bash
+npm start
+```
+
+4. Para Android:
+```bash
+npm run android
+```
+
+5. Para iOS:
+```bash
+npm run ios
+```
+
+## Configuración
+
+La aplicación móvil permite configurar la URL del servidor desde la pantalla de inicio. Por defecto usa `http://192.168.100.174:3000`.
+
+## Características
+
+- Rastreo GPS en tiempo real
+- Historial de ubicaciones
+- Múltiples dispositivos
+- Dashboard con mapa
+- Rastreo en segundo plano
+- Soporte offline (cola de ubicaciones pendientes)
+
+## Tecnologías
+
+- **Frontend**: React Native, TypeScript
+- **Backend**: Node.js, Express, SQLite (sql.js)
+- **Comunicación**: REST API + Socket.IO
