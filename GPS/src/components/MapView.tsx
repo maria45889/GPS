@@ -49,6 +49,16 @@ function generateBaseMapHTML(): string {
   body { background: #0a0a1a; }
   #map { width: 100vw; height: 100vh; }
   
+  /* Ocultar todos los elementos de carga y estado del mapa */
+  .maplibregl-popup-content, .mapboxgl-popup-content { display: none !important; }
+  .maplibregl-ctrl-attrib, .mapboxgl-ctrl-attrib { display: none !important; }
+  .maplibregl-ctrl-logo, .mapboxgl-ctrl-logo { display: none !important; }
+  .maplibregl-ctrl, .mapboxgl-ctrl { display: none !important; }
+  .maplibregl-ctrl-bottom-right, .mapboxgl-ctrl-bottom-right { display: none !important; }
+  .maplibregl-ctrl-bottom-left, .mapboxgl-ctrl-bottom-left { display: none !important; }
+  .maplibregl-ctrl-top-right, .mapboxgl-ctrl-top-right { display: none !important; }
+  .maplibregl-ctrl-top-left, .mapboxgl-ctrl-top-left { display: none !important; }
+  
   .marker-container { position: relative; width: 40px; height: 40px; }
   .marker-pulse { width: 40px; height: 40px; background: rgba(78,204,163,0.4); border-radius: 50%; position: absolute; animation: pulse-ring 2s ease-out infinite; }
   .marker-inner { width: 24px; height: 24px; background: #4ecca3; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.3); position: absolute; top: 8px; left: 8px; }
@@ -72,6 +82,12 @@ function generateBaseMapHTML(): string {
 </head>
 <body>
 <div id="map"></div>
+
+<!-- Elemento para cubrir mensajes de carga del mapa -->
+<div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a1a; z-index: 9999;"></div>
+
+<!-- Elemento para cubrir el área donde aparece el mensaje -->
+<div id="message-cover" style="position: fixed; bottom: 0; left: 0; right: 0; height: 100px; background: #0a0a1a; z-index: 10000;"></div>
 
 <div class="style-selector">
   <button class="style-btn active" data-style="dark" onclick="changeStyle('dark')">Oscuro</button>
@@ -262,13 +278,31 @@ function generateBaseMapHTML(): string {
     style: mapStyles[currentStyle],
     center: [-78.512, -0.22],
     zoom: 15,
-    attributionControl: false
+    attributionControl: false,
+    failIfMajorPerformanceCaveat: false,
+    preserveDrawingBuffer: true,
+    antialias: true
   });
   
   map.addControl(new maplibregl.NavigationControl({ showCompass: true, showZoom: false }));
   
   map.on('load', function() {
     if (pendingUpdate) { doUpdate(pendingUpdate); pendingUpdate = null; }
+    
+    // Ocultar cualquier elemento que contenga mensajes de carga o estado
+    setInterval(function() {
+      const allElements = document.querySelectorAll('*');
+      allElements.forEach(function(el) {
+        if (el.textContent && (
+          el.textContent.includes('Esperando datos') ||
+          el.textContent.includes('esperando') ||
+          el.textContent.includes('waiting') ||
+          el.textContent.includes('loading')
+        )) {
+          el.style.display = 'none';
+        }
+      });
+    }, 500);
   });
 
   document.addEventListener('message', function(e) {

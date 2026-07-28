@@ -1,7 +1,8 @@
 import BackgroundService from 'react-native-background-actions';
 import Geolocation from '@react-native-community/geolocation';
 import DeviceInfo from 'react-native-device-info';
-import {sendLocation, LocationPayload, initApiBase} from './api';
+import NetInfo from '@react-native-community/netinfo';
+import {sendLocation, LocationPayload, initApiBase, syncOfflineLocations} from './api';
 import {
   getToken,
   getDeviceId,
@@ -13,6 +14,7 @@ import {
   isTrackingEnabled,
   getPendingLocations,
   savePendingLocations,
+  savePendingLocation,
 } from './storage';
 import {registerDevice} from './api';
 
@@ -98,10 +100,36 @@ async function trackingTask(taskData?: {delay?: number}) {
     clearTimeout(trackingTimer);
   }
 
+  // Función para sincronizar ubicaciones pendientes
+  const syncPending = async () => {
+    const pending = await getPendingLocations();
+    if (pending.length === 0) return;
+
+    try {
+      const result = await syncOfflineLocations(token, pending);
+      if ('status' in result && result.status === 'ok') {
+        console.log(`Sincronizadas ${result.synced} ubicaciones offline`);
+        await savePendingLocations([]);
+      } else {
+        console.warn('Error al sincronizar ubicaciones offline:', result);
+      }
+    } catch (err) {
+      console.warn('Error de red al sincronizar:', err);
+    }
+  };
+
+  // Listener de conexión para sincronizar automáticamente
+  const unsubscribe = NetInfo.addEventListener(state => {
+    if (state.isConnected) {
+      syncPending();
+    }
+  });
+
   const tick = async () => {
     try {
       const pos = await getCurrentPosition();
       const battery = await getBatteryLevel();
+      const isConnected = await NetInfo.fetch().then(state => state.isConnected);
 
       const payload: LocationPayload = {
         latitude: pos.latitude,
@@ -110,28 +138,32 @@ async function trackingTask(taskData?: {delay?: number}) {
         battery,
       };
 
-      const pending = await getPendingLocations();
-      pending.push(payload);
+      if (isConnected) {
+        // Primero intentar sincronizar ubicaciones pendientes
+        await syncPending();
 
-      try {
-        const result = await sendLocation(token, pending);
-        if ('error' in result && result.error) {
-          console.warn('Error al enviar ubicación:', result.error);
-          await savePendingLocations(pending);
-        } else {
-          // Si se envía correctamente, vaciar la cola
-          await savePendingLocations([]);
+        // Enviar ubicación actual
+        try {
+          const result = await sendLocation(token, payload);
+          if ('error' in result && result.error) {
+            console.warn('Error al enviar ubicación:', result.error);
+            await savePendingLocation(payload);
+          }
+        } catch (netErr) {
+          console.warn('Error de red, guardando en cola offline...', netErr);
+          await savePendingLocation(payload);
         }
-      } catch (netErr) {
-        console.warn('Sin conexión, guardando en cola offline...', netErr);
-        await savePendingLocations(pending);
+      } else {
+        // Sin conexión - guardar localmente
+        console.log('Sin conexión, guardando ubicación localmente');
+        await savePendingLocation(payload);
       }
-      
+
       // Adaptar el intervalo si la batería es baja (< 20%)
-      const nextInterval = (battery !== null && battery < 20) 
-        ? BASE_UPDATE_INTERVAL_MS * 2 
+      const nextInterval = (battery !== null && battery < 20)
+        ? BASE_UPDATE_INTERVAL_MS * 2
         : BASE_UPDATE_INTERVAL_MS;
-      
+
       trackingTimer = setTimeout(tick, nextInterval);
 
     } catch (err) {
