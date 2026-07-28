@@ -1,0 +1,10 @@
+Your FreeVPS.info Details
+---------------------------
+Username: Majo
+Password: Majito2@525-
+IPv4: 157.90.97.14
+IPv6: d0ee:fa88:870f:14fc:8ff7:3151:59c1:766c
+Location: Europe
+OS: Ubuntu
+---------------------------
+Thank you for using our service!
