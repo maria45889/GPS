@@ -163,5 +163,26 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(location)
     });
+  },
+
+  // Export locations as GPX
+  async exportLocations() {
+    const token = getLocalToken();
+    const url = buildApiUrl('/api/location/export');
+    
+    const response = await fetch(url, {
+      headers: { 'X-Device-Token': token }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: Failed to export`);
+    }
+    
+    return response.blob();
+  },
+
+  // Get device statistics
+  async getDeviceStats(deviceId) {
+    return request(`/api/devices/${deviceId}/stats`);
   }
 };
