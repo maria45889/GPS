@@ -1,6 +1,6 @@
 import { getServerUrl } from './storage';
 
-let API_BASE = 'http://192.168.100.176:3000';
+let API_BASE = 'https://odd-moments-shake.loca.lt';
 
 // Función para actualizar la URL base del API
 export function setApiBase(url: string) {
@@ -54,12 +54,22 @@ export interface LocationData {
 }
 
 export async function registerDevice(name: string): Promise<RegisterResponse> {
-  const res = await fetch(`${API_BASE}/api/devices/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${API_BASE}/api/devices/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    return res.json();
+  } catch (error) {
+    console.error('Error registrando dispositivo:', error);
+    throw error;
+  }
 }
 
 export async function sendLocation(
@@ -103,14 +113,14 @@ export async function fetchLocationHistory(token: string, limit = 500): Promise<
 export async function syncOfflineLocations(
   token: string,
   locations: LocationPayload[],
-): Promise<{ status: string; synced: number } | { error: string }> {
-  const res = await fetch(`${API_BASE}/api/location/sync`, {
+): Promise<{ status: string; inserted: number } | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/location`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Device-Token': token,
     },
-    body: JSON.stringify({ locations }),
+    body: JSON.stringify(locations),
   });
   return res.json();
 }

@@ -83,22 +83,28 @@ async function ensureDeviceRegistered(): Promise<string> {
     const deviceId = await getDeviceId();
     const deviceName =
       (await getDeviceName()) || `Android-${deviceId || Date.now()}`;
-    const result = await registerDevice(deviceName);
-    await setToken(result.token);
-    await setDeviceId(result.id);
-    await setDeviceName(result.name);
-    token = result.token;
+    try {
+      const result = await registerDevice(deviceName);
+      await setToken(result.token);
+      await setDeviceId(result.id);
+      await setDeviceName(result.name);
+      token = result.token;
+    } catch (error) {
+      console.error('Error registrando dispositivo:', error);
+      throw new Error('No se pudo registrar el dispositivo');
+    }
   }
   return token;
 }
 
 async function trackingTask(taskData?: {delay?: number}) {
-  await initApiBase();
-  const token = await ensureDeviceRegistered();
+  try {
+    await initApiBase();
+    const token = await ensureDeviceRegistered();
 
-  if (trackingTimer) {
-    clearTimeout(trackingTimer);
-  }
+    if (trackingTimer) {
+      clearTimeout(trackingTimer);
+    }
 
   // Función para sincronizar ubicaciones pendientes
   const syncPending = async () => {
@@ -108,7 +114,7 @@ async function trackingTask(taskData?: {delay?: number}) {
     try {
       const result = await syncOfflineLocations(token, pending);
       if ('status' in result && result.status === 'ok') {
-        console.log(`Sincronizadas ${result.synced} ubicaciones offline`);
+        console.log(`Sincronizadas ${result.inserted} ubicaciones offline`);
         await savePendingLocations([]);
       } else {
         console.warn('Error al sincronizar ubicaciones offline:', result);
@@ -177,6 +183,10 @@ async function trackingTask(taskData?: {delay?: number}) {
   }
 
   await tick();
+  } catch (error) {
+    console.error('Error fatal en trackingTask:', error);
+    await stopTracking();
+  }
 }
 
 export async function startTracking(): Promise<void> {
