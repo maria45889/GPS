@@ -65,4 +65,40 @@ router.get('/history', auth, async (req, res) => {
   res.json(history);
 });
 
+// GET /api/location/export — exportar ubicaciones en formato GPX
+router.get('/export', auth, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 1000, 10000);
+  const history = await db.getLocationHistory(req.device.id, limit, 0);
+  
+  if (history.length === 0) {
+    return res.status(404).json({ error: 'No hay ubicaciones para exportar' });
+  }
+
+  // Generar GPX
+  const gpxHeader = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS Tracker" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Track from ${req.device.name}</name>
+    <trkseg>
+`;
+  
+  const gpxPoints = history.map(loc => 
+    `      <trkpt lat="${loc.latitude}" lon="${loc.longitude}">
+        <ele>${loc.altitude || 0}</ele>
+        <time>${loc.timestamp}</time>
+        <speed>${loc.speed || 0}</speed>
+      </trkpt>`
+  ).join('\n');
+  
+  const gpxFooter = `    </trkseg>
+  </trk>
+</gpx>`;
+
+  const gpx = gpxHeader + gpxPoints + gpxFooter;
+  
+  res.setHeader('Content-Type', 'application/gpx+xml');
+  res.setHeader('Content-Disposition', `attachment; filename="track_${req.device.id}_${Date.now()}.gpx"`);
+  res.send(gpx);
+});
+
 module.exports = router;
