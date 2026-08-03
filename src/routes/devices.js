@@ -45,4 +45,64 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// PUT /api/devices/:id — actualizar nombre del dispositivo
+router.put('/:id', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name } = req.body;
+  
+  if (!name) {
+    return res.status(400).json({ error: 'Nombre requerido' });
+  }
+  
+  try {
+    const device = await db.updateDeviceName(id, name);
+    if (!device) {
+      return res.status(404).json({ error: 'no encontrado' });
+    }
+    
+    res.json(device);
+  } catch (error) {
+    console.error('Error actualizando dispositivo:', error);
+    res.status(500).json({ error: 'Error al actualizar dispositivo' });
+  }
+});
+
+// GET /api/devices/:id/stats — estadísticas del dispositivo
+router.get('/:id/stats', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const device = await db.getDeviceById(id);
+  
+  if (!device) {
+    return res.status(404).json({ error: 'no encontrado' });
+  }
+  
+  const history = await db.getLocationHistory(id, 1000, 0);
+  
+  if (history.length === 0) {
+    return res.json({
+      deviceId: id,
+      totalLocations: 0,
+      avgAccuracy: null,
+      maxSpeed: null,
+      avgSpeed: null,
+      batteryLevels: []
+    });
+  }
+  
+  const avgAccuracy = history.reduce((sum, loc) => sum + (loc.accuracy || 0), 0) / history.length;
+  const speeds = history.map(loc => loc.speed || 0);
+  const maxSpeed = Math.max(...speeds);
+  const avgSpeed = speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length;
+  const batteryLevels = history.filter(loc => loc.battery != null).map(loc => loc.battery);
+  
+  res.json({
+    deviceId: id,
+    totalLocations: history.length,
+    avgAccuracy: Math.round(avgAccuracy * 10) / 10,
+    maxSpeed: Math.round(maxSpeed * 3.6 * 10) / 10, // Convertir a km/h
+    avgSpeed: Math.round(avgSpeed * 3.6 * 10) / 10, // Convertir a km/h
+    batteryLevels
+  });
+});
+
 module.exports = router;
