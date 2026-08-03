@@ -11,7 +11,14 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { colors, spacing, radius, shadows } from '../theme';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  getServerUrl,
+  setServerUrl,
+  getDeviceName,
+  setDeviceName,
+  getToken,
+  setToken,
+} from '../storage';
 
 interface HomeScreenProps {
   checking: boolean;
@@ -33,9 +40,9 @@ export default function HomeScreen({ checking, connected, onConnect }: HomeScree
     // Cargar credenciales guardadas si existen
     const loadSavedData = async () => {
       try {
-        const savedUrl = await AsyncStorage.getItem('SERVER_URL');
-        const savedName = await AsyncStorage.getItem('DEVICE_NAME');
-        const savedToken = await AsyncStorage.getItem('DEVICE_TOKEN');
+        const savedUrl = await getServerUrl();
+        const savedName = await getDeviceName();
+        const savedToken = await getToken();
         if (savedUrl) setServerUrl(savedUrl);
         if (savedName) setDeviceNameState(savedName);
         if (savedToken) setTokenState(savedToken);
@@ -66,10 +73,10 @@ export default function HomeScreen({ checking, connected, onConnect }: HomeScree
 
   const handleConnect = async () => {
     try {
-      await AsyncStorage.setItem('SERVER_URL', serverUrl);
-      await AsyncStorage.setItem('DEVICE_NAME', deviceName);
+      await setServerUrl(serverUrl);
+      await setDeviceName(deviceName);
       if (token) {
-        await AsyncStorage.setItem('DEVICE_TOKEN', token);
+        await setToken(token);
       }
       onConnect(serverUrl);
     } catch (e) {
