@@ -100,8 +100,26 @@ npm run build  # Producción
 
 #### Despliegue
 ```powershell
-./deploy.ps1  # PowerShell
+.\deploy.ps1 -ServerHost <IP-del-servidor> [-ServerUser <usuario>] [-RemotePath <ruta>] [-NodeEnv <entorno>] [-CorsOrigin <origen>]
 ```
+
+**Parámetros del script de despliegue:**
+- `-ServerHost`: IP o dominio del servidor remoto (requerido)
+- `-ServerUser`: Usuario SSH (default: root)
+- `-RemotePath`: Ruta remota del proyecto (default: /var/www/gps-tracker)
+- `-NodeEnv`: Entorno Node.js (default: production)
+- `-CorsOrigin`: Origen permitido para CORS (default: *)
+
+**Ejemplo:**
+```powershell
+.\deploy.ps1 -ServerHost 192.168.1.100 -ServerUser ubuntu -CorsOrigin https://midominio.com
+```
+
+**Requisitos previos:**
+- Conexión SSH al servidor remoto
+- SCP instalado (o WinSCP para Windows)
+- Node.js y npm instalados en el servidor
+- PM2 se instalará automáticamente si no está presente
 
 ### 📊 Endpoints API
 
