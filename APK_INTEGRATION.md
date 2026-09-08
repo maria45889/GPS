@@ -49,7 +49,14 @@ Content-Type: application/json
   "accuracy": 10.2,
   "altitude": 2240,
   "bearing": 180.5,
-  "timestamp": "2024-01-01T12:00:00Z"
+  "timestamp": "2024-01-01T12:00:00Z",
+  "battery_level": 85.5,
+  "voltage": 13.0,
+  "apk_battery": 78.0,
+  "network_type": "4G",
+  "ram_usage": 256,
+  "device_status": "moving",
+  "signal_strength": 4
 }
 ```
 
@@ -64,6 +71,13 @@ Content-Type: application/json
 - `altitude`: Altitud en metros (float)
 - `bearing`: Dirección en grados (0-360, float)
 - `timestamp`: Fecha/hora en formato ISO 8601 (string)
+- `battery_level`: Nivel de batería del dispositivo GPS (0-100, float)
+- `voltage`: Voltaje del dispositivo (float, en Volts)
+- `apk_battery`: Nivel de batería del teléfono donde corre el APK (0-100, float)
+- `network_type`: Tipo de red del teléfono (string: "4G", "5G", "WiFi", "3G", etc)
+- `ram_usage`: Uso de RAM del APK (integer, en MB)
+- `device_status`: Estado del dispositivo (string: "moving", "stopped")
+- `signal_strength`: Fuerza de señal GPS (integer: 0-4)
 
 **Respuesta Exitosa (201):**
 ```json
@@ -251,6 +265,14 @@ class GPSTracker(private val context: Context) {
                     put("bearing", location.bearing)
                     put("timestamp", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
                         .format(Date()))
+                    // Nuevos campos para el panel mejorado
+                    put("battery_level", getBatteryLevel()) // Batería del dispositivo GPS
+                    put("voltage", getVoltage()) // Voltaje del dispositivo
+                    put("apk_battery", getAPKBatteryLevel()) // Batería del teléfono
+                    put("network_type", getNetworkType()) // Tipo de red (4G, 5G, WiFi)
+                    put("ram_usage", getRAMUsage()) // Uso de RAM en MB
+                    put("device_status", if (location.speed > 0) "moving" else "stopped")
+                    put("signal_strength", getSignalStrength()) // 0-4
                 }
                 
                 val outputStream = OutputStreamWriter(conn.outputStream)
@@ -286,6 +308,49 @@ class GPSTracker(private val context: Context) {
     fun stopTracking() {
         isTracking = false
         handler.removeCallbacksAndMessages(null)
+    }
+    
+    // Funciones helper para obtener datos del dispositivo
+    private fun getBatteryLevel(): Float {
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        return batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY).toFloat()
+    }
+    
+    private fun getVoltage(): Float {
+        val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        return batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_VOLTAGE).toFloat() / 1000f
+    }
+    
+    private fun getAPKBatteryLevel(): Float {
+        return getBatteryLevel() // Misma batería del teléfono
+    }
+    
+    private fun getNetworkType(): String {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetworkInfo
+        return when (network?.type) {
+            ConnectivityManager.TYPE_WIFI -> "WiFi"
+            ConnectivityManager.TYPE_MOBILE -> when (network.subtype) {
+                TelephonyManager.NETWORK_TYPE_LTE -> "4G"
+                TelephonyManager.NETWORK_TYPE_NR -> "5G"
+                TelephonyManager.NET_TYPE_HSPA -> "3G"
+                else -> "3G"
+            }
+            else -> "Desconocido"
+        }
+    }
+    
+    private fun getRAMUsage(): Int {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val memoryInfo = ActivityManager.MemoryInfo()
+        activityManager.getMemoryInfo(memoryInfo)
+        val usedMemory = (memoryInfo.totalMem - memoryInfo.availMem) / (1024 * 1024)
+        return usedMemory.toInt()
+    }
+    
+    private fun getSignalStrength(): Int {
+        // Simplificado - en producción usar TelephonyManager
+        return 4 // Valor por defecto
     }
 }
 ```
@@ -341,6 +406,15 @@ public class GPSTracker {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
                 json.put("timestamp", sdf.format(new Date()));
                 
+                // Nuevos campos para el panel mejorado
+                json.put("battery_level", getBatteryLevel()); // Batería del dispositivo GPS
+                json.put("voltage", getVoltage()); // Voltaje del dispositivo
+                json.put("apk_battery", getAPKBatteryLevel()); // Batería del teléfono
+                json.put("network_type", getNetworkType()); // Tipo de red (4G, 5G, WiFi)
+                json.put("ram_usage", getRAMUsage()); // Uso de RAM en MB
+                json.put("device_status", location.getSpeed() > 0 ? "moving" : "stopped");
+                json.put("signal_strength", getSignalStrength()); // 0-4
+                
                 OutputStreamWriter outputStream = new OutputStreamWriter(conn.getOutputStream());
                 outputStream.write(json.toString());
                 outputStream.flush();
@@ -354,6 +428,58 @@ public class GPSTracker {
                 System.out.println("Error sending location: " + e.getMessage());
             }
         }).start();
+    }
+    
+    // Funciones helper para obtener datos del dispositivo
+    private float getBatteryLevel() {
+        BatteryManager batteryManager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+        return batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+    }
+    
+    private float getVoltage() {
+        BatteryManager batteryManager = (BatteryManager) context.getSystemService(Context.BATTERY_SERVICE);
+        return batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_VOLTAGE) / 1000f;
+    }
+    
+    private float getAPKBatteryLevel() {
+        return getBatteryLevel(); // Misma batería del teléfono
+    }
+    
+    private String getNetworkType() {
+        ConnectivityManager connectivityManager = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+        android.net.NetworkInfo network = connectivityManager.getActiveNetworkInfo();
+        if (network == null) return "Desconocido";
+        
+        switch (network.getType()) {
+            case ConnectivityManager.TYPE_WIFI:
+                return "WiFi";
+            case ConnectivityManager.TYPE_MOBILE:
+                switch (network.getSubtype()) {
+                    case TelephonyManager.NETWORK_TYPE_LTE:
+                        return "4G";
+                    case TelephonyManager.NETWORK_TYPE_NR:
+                        return "5G";
+                    case TelephonyManager.NETWORK_TYPE_HSPA:
+                        return "3G";
+                    default:
+                        return "3G";
+                }
+            default:
+                return "Desconocido";
+        }
+    }
+    
+    private int getRAMUsage() {
+        ActivityManager activityManager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo memoryInfo = new ActivityManager.MemoryInfo();
+        activityManager.getMemoryInfo(memoryInfo);
+        long usedMemory = (memoryInfo.totalMem - memoryInfo.availMem) / (1024 * 1024);
+        return (int) usedMemory;
+    }
+    
+    private int getSignalStrength() {
+        // Simplificado - en producción usar TelephonyManager
+        return 4; // Valor por defecto
     }
 }
 ```

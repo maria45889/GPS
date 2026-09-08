@@ -15,7 +15,15 @@ CREATE TABLE IF NOT EXISTS gps_locations (
     altitude DECIMAL(10, 2),
     bearing DECIMAL(7, 2),
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    -- Nuevos campos para el panel mejorado
+    battery_level DECIMAL(5, 2),           -- Nivel de batería del dispositivo (%)
+    voltage DECIMAL(5, 2),                  -- Voltaje del dispositivo (V)
+    apk_battery DECIMAL(5, 2),              -- Nivel de batería del APK (%)
+    network_type VARCHAR(20),                -- Tipo de red (4G, 5G, WiFi, etc)
+    ram_usage INTEGER,                       -- Uso de RAM del APK (MB)
+    device_status VARCHAR(20),                -- Estado del dispositivo (moving, stopped)
+    signal_strength INTEGER                   -- Fuerza de señal (0-4)
 );
 
 -- 2. Crear índices para optimizar búsquedas
