@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Monitoreo GPS</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            background: #16213e;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #0f3460;
+        }
+
+        .device-selector {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .device-selector select {
+            padding: 0.5rem;
+            border-radius: 5px;
+            border: none;
+            background: #0f3460;
+            color: #fff;
+            font-size: 1rem;
+        }
+
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s;
+        }
+
+        .btn-primary {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: #c73e52;
+        }
+
+        .btn-secondary {
+            background: #0f3460;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #16213e;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: #16213e;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .info-card {
+            background: #0f3460;
+            padding: 1rem;
+            border-radius: 10px;
+        }
+
+        .info-card h3 {
+            color: #e94560;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 0.5rem 0;
+            font-size: 0.9rem;
+        }
+
+        .info-label {
+            color: #a0a0a0;
+        }
+
+        .info-value {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        .map-container {
+            flex: 1;
+            height: 100%;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+        }
+
+        .status-online {
+            background: #4caf50;
+            color: #fff;
+        }
+
+        .status-offline {
+            background: #f44336;
+            color: #fff;
+        }
+
+        .history-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            padding: 0.5rem;
+            background: #0f3460;
+            margin: 0.25rem 0;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .history-item:hover {
+            background: #16213e;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                max-height: 40vh;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .device-selector {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛵 Panel de Monitoreo GPS</h1>
+            <div class="device-selector">
+                <select id="deviceSelect">
+                    <option value="">Seleccionar dispositivo...</option>
+                </select>
+            </div>
+            <div class="controls">
+                <button class="btn btn-primary" onclick="startTracking()">▶ Iniciar</button>
+                <button class="btn btn-secondary" onclick="stopTracking()">⏸ Pausar</button>
+                <button class="btn btn-secondary" onclick="refreshData()">🔄 Actualizar</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <div class="info-card">
+                    <h3>📍 Ubicación Actual</h3>
+                    <div class="info-item">
+                        <span class="info-label">Latitud:</span>
+                        <span class="info-value" id="currentLat">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Longitud:</span>
+                        <span class="info-value" id="currentLng">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Velocidad:</span>
+                        <span class="info-value" id="currentSpeed">-- km/h</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Precisión:</span>
+                        <span class="info-value" id="currentAccuracy">-- m</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Estado:</span>
+                        <span class="status status-offline" id="connectionStatus">Desconectado</span>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h3>📊 Estadísticas</h3>
+                    <div class="info-item">
+                        <span class="info-label">Última actualización:</span>
+                        <span class="info-value" id="lastUpdate">--</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Puntos registrados:</span>
+                        <span class="info-value" id="totalPoints">0</span>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <h3>📜 Historial Reciente</h3>
+                    <div class="history-list" id="historyList">
+                        <p style="color: #a0a0a0; font-size: 0.9rem;">Seleccione un dispositivo</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="map-container">
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let currentMarker;
+        let trackingInterval;
+        let currentDevice = null;
+        let polyline;
+
+        // Inicializar mapa
+        function initMap() {
+            map = L.map('map').setView([0, 0], 2);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        // Cargar dispositivos disponibles
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/gps/devices');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const select = document.getElementById('deviceSelect');
+                    select.innerHTML = '<option value="">Seleccionar dispositivo...</option>';
+                    
+                    result.data.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device;
+                        option.textContent = device;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando dispositivos:', error);
+            }
+        }
+
+        // Seleccionar dispositivo
+        document.getElementById('deviceSelect').addEventListener('change', async (e) => {
+            currentDevice = e.target.value;
+            if (currentDevice) {
+                await loadLatestLocation();
+                await loadHistory();
+                startTracking();
+            } else {
+                stopTracking();
+                clearMap();
+            }
+        });
+
+        // Cargar última ubicación
+        async function loadLatestLocation() {
+            if (!currentDevice) return;
+
+            try {
+                const response = await fetch(`/api/gps/latest/${currentDevice}`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    updateLocation(result.data);
+                }
+            } catch (error) {
+                console.error('Error cargando última ubicación:', error);
+            }
+        }
+
+        // Cargar historial
+        async function loadHistory() {
+            if (!currentDevice) return;
+
+            try {
+                const response = await fetch(`/api/gps/locations/${currentDevice}?limit=20`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayHistory(result.data);
+                    drawPath(result.data);
+                }
+            } catch (error) {
+                console.error('Error cargando historial:', error);
+            }
+        }
+
+        // Actualizar ubicación en el mapa y panel
+        function updateLocation(data) {
+            const { latitude, longitude, speed, accuracy, timestamp } = data;
+
+            // Actualizar panel
+            document.getElementById('currentLat').textContent = latitude.toFixed(6);
+            document.getElementById('currentLng').textContent = longitude.toFixed(6);
+            document.getElementById('currentSpeed').textContent = speed ? `${speed.toFixed(1)} km/h` : '--';
+            document.getElementById('currentAccuracy').textContent = accuracy ? `${accuracy.toFixed(1)} m` : '--';
+            document.getElementById('lastUpdate').textContent = new Date(timestamp).toLocaleString();
+            document.getElementById('connectionStatus').textContent = 'Conectado';
+            document.getElementById('connectionStatus').className = 'status status-online';
+
+            // Actualizar marcador en el mapa
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+
+            currentMarker = L.marker([latitude, longitude])
+                .addTo(map)
+                .bindPopup(`<b>🛵 Moto GPS</b><br>Lat: ${latitude.toFixed(6)}<br>Lng: ${longitude.toFixed(6)}`)
+                .openPopup();
+
+            map.setView([latitude, longitude], 16);
+        }
+
+        // Mostrar historial
+        function displayHistory(locations) {
+            const historyList = document.getElementById('historyList');
+            historyList.innerHTML = '';
+            
+            document.getElementById('totalPoints').textContent = locations.length;
+
+            locations.forEach((loc, index) => {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.innerHTML = `
+                    <div><strong>#${locations.length - index}</strong> - ${new Date(loc.timestamp).toLocaleString()}</div>
+                    <div>📍 ${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}</div>
+                    <div>🚀 ${loc.speed ? loc.speed.toFixed(1) + ' km/h' : 'N/A'}</div>
+                `;
+                item.onclick = () => {
+                    map.setView([loc.latitude, loc.longitude], 18);
+                    if (currentMarker) {
+                        map.removeLayer(currentMarker);
+                    }
+                    currentMarker = L.marker([loc.latitude, loc.longitude])
+                        .addTo(map)
+                        .bindPopup(`<b>🛵 Moto GPS</b><br>Lat: ${loc.latitude.toFixed(6)}<br>Lng: ${loc.longitude.toFixed(6)}`)
+                        .openPopup();
+                };
+                historyList.appendChild(item);
+            });
+        }
+
+        // Dibujar ruta en el mapa
+        function drawPath(locations) {
+            if (polyline) {
+                map.removeLayer(polyline);
+            }
+
+            if (locations.length > 1) {
+                const latLngs = locations
+                    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+                    .map(loc => [loc.latitude, loc.longitude]);
+
+                polyline = L.polyline(latLngs, {
+                    color: '#e94560',
+                    weight: 3,
+                    opacity: 0.7
+                }).addTo(map);
+            }
+        }
+
+        // Iniciar seguimiento
+        function startTracking() {
+            if (trackingInterval) {
+                clearInterval(trackingInterval);
+            }
+            
+            trackingInterval = setInterval(async () => {
+                if (currentDevice) {
+                    await loadLatestLocation();
+                }
+            }, 5000); // Actualizar cada 5 segundos
+        }
+
+        // Pausar seguimiento
+        function stopTracking() {
+            if (trackingInterval) {
+                clearInterval(trackingInterval);
+                trackingInterval = null;
+            }
+            document.getElementById('connectionStatus').textContent = 'Pausado';
+            document.getElementById('connectionStatus').className = 'status status-offline';
+        }
+
+        // Refrescar datos manualmente
+        async function refreshData() {
+            if (currentDevice) {
+                await loadLatestLocation();
+                await loadHistory();
+            }
+        }
+
+        // Limpiar mapa
+        function clearMap() {
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+                currentMarker = null;
+            }
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+            }
+            map.setView([0, 0], 2);
+            
+            document.getElementById('currentLat').textContent = '--';
+            document.getElementById('currentLng').textContent = '--';
+            document.getElementById('currentSpeed').textContent = '-- km/h';
+            document.getElementById('currentAccuracy').textContent = '-- m';
+            document.getElementById('lastUpdate').textContent = '--';
+            document.getElementById('totalPoints').textContent = '0';
+            document.getElementById('historyList').innerHTML = '<p style="color: #a0a0a0; font-size: 0.9rem;">Seleccione un dispositivo</p>';
+        }
+
+        // Inicializar
+        initMap();
+        loadDevices();
+    </script>
+</body>
+</html>
