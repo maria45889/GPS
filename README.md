@@ -1,16 +1,18 @@
-# 🛵 Sistema de Rastreo GPS para Moto
+# 🛵 Sistema de Rastreo GPS para Moto (Serverless)
 
-Sistema completo de rastreo GPS con panel de monitoreo web accesible desde PC y móvil.
+Sistema completo de rastreo GPS con panel de monitoreo web accesible desde PC y móvil. **Arquitectura 100% serverless con Supabase** - sin servidor backend necesario.
 
 ## 📋 Características
 
-- ✅ Panel de monitoreo en tiempo real
+- ✅ Panel de monitoreo en tiempo real con Supabase Realtime
 - ✅ Mapa interactivo con OpenStreetMap
-- ✅ Seguimiento de ubicación GPS
+- ✅ Seguimiento de ubicación GPS automático
 - ✅ Historial de rutas
 - ✅ Responsive (funciona en PC y móvil)
+- ✅ **100% Serverless** - Sin servidor Node.js/Express
 - ✅ Base de datos gratis con Supabase
-- ✅ APIs REST para integración con APK
+- ✅ Despliegue estático fácil (Vercel/Netlify)
+- ✅ Actualizaciones en tiempo real sin polling
 
 ## 🚀 Instalación
 
@@ -20,87 +22,75 @@ git clone git@github.com:maria45889/GPS.git
 cd GPS
 ```
 
-### 2. Instalar dependencias
-```bash
-npm install
-```
-
-### 3. Configurar Supabase
+### 2. Configurar Supabase
 
 1. Crear cuenta en [Supabase](https://supabase.com/)
 2. Crear un nuevo proyecto
-3. En el dashboard de Supabase, ir a SQL Editor y ejecutar:
+3. En el dashboard de Supabase, ir a SQL Editor y ejecutar el archivo `supabase_setup.sql`:
 
-```sql
--- Crear tabla para almacenar ubicaciones GPS
-CREATE TABLE gps_locations (
-    id BIGSERIAL PRIMARY KEY,
-    device_id VARCHAR(100) NOT NULL,
-    latitude DECIMAL(10, 7) NOT NULL,
-    longitude DECIMAL(10, 7) NOT NULL,
-    speed DECIMAL(7, 2),
-    accuracy DECIMAL(7, 2),
-    altitude DECIMAL(10, 2),
-    bearing DECIMAL(7, 2),
-    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Crear índice para búsquedas por device_id
-CREATE INDEX idx_gps_locations_device_id ON gps_locations(device_id);
-
--- Crear índice para búsquedas por timestamp
-CREATE INDEX idx_gps_locations_timestamp ON gps_locations(timestamp DESC);
-
--- Habilitar RLS (Row Level Security)
-ALTER TABLE gps_locations ENABLE ROW LEVEL SECURITY;
-
--- Política para permitir inserciones desde cualquier IP (para el APK)
-CREATE POLICY "Allow insert for all" ON gps_locations
-    FOR INSERT
-    WITH CHECK (true);
-
--- Política para permitir lecturas desde cualquier IP (para el panel web)
-CREATE POLICY "Allow select for all" ON gps_locations
-    FOR SELECT
-    USING (true);
+```bash
+# O copiar el contenido de supabase_setup.sql en el SQL Editor
 ```
 
 4. Obtener las credenciales:
    - Ir a Settings → API
    - Copiar `Project URL` y `anon public key`
 
-### 4. Configurar variables de entorno
+### 3. Configurar el panel web
 
-Crear archivo `.env` en la raíz del proyecto:
+Editar `public/index.html` y reemplazar las credenciales de Supabase:
 
-```bash
-cp .env.example .env
+```javascript
+// Líneas 268-270 en public/index.html
+const SUPABASE_URL = 'https://wsmqgjcfheraxorljhjc.supabase.co'; // Tu URL real
+const SUPABASE_KEY = 'TU_SUPABASE_ANON_KEY_REAL'; // Tu clave ANON real
 ```
 
-Editar `.env` con tus credenciales de Supabase:
-
-```env
-SUPABASE_URL=tu_supabase_url_aqui
-SUPABASE_KEY=tu_supabase_key_aqui
-PORT=3000
-```
-
-### 5. Iniciar el servidor
+### 4. Probar localmente (opcional)
 
 ```bash
-npm start
+npm install
+npm run dev
 ```
 
 El panel estará disponible en: `http://localhost:3000`
 
+### 5. Desplegar en producción
+
+**Opción A: Vercel (Recomendado)**
+```bash
+# Instalar Vercel CLI
+npm i -g vercel
+
+# Desplegar
+vercel
+```
+
+**Opción B: Netlify**
+```bash
+# Instalar Netlify CLI
+npm i -g netlify-cli
+
+# Desplegar
+netlify deploy --prod
+```
+
+**Opción C: GitHub Pages**
+- Subir el código a GitHub
+- Habilitar GitHub Pages en el repositorio
+- Configurar source branch a `main` y folder a `/public`
+
 ## 📱 Para el APK
 
-### Rutas de la API
+El APK debe conectarse directamente a Supabase. Consulta el archivo `APK_INTEGRATION.md` para documentación completa.
+
+### Endpoints de Supabase
 
 #### Enviar ubicación GPS
 ```http
-POST /api/gps/location
+POST https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1/gps_locations
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
 Content-Type: application/json
 
 {
@@ -117,26 +107,27 @@ Content-Type: application/json
 
 #### Obtener última ubicación
 ```http
-GET /api/gps/latest/{device_id}
+GET https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1/gps_locations?device_id=eq.{device_id}&order=timestamp.desc&limit=1
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
 ```
 
 #### Obtener historial de ubicaciones
 ```http
-GET /api/gps/locations/{device_id}?limit=100
-```
-
-#### Obtener lista de dispositivos
-```http
-GET /api/gps/devices
+GET https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1/gps_locations?device_id=eq.{device_id}&order=timestamp.desc&limit=100
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
 ```
 
 ### Ejemplo de implementación en Android (Kotlin)
 
 ```kotlin
-// Clase para enviar datos GPS
+// Clase para enviar datos GPS a Supabase
 class GPSTracker(private val context: Context) {
     
-    private val API_URL = "http://TU_IP_DEL_SERVIDOR:3000/api/gps/location"
+    private val SUPABASE_URL = "https://wsmqgjcfheraxorljhjc.supabase.co"
+    private val SUPABASE_KEY = "TU_SUPABASE_ANON_KEY"
+    private val API_URL = "$SUPABASE_URL/rest/v1/gps_locations"
     
     fun sendLocation(deviceId: String, location: Location) {
         val json = JSONObject().apply {
@@ -156,6 +147,8 @@ class GPSTracker(private val context: Context) {
                 val url = URL(API_URL)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
+                conn.setRequestProperty("apikey", SUPABASE_KEY)
+                conn.setRequestProperty("Authorization", "Bearer $SUPABASE_KEY")
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.doOutput = true
                 
@@ -177,78 +170,97 @@ class GPSTracker(private val context: Context) {
 
 ## 🎮 Uso del Panel
 
-1. Abrir `http://localhost:3000` en el navegador
+1. Abrir la URL del panel (local o desplegado en Vercel/Netlify)
 2. Seleccionar el dispositivo del dropdown
-3. El sistema iniciará el seguimiento automático
-4. Ver ubicación en tiempo real en el mapa
+3. El sistema iniciará el seguimiento automático con Supabase Realtime
+4. Ver ubicación en tiempo real en el mapa (actualizaciones instantáneas)
 5. Revisar historial de rutas en el panel lateral
 
 ## 📊 Estructura del Proyecto
 
 ```
 GPS/
-├── backend/
-│   └── server.js          # Servidor Express
-├── config/
-│   └── supabase.js        # Configuración de Supabase
 ├── public/
-│   └── index.html         # Panel de monitoreo web
-├── routes/
-│   └── gps.js             # Rutas de la API GPS
-├── .env.example           # Ejemplo de variables de entorno
-├── .env                   # Variables de entorno (crear este archivo)
-├── package.json           # Dependencias del proyecto
+│   └── index.html         # Panel de monitoreo web (conecta directo a Supabase)
+├── supabase_setup.sql     # Script SQL para configurar Supabase
+├── APK_INTEGRATION.md     # Documentación para integración con APK
+├── vercel.json            # Configuración para despliegue en Vercel
+├── netlify.toml           # Configuración para despliegue en Netlify
+├── package.json           # Dependencias (solo para desarrollo local)
 └── README.md              # Este archivo
 ```
 
-## 🔧 Variables de Entorno
+## 🔧 Configuración
 
-- `SUPABASE_URL`: URL del proyecto de Supabase
-- `SUPABASE_KEY`: Key pública de Supabase (anon key)
-- `PORT`: Puerto del servidor (default: 3000)
+- **SUPABASE_URL**: URL del proyecto de Supabase (configurada en `public/index.html`)
+- **SUPABASE_KEY**: Key pública de Supabase (anon key, configurada en `public/index.html`)
 
 ## 🌐 Despliegue
 
-### Para acceso desde móvil en la misma red:
+### Despliegue en Vercel (Recomendado)
 
-1. Obtener la IP de tu PC:
-   - Windows: `ipconfig`
-   - Mac/Linux: `ifconfig`
+```bash
+# Instalar Vercel CLI
+npm i -g vercel
 
-2. En el APK, usar la IP en lugar de `localhost`:
-   ```
-   http://192.168.1.X:3000/api/gps/location
-   ```
+# Desplegar
+vercel
+```
 
-### Para despliegue en la nube:
+El panel estará disponible en: `https://tu-proyecto.vercel.app`
 
-Puedes usar servicios gratuitos como:
-- [Render](https://render.com/)
-- [Railway](https://railway.app/)
-- [Vercel](https://vercel.com/)
+### Despliegue en Netlify
+
+```bash
+# Instalar Netlify CLI
+npm i -g netlify-cli
+
+# Desplegar
+netlify deploy --prod
+```
+
+El panel estará disponible en: `https://tu-proyecto.netlify.app`
+
+### Despliegue en GitHub Pages
+
+1. Subir el código a GitHub
+2. Ir a Settings → Pages
+3. Configurar:
+   - Source: Deploy from a branch
+   - Branch: main
+   - Folder: /public
+4. El panel estará disponible en: `https://tu-usuario.github.io/GPS/`
 
 ## 📱 Acceso Móvil
 
-Para acceder al panel desde el móvil:
-1. En el mismo archivo `.env`, cambiar el host a `0.0.0.0`
-2. Acceder desde el móvil usando la IP de tu PC: `http://192.168.1.X:3000`
+Con la arquitectura serverless, el panel es accesible desde cualquier lugar:
+- No necesitas configurar IP local
+- Funciona con cualquier conexión a internet
+- El APK también se conecta directamente a Supabase
 
 ## 🔒 Seguridad
 
-- Para producción, considera usar API keys adicionales
-- Implementar autenticación para el panel web
-- Usar HTTPS en lugar de HTTP
+- Para producción, considera usar Row Level Security (RLS) más restrictivo
+- Implementar autenticación para el panel web con Supabase Auth
+- Usar HTTPS (Vercel y Netlify lo proveen automáticamente)
+- No exponer la `service_role_key` en el código del cliente
 
 ## 🐛 Troubleshooting
 
 ### Error de conexión a Supabase
-- Verificar que las credenciales en `.env` sean correctas
-- Asegurarse de que las políticas RLS estén configuradas correctamente
+- Verificar que las credenciales en `public/index.html` sean correctas
+- Asegurarse de que las políticas RLS estén configuradas correctamente (ejecutar `supabase_setup.sql`)
+- Verificar que Realtime esté habilitado en Supabase (Database > Replication)
 
 ### El APK no envía datos
-- Verificar que la URL del servidor sea correcta
-- Revisar que el dispositivo esté en la misma red o que el servidor sea accesible públicamente
-- Verificar los logs del servidor
+- Verificar que la URL de Supabase sea correcta
+- Revisar que los headers `apikey` y `Authorization` estén incluidos
+- Verificar que la clave ANON sea correcta
+
+### El panel no se actualiza en tiempo real
+- Verificar que la tabla `gps_locations` esté en la publicación `supabase_realtime`
+- Ejecutar: `ALTER PUBLICATION supabase_realtime ADD TABLE gps_locations;`
+- Revisar la consola del navegador para errores de WebSocket
 
 ### El mapa no carga
 - Verificar conexión a internet

@@ -1,33 +1,41 @@
-# 📱 Documentación para el APK Android
+# 📱 Documentación para el APK Android (Arquitectura Serverless)
 
-Este archivo contiene toda la información necesaria para integrar el APK con el sistema de rastreo GPS.
+Este archivo contiene toda la información necesaria para integrar el APK con el sistema de rastreo GPS usando **Supabase directamente** (sin servidor backend).
 
-## 🔗 URL del Servidor
+## 🔗 URL de Supabase
 
-### Desarrollo (Local)
+### Endpoint Base
 ```
-http://localhost:3000
-```
-
-### Producción (Red Local)
-```
-http://192.168.1.X:3000
-```
-*(Reemplazar `192.168.1.X` con la IP de tu PC)*
-
-### Producción (Nube)
-```
-https://tu-dominio.com
+https://wsmqgjcfheraxorljhjc.supabase.co
 ```
 
-## 🛣️ Rutas de la API
+### API REST
+```
+https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1
+```
+
+## 🔑 Autenticación
+
+El APK debe incluir los siguientes headers en todas las peticiones:
+
+```
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
+Content-Type: application/json
+```
+
+**Importante:** Reemplaza `TU_SUPABASE_ANON_KEY` con la clave ANON de tu proyecto Supabase (disponible en Settings > API).
+
+## 🛣️ Endpoints de Supabase
 
 ### 1. Enviar Ubicación GPS
 
-**Endpoint:** `POST /api/gps/location`
+**Endpoint:** `POST /rest/v1/gps_locations`
 
 **Headers:**
 ```
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
 Content-Type: application/json
 ```
 
@@ -57,12 +65,10 @@ Content-Type: application/json
 - `bearing`: Dirección en grados (0-360, float)
 - `timestamp`: Fecha/hora en formato ISO 8601 (string)
 
-**Respuesta Exitosa (200):**
+**Respuesta Exitosa (201):**
 ```json
-{
-  "success": true,
-  "message": "Ubicación guardada correctamente",
-  "data": {
+[
+  {
     "id": 1,
     "device_id": "moto_001",
     "latitude": 19.432608,
@@ -74,14 +80,15 @@ Content-Type: application/json
     "timestamp": "2024-01-01T12:00:00Z",
     "created_at": "2024-01-01T12:00:00Z"
   }
-}
+]
 ```
 
 **Respuesta de Error (400/500):**
 ```json
 {
-  "success": false,
-  "error": "device_id, latitude y longitude son requeridos"
+  "message": "Error details",
+  "code": "PGRST116",
+  "details": "..."
 }
 ```
 
@@ -89,18 +96,23 @@ Content-Type: application/json
 
 ### 2. Obtener Última Ubicación
 
-**Endpoint:** `GET /api/gps/latest/{device_id}`
+**Endpoint:** `GET /rest/v1/gps_locations?device_id=eq.{device_id}&order=timestamp.desc&limit=1`
 
 **Ejemplo:**
 ```
-GET /api/gps/latest/moto_001
+GET /rest/v1/gps_locations?device_id=eq.moto_001&order=timestamp.desc&limit=1
+```
+
+**Headers:**
+```
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
 ```
 
 **Respuesta Exitosa (200):**
 ```json
-{
-  "success": true,
-  "data": {
+[
+  {
     "id": 100,
     "device_id": "moto_001",
     "latitude": 19.432608,
@@ -112,80 +124,86 @@ GET /api/gps/latest/moto_001
     "timestamp": "2024-01-01T12:00:00Z",
     "created_at": "2024-01-01T12:00:00Z"
   }
-}
+]
 ```
 
 ---
 
 ### 3. Obtener Historial de Ubicaciones
 
-**Endpoint:** `GET /api/gps/locations/{device_id}?limit=100`
+**Endpoint:** `GET /rest/v1/gps_locations?device_id=eq.{device_id}&order=timestamp.desc&limit={limit}`
 
 **Parámetros:**
 - `device_id`: Identificador del dispositivo (string)
-- `limit`: Cantidad de registros a retornar (default: 100)
+- `limit`: Cantidad de registros a retornar (default: 50)
 
 **Ejemplo:**
 ```
-GET /api/gps/locations/moto_001?limit=50
+GET /rest/v1/gps_locations?device_id=eq.moto_001&order=timestamp.desc&limit=50
+```
+
+**Headers:**
+```
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
 ```
 
 **Respuesta Exitosa (200):**
 ```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 100,
-      "device_id": "moto_001",
-      "latitude": 19.432608,
-      "longitude": -99.133209,
-      "speed": 45.5,
-      "accuracy": 10.2,
-      "altitude": 2240,
-      "bearing": 180.5,
-      "timestamp": "2024-01-01T12:00:00Z",
-      "created_at": "2024-01-01T12:00:00Z"
-    },
-    {
-      "id": 99,
-      "device_id": "moto_001",
-      "latitude": 19.432500,
-      "longitude": -99.133100,
-      "speed": 44.0,
-      "accuracy": 11.5,
-      "altitude": 2238,
-      "bearing": 175.0,
-      "timestamp": "2024-01-01T11:55:00Z",
-      "created_at": "2024-01-01T11:55:00Z"
-    }
-  ]
-}
+[
+  {
+    "id": 100,
+    "device_id": "moto_001",
+    "latitude": 19.432608,
+    "longitude": -99.133209,
+    "speed": 45.5,
+    "accuracy": 10.2,
+    "altitude": 2240,
+    "bearing": 180.5,
+    "timestamp": "2024-01-01T12:00:00Z",
+    "created_at": "2024-01-01T12:00:00Z"
+  },
+  {
+    "id": 99,
+    "device_id": "moto_001",
+    "latitude": 19.432500,
+    "longitude": -99.133100,
+    "speed": 44.0,
+    "accuracy": 11.5,
+    "altitude": 2238,
+    "bearing": 175.0,
+    "timestamp": "2024-01-01T11:55:00Z",
+    "created_at": "2024-01-01T11:55:00Z"
+  }
+]
 ```
 
 ---
 
 ### 4. Obtener Lista de Dispositivos
 
-**Endpoint:** `GET /api/gps/devices`
+**Endpoint:** `GET /rest/v1/gps_locations?select=device_id`
+
+**Headers:**
+```
+apikey: TU_SUPABASE_ANON_KEY
+Authorization: Bearer TU_SUPABASE_ANON_KEY
+```
 
 **Respuesta Exitosa (200):**
 ```json
-{
-  "success": true,
-  "data": [
-    "moto_001",
-    "moto_002",
-    "moto_003"
-  ]
-}
+[
+  {"device_id": "moto_001"},
+  {"device_id": "moto_002"},
+  {"device_id": "moto_003"}
+]
 ```
 
 ---
 
 ## 💻 Ejemplo de Implementación en Android
 
-### Kotlin (Modern Android)
+### Kotlin (Modern Android) - Con Supabase Directo
 
 ```kotlin
 import android.content.Context
@@ -201,17 +219,23 @@ import java.util.*
 
 class GPSTracker(private val context: Context) {
     
-    private val API_BASE_URL = "http://192.168.1.100:3000/api/gps" // Cambiar por tu IP
+    // Configuración de Supabase
+    private val SUPABASE_URL = "https://wsmqgjcfheraxorljhjc.supabase.co"
+    private val SUPABASE_KEY = "TU_SUPABASE_ANON_KEY" // Reemplazar con tu clave real
+    private val API_BASE_URL = "$SUPABASE_URL/rest/v1/gps_locations"
+    
     private val handler = Handler(Looper.getMainLooper())
     private var isTracking = false
     
-    // Enviar ubicación al servidor
+    // Enviar ubicación a Supabase
     fun sendLocation(deviceId: String, location: Location) {
         Thread {
             try {
-                val url = URL("$API_BASE_URL/location")
+                val url = URL(API_BASE_URL)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
+                conn.setRequestProperty("apikey", SUPABASE_KEY)
+                conn.setRequestProperty("Authorization", "Bearer $SUPABASE_KEY")
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.doOutput = true
                 conn.connectTimeout = 10000
@@ -266,7 +290,7 @@ class GPSTracker(private val context: Context) {
 }
 ```
 
-### Java (Traditional Android)
+### Java (Traditional Android) - Con Supabase Directo
 
 ```java
 import android.content.Context;
@@ -282,7 +306,11 @@ import java.util.Locale;
 public class GPSTracker {
     
     private Context context;
-    private String API_BASE_URL = "http://192.168.1.100:3000/api/gps"; // Cambiar por tu IP
+    
+    // Configuración de Supabase
+    private String SUPABASE_URL = "https://wsmqgjcfheraxorljhjc.supabase.co";
+    private String SUPABASE_KEY = "TU_SUPABASE_ANON_KEY"; // Reemplazar con tu clave real
+    private String API_BASE_URL = SUPABASE_URL + "/rest/v1/gps_locations";
     
     public GPSTracker(Context context) {
         this.context = context;
@@ -291,9 +319,11 @@ public class GPSTracker {
     public void sendLocation(String deviceId, Location location) {
         new Thread(() -> {
             try {
-                URL url = new URL(API_BASE_URL + "/location");
+                URL url = new URL(API_BASE_URL);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
+                conn.setRequestProperty("apikey", SUPABASE_KEY);
+                conn.setRequestProperty("Authorization", "Bearer " + SUPABASE_KEY);
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setDoOutput(true);
                 conn.setConnectTimeout(10000);
@@ -364,22 +394,21 @@ No olvides agregar los permisos necesarios:
 
 ## 🔧 Configuración de URL
 
-### Para desarrollo local:
-1. Obtener la IP de tu PC:
-   - Windows: `ipconfig` en CMD
-   - Mac/Linux: `ifconfig` en terminal
+### Con Supabase, no necesitas configurar servidores:
 
-2. En el APK, usar la IP en lugar de `localhost`:
-   ```kotlin
-   private val API_BASE_URL = "http://192.168.1.100:3000/api/gps"
-   ```
+La URL de Supabase es constante y funciona desde cualquier lugar:
 
-### Para producción:
-1. Desplegar el servidor en la nube (Render, Railway, etc.)
-2. Usar el dominio asignado:
-   ```kotlin
-   private val API_BASE_URL = "https://tu-app-render.com/api/gps"
-   ```
+```kotlin
+private val SUPABASE_URL = "https://wsmqgjcfheraxorljhjc.supabase.co"
+private val SUPABASE_KEY = "TU_SUPABASE_ANON_KEY"
+private val API_BASE_URL = "$SUPABASE_URL/rest/v1/gps_locations"
+```
+
+**Ventajas:**
+- ✅ Funciona desde cualquier lugar del mundo
+- ✅ No necesitas IP local
+- ✅ No necesitas desplegar servidor propio
+- ✅ Supabase maneja la infraestructura
 
 ## 📱 Frecuencia de Envío
 
@@ -395,7 +424,9 @@ Recomendaciones según el caso de uso:
 
 ```bash
 # Enviar ubicación
-curl -X POST http://localhost:3000/api/gps/location \
+curl -X POST https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1/gps_locations \
+  -H "apikey: TU_SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer TU_SUPABASE_ANON_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "device_id": "test_device",
@@ -406,13 +437,19 @@ curl -X POST http://localhost:3000/api/gps/location \
   }'
 
 # Obtener última ubicación
-curl http://localhost:3000/api/gps/latest/test_device
+curl "https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1/gps_locations?device_id=eq.test_device&order=timestamp.desc&limit=1" \
+  -H "apikey: TU_SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer TU_SUPABASE_ANON_KEY"
 
 # Obtener historial
-curl http://localhost:3000/api/gps/locations/test_device?limit=10
+curl "https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1/gps_locations?device_id=eq.test_device&order=timestamp.desc&limit=10" \
+  -H "apikey: TU_SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer TU_SUPABASE_ANON_KEY"
 
 # Obtener dispositivos
-curl http://localhost:3000/api/gps/devices
+curl "https://wsmqgjcfheraxorljhjc.supabase.co/rest/v1/gps_locations?select=device_id" \
+  -H "apikey: TU_SUPABASE_ANON_KEY" \
+  -H "Authorization: Bearer TU_SUPABASE_ANON_KEY"
 ```
 
 ## ⚠️ Notas Importantes
@@ -425,12 +462,12 @@ curl http://localhost:3000/api/gps/devices
 
 ## 🚀 Próximos Pasos
 
-1. Configurar Supabase según el README.md
-2. Iniciar el servidor: `npm start`
+1. Configurar Supabase según el supabase_setup.sql
+2. Actualizar la clave ANON en el código del APK
 3. Probar las APIs con cURL
 4. Implementar el código en el APK
 5. Probar el envío de datos desde el APK
-6. Verificar en el panel web: `http://localhost:3000`
+6. Verificar en el panel web (desplegar en Vercel/Netlify o usar `npm run dev` localmente)
 
 ## 📞 Soporte
 

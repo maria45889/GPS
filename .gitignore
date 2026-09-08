@@ -5,6 +5,9 @@ package-lock.json
 # Environment variables
 .env
 
+# Supabase credentials (security)
+# No comitar archivos con credenciales reales
+
 # Logs
 logs/
 *.log

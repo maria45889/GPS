@@ -206,8 +206,6 @@
                 </select>
             </div>
             <div class="controls">
-                <button class="btn btn-primary" onclick="startTracking()">▶ Iniciar</button>
-                <button class="btn btn-secondary" onclick="stopTracking()">⏸ Pausar</button>
                 <button class="btn btn-secondary" onclick="refreshData()">🔄 Actualizar</button>
             </div>
         </div>
@@ -265,12 +263,21 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
+        // Configuración de Supabase
+        // REEMPLAZA ESTA CLAVE CON TU CLAVE ANON REAL DEL ARCHIVO .env
+        const SUPABASE_URL = 'https://wsmqgjcfheraxorljhjc.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndzbXFnamNmaGVyYXhvcmxqaGpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMxMTk1NzEsImV4cCI6MjA0ODY3NTU3MX0...';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
         let map;
         let currentMarker;
-        let trackingInterval;
         let currentDevice = null;
         let polyline;
+        let realtimeSubscription = null;
+        let locationHistory = [];
 
         // Inicializar mapa
         function initMap() {
@@ -284,20 +291,26 @@
         // Cargar dispositivos disponibles
         async function loadDevices() {
             try {
-                const response = await fetch('/api/gps/devices');
-                const result = await response.json();
+                const { data, error } = await supabase
+                    .from('gps_locations')
+                    .select('device_id')
+                    .order('timestamp', { ascending: false })
+                    .limit(1000);
+
+                if (error) throw error;
+
+                // Obtener dispositivos únicos
+                const uniqueDevices = [...new Set(data.map(item => item.device_id))];
                 
-                if (result.success) {
-                    const select = document.getElementById('deviceSelect');
-                    select.innerHTML = '<option value="">Seleccionar dispositivo...</option>';
-                    
-                    result.data.forEach(device => {
-                        const option = document.createElement('option');
-                        option.value = device;
-                        option.textContent = device;
-                        select.appendChild(option);
-                    });
-                }
+                const select = document.getElementById('deviceSelect');
+                select.innerHTML = '<option value="">Seleccionar dispositivo...</option>';
+                
+                uniqueDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device;
+                    option.textContent = device;
+                    select.appendChild(option);
+                });
             } catch (error) {
                 console.error('Error cargando dispositivos:', error);
             }
@@ -306,12 +319,18 @@
         // Seleccionar dispositivo
         document.getElementById('deviceSelect').addEventListener('change', async (e) => {
             currentDevice = e.target.value;
+            
+            // Cancelar suscripción anterior
+            if (realtimeSubscription) {
+                realtimeSubscription.unsubscribe();
+                realtimeSubscription = null;
+            }
+            
             if (currentDevice) {
                 await loadLatestLocation();
                 await loadHistory();
-                startTracking();
+                subscribeToRealtime();
             } else {
-                stopTracking();
                 clearMap();
             }
         });
@@ -321,11 +340,18 @@
             if (!currentDevice) return;
 
             try {
-                const response = await fetch(`/api/gps/latest/${currentDevice}`);
-                const result = await response.json();
-                
-                if (result.success && result.data) {
-                    updateLocation(result.data);
+                const { data, error } = await supabase
+                    .from('gps_locations')
+                    .select('*')
+                    .eq('device_id', currentDevice)
+                    .order('timestamp', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (error) throw error;
+
+                if (data) {
+                    updateLocation(data);
                 }
             } catch (error) {
                 console.error('Error cargando última ubicación:', error);
@@ -337,16 +363,59 @@
             if (!currentDevice) return;
 
             try {
-                const response = await fetch(`/api/gps/locations/${currentDevice}?limit=20`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    displayHistory(result.data);
-                    drawPath(result.data);
+                const { data, error } = await supabase
+                    .from('gps_locations')
+                    .select('*')
+                    .eq('device_id', currentDevice)
+                    .order('timestamp', { ascending: false })
+                    .limit(50);
+
+                if (error) throw error;
+
+                if (data) {
+                    locationHistory = data;
+                    displayHistory(data);
+                    drawPath(data);
                 }
             } catch (error) {
                 console.error('Error cargando historial:', error);
             }
+        }
+
+        // Suscribirse a eventos en tiempo real
+        function subscribeToRealtime() {
+            if (!currentDevice) return;
+
+            realtimeSubscription = supabase
+                .channel('gps_locations_channel')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'gps_locations',
+                        filter: `device_id=eq.${currentDevice}`
+                    },
+                    (payload) => {
+                        console.log('Nuevo dato GPS recibido:', payload.new);
+                        updateLocation(payload.new);
+                        
+                        // Agregar al historial
+                        locationHistory.unshift(payload.new);
+                        if (locationHistory.length > 50) {
+                            locationHistory.pop();
+                        }
+                        displayHistory(locationHistory);
+                        drawPath(locationHistory);
+                    }
+                )
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('Suscrito a eventos en tiempo real');
+                        document.getElementById('connectionStatus').textContent = 'Conectado';
+                        document.getElementById('connectionStatus').className = 'status status-online';
+                    }
+                });
         }
 
         // Actualizar ubicación en el mapa y panel
@@ -359,8 +428,6 @@
             document.getElementById('currentSpeed').textContent = speed ? `${speed.toFixed(1)} km/h` : '--';
             document.getElementById('currentAccuracy').textContent = accuracy ? `${accuracy.toFixed(1)} m` : '--';
             document.getElementById('lastUpdate').textContent = new Date(timestamp).toLocaleString();
-            document.getElementById('connectionStatus').textContent = 'Conectado';
-            document.getElementById('connectionStatus').className = 'status status-online';
 
             // Actualizar marcador en el mapa
             if (currentMarker) {
@@ -423,35 +490,23 @@
             }
         }
 
-        // Iniciar seguimiento
-        function startTracking() {
-            if (trackingInterval) {
-                clearInterval(trackingInterval);
-            }
-            
-            trackingInterval = setInterval(async () => {
-                if (currentDevice) {
-                    await loadLatestLocation();
-                }
-            }, 5000); // Actualizar cada 5 segundos
-        }
-
-        // Pausar seguimiento
-        function stopTracking() {
-            if (trackingInterval) {
-                clearInterval(trackingInterval);
-                trackingInterval = null;
-            }
-            document.getElementById('connectionStatus').textContent = 'Pausado';
-            document.getElementById('connectionStatus').className = 'status status-offline';
-        }
-
         // Refrescar datos manualmente
         async function refreshData() {
             if (currentDevice) {
                 await loadLatestLocation();
                 await loadHistory();
             }
+        }
+
+        // Funciones de compatibilidad (ya no se usan con Realtime)
+        function startTracking() {
+            // El seguimiento es automático con Supabase Realtime
+            console.log('Seguimiento automático activado con Supabase Realtime');
+        }
+
+        function stopTracking() {
+            // El seguimiento es automático con Supabase Realtime
+            console.log('Seguimiento automático pausado');
         }
 
         // Limpiar mapa
@@ -464,7 +519,12 @@
                 map.removeLayer(polyline);
                 polyline = null;
             }
+            if (realtimeSubscription) {
+                realtimeSubscription.unsubscribe();
+                realtimeSubscription = null;
+            }
             map.setView([0, 0], 2);
+            locationHistory = [];
             
             document.getElementById('currentLat').textContent = '--';
             document.getElementById('currentLng').textContent = '--';
@@ -473,6 +533,8 @@
             document.getElementById('lastUpdate').textContent = '--';
             document.getElementById('totalPoints').textContent = '0';
             document.getElementById('historyList').innerHTML = '<p style="color: #a0a0a0; font-size: 0.9rem;">Seleccione un dispositivo</p>';
+            document.getElementById('connectionStatus').textContent = 'Desconectado';
+            document.getElementById('connectionStatus').className = 'status status-offline';
         }
 
         // Inicializar

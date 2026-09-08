@@ -39,6 +39,11 @@ CREATE POLICY "Allow select for all" ON gps_locations
     FOR SELECT
     USING (true);
 
+-- Política para permitir suscripciones en tiempo real
+CREATE POLICY "Allow realtime for all" ON gps_locations
+    FOR SELECT
+    USING (true);
+
 -- 5. Crear función para limpiar datos antiguos (opcional)
 CREATE OR REPLACE FUNCTION clean_old_gps_data()
 RETURNS void AS $$
@@ -80,6 +85,10 @@ VALUES
     ('moto_001', 19.432800, -99.133400, 46.2, 9.8, 2245, 185.0, NOW() - INTERVAL '15 minutes'),
     ('moto_001', 19.432900, -99.133500, 43.8, 10.5, 2248, 190.0, NOW() - INTERVAL '5 minutes');
 
--- 8. Verificar la configuración
+-- 8. Habilitar Realtime para la tabla gps_locations
+-- Esto permite que el panel web reciba actualizaciones en tiempo real
+ALTER PUBLICATION supabase_realtime ADD TABLE gps_locations;
+
+-- 9. Verificar la configuración
 SELECT 'Configuración completada' as status;
 SELECT COUNT(*) as total_locations FROM gps_locations;
