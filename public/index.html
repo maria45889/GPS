@@ -54,7 +54,7 @@
             background: linear-gradient(135deg, rgba(15, 15, 35, 0.98) 0%, rgba(26, 26, 62, 0.98) 100%);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            padding: 1.2rem 1.8rem;
+            padding: 1rem 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -593,34 +593,31 @@
             .header {
                 flex-direction: column;
                 align-items: stretch;
-                padding: 1rem;
-                gap: 0.8rem;
+                padding: 0.8rem;
+                gap: 0.6rem;
+                background: linear-gradient(135deg, rgba(15, 15, 35, 0.99) 0%, rgba(26, 26, 62, 0.99) 100%);
             }
 
             .header-left {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 0.8rem;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.5rem;
             }
 
             .header h1 {
-                font-size: 1.2rem;
-                text-align: center;
+                font-size: 1.1rem;
+                margin: 0;
             }
 
             .search-box {
-                width: 100%;
-            }
-
-            .search-box input {
-                width: 100%;
-                font-size: 0.85rem;
+                display: none;
             }
 
             .header-right {
                 flex-direction: column;
                 width: 100%;
-                gap: 0.8rem;
+                gap: 0.6rem;
             }
 
             .device-selector {
@@ -630,260 +627,339 @@
             .device-selector select {
                 width: 100%;
                 min-width: auto;
-                font-size: 0.85rem;
-                padding: 0.6rem 1rem;
+                font-size: 0.9rem;
+                padding: 0.7rem 1rem;
             }
 
             .action-buttons {
-                flex-wrap: wrap;
-                justify-content: center;
-                gap: 0.4rem;
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 0.5rem;
             }
 
             .btn {
-                flex: 1;
-                justify-content: center;
-                min-width: 100px;
-                padding: 0.6rem 0.8rem;
-                font-size: 0.75rem;
+                padding: 0.8rem 0.6rem;
+                font-size: 0.8rem;
+                min-width: auto;
+                gap: 0.4rem;
             }
 
-            .main-content {
-                grid-template-rows: auto 50vh auto;
-            }
-
-            .map-container {
-                min-height: 50vh;
-            }
-
-            .left-panel, .right-panel {
-                padding: 1rem;
-            }
-
-            .info-card {
-                padding: 1rem;
-                margin-bottom: 0.8rem;
-            }
-
-            .info-card h3 {
+            .btn i {
                 font-size: 0.9rem;
             }
 
-            .info-item {
-                font-size: 0.8rem;
-                margin: 0.6rem 0;
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: 60vh auto;
+                overflow-y: auto;
+            }
+
+            .map-container {
+                min-height: 60vh;
+                height: 60vh;
+                order: 1;
+            }
+
+            .left-panel {
+                display: none;
+            }
+
+            .right-panel {
+                display: none;
+            }
+
+            .mobile-info-panel {
+                display: block;
+                order: 2;
+                padding: 1rem;
+                background: linear-gradient(180deg, rgba(15, 15, 35, 0.97) 0%, rgba(22, 33, 62, 0.97) 100%);
+                border-top: 2px solid rgba(233, 69, 96, 0.3);
+            }
+
+            .mobile-info-card {
+                background: linear-gradient(135deg, rgba(15, 52, 96, 0.8) 0%, rgba(22, 33, 62, 0.8) 100%);
+                padding: 1rem;
+                border-radius: 12px;
+                border: 1px solid rgba(233, 69, 96, 0.3);
+                margin-bottom: 0.8rem;
+            }
+
+            .mobile-info-card h3 {
+                color: #e94560;
+                font-size: 0.95rem;
+                font-weight: 700;
+                margin-bottom: 0.8rem;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .mobile-info-card h3 i {
+                font-size: 1rem;
+            }
+
+            .mobile-info-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
                 padding: 0.5rem 0;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                font-size: 0.85rem;
             }
 
-            .info-label {
-                font-size: 0.75rem;
+            .mobile-info-row:last-child {
+                border-bottom: none;
             }
 
-            .info-value {
+            .mobile-info-label {
+                color: rgba(255, 255, 255, 0.7);
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+            }
+
+            .mobile-info-label i {
+                color: #e94560;
                 font-size: 0.8rem;
             }
 
-            .status-badge {
-                font-size: 0.7rem;
-                padding: 0.25rem 0.6rem;
+            .mobile-info-value {
+                color: #fff;
+                font-weight: 600;
             }
 
-            .battery-icon {
-                width: 25px;
+            .mobile-battery-indicator {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .mobile-battery-icon {
+                width: 28px;
+                height: 14px;
+                border: 2px solid #4caf50;
+                border-radius: 2px;
+                position: relative;
+                display: flex;
+                align-items: center;
+                padding: 2px;
+            }
+
+            .mobile-battery-icon::after {
+                content: '';
+                position: absolute;
+                right: -5px;
+                width: 3px;
+                height: 7px;
+                background: #4caf50;
+                border-radius: 0 1px 1px 0;
+            }
+
+            .mobile-battery-level {
+                height: 100%;
+                background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
+                border-radius: 1px;
+                transition: width 0.3s ease;
+            }
+
+            .mobile-battery-level.low {
+                background: linear-gradient(90deg, #f44336 0%, #ff5722 100%);
+            }
+
+            .mobile-battery-level.medium {
+                background: linear-gradient(90deg, #ff9800 0%, #ffc107 100%);
+            }
+
+            .mobile-signal-bars {
+                display: flex;
+                align-items: flex-end;
+                gap: 2px;
                 height: 14px;
             }
 
-            .signal-bars {
-                height: 14px;
+            .mobile-signal-bar {
+                width: 3px;
+                background: #4caf50;
+                border-radius: 1px;
             }
 
-            .signal-bar {
-                width: 2px;
+            .mobile-signal-bar:nth-child(1) { height: 4px; }
+            .mobile-signal-bar:nth-child(2) { height: 7px; }
+            .mobile-signal-bar:nth-child(3) { height: 10px; }
+            .mobile-signal-bar:nth-child(4) { height: 14px; }
+
+            .mobile-signal-bar.inactive {
+                background: rgba(255, 255, 255, 0.2);
             }
 
-            .signal-bar:nth-child(1) { height: 3px; }
-            .signal-bar:nth-child(2) { height: 6px; }
-            .signal-bar:nth-child(3) { height: 10px; }
-            .signal-bar:nth-child(4) { height: 14px; }
-
-            .device-image {
-                height: 120px;
+            .mobile-status-badge {
+                display: inline-block;
+                padding: 0.3rem 0.7rem;
+                border-radius: 15px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                text-transform: uppercase;
             }
 
-            .device-image-overlay {
-                font-size: 0.7rem;
-                padding: 0.6rem;
+            .mobile-status-badge.active {
+                background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+                color: #fff;
             }
 
-            .alert-item {
-                padding: 0.6rem;
+            .mobile-status-badge.moving {
+                background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+                color: #fff;
+            }
+
+            .mobile-status-badge.stopped {
+                background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+                color: #fff;
+            }
+
+            .mobile-status-badge.offline {
+                background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+                color: #fff;
+            }
+
+            .mobile-alert-item {
+                padding: 0.7rem;
+                background: linear-gradient(135deg, rgba(244, 67, 54, 0.15) 0%, rgba(211, 47, 47, 0.15) 100%);
+                border-radius: 8px;
+                margin: 0.4rem 0;
+                border-left: 3px solid #f44336;
                 font-size: 0.8rem;
             }
 
-            .alert-time {
+            .mobile-alert-item.warning {
+                background: linear-gradient(135deg, rgba(255, 152, 0, 0.15) 0%, rgba(245, 124, 0, 0.15) 100%);
+                border-left-color: #ff9800;
+            }
+
+            .mobile-alert-item.info {
+                background: linear-gradient(135deg, rgba(33, 150, 243, 0.15) 0%, rgba(25, 118, 210, 0.15) 100%);
+                border-left-color: #2196f3;
+            }
+
+            .mobile-alert-time {
+                color: rgba(255, 255, 255, 0.6);
                 font-size: 0.7rem;
+                margin-bottom: 0.2rem;
             }
 
-            .alert-message {
-                font-size: 0.75rem;
-            }
-
-            .mini-map {
-                height: 100px;
+            .mobile-alert-message {
+                color: #fff;
+                font-weight: 600;
             }
         }
 
         @media (max-width: 480px) {
             .header {
-                padding: 0.8rem;
-                gap: 0.6rem;
+                padding: 0.6rem;
+                gap: 0.5rem;
             }
 
             .header h1 {
                 font-size: 1rem;
-                margin-bottom: 0.2rem;
-            }
-
-            .search-box {
-                padding: 0.5rem 0.8rem;
-            }
-
-            .search-box input {
-                font-size: 0.8rem;
             }
 
             .device-selector select {
-                padding: 0.5rem 0.8rem;
-                font-size: 0.8rem;
+                font-size: 0.85rem;
+                padding: 0.6rem 0.8rem;
             }
 
             .action-buttons {
-                gap: 0.3rem;
+                gap: 0.4rem;
             }
 
             .btn {
-                padding: 0.5rem 0.6rem;
-                font-size: 0.7rem;
-                min-width: 80px;
-                gap: 0.3rem;
+                padding: 0.7rem 0.5rem;
+                font-size: 0.75rem;
             }
 
             .btn i {
-                font-size: 0.7rem;
+                font-size: 0.85rem;
             }
 
             .main-content {
-                grid-template-rows: auto 45vh auto;
+                grid-template-rows: 65vh auto;
             }
 
             .map-container {
-                min-height: 45vh;
+                height: 65vh;
+                min-height: 65vh;
             }
 
-            .left-panel, .right-panel {
+            .mobile-info-panel {
                 padding: 0.8rem;
             }
 
-            .info-card {
+            .mobile-info-card {
                 padding: 0.8rem;
                 margin-bottom: 0.6rem;
             }
 
-            .info-card h3 {
-                font-size: 0.85rem;
-                margin-bottom: 0.8rem;
-            }
-
-            .info-card h3 i {
+            .mobile-info-card h3 {
                 font-size: 0.9rem;
             }
 
-            .info-item {
-                font-size: 0.75rem;
-                margin: 0.5rem 0;
+            .mobile-info-row {
+                font-size: 0.8rem;
                 padding: 0.4rem 0;
             }
 
-            .info-label {
-                font-size: 0.7rem;
-            }
-
-            .info-label i {
-                font-size: 0.7rem;
-            }
-
-            .info-value {
+            .mobile-info-label {
                 font-size: 0.75rem;
             }
 
-            .status-badge {
-                font-size: 0.65rem;
-                padding: 0.2rem 0.5rem;
+            .mobile-info-value {
+                font-size: 0.8rem;
             }
 
-            .battery-indicator {
-                gap: 0.3rem;
-            }
-
-            .battery-icon {
-                width: 22px;
+            .mobile-battery-icon {
+                width: 24px;
                 height: 12px;
             }
 
-            .battery-icon::after {
-                right: -5px;
+            .mobile-battery-icon::after {
+                right: -4px;
                 width: 3px;
                 height: 6px;
             }
 
-            .signal-bars {
+            .mobile-signal-bars {
                 height: 12px;
             }
 
-            .signal-bar {
+            .mobile-signal-bar {
                 width: 2px;
             }
 
-            .signal-bar:nth-child(1) { height: 3px; }
-            .signal-bar:nth-child(2) { height: 5px; }
-            .signal-bar:nth-child(3) { height: 8px; }
-            .signal-bar:nth-child(4) { height: 12px; }
+            .mobile-signal-bar:nth-child(1) { height: 3px; }
+            .mobile-signal-bar:nth-child(2) { height: 6px; }
+            .mobile-signal-bar:nth-child(3) { height: 9px; }
+            .mobile-signal-bar:nth-child(4) { height: 12px; }
 
-            .device-image {
-                height: 100px;
-                margin-bottom: 0.8rem;
+            .mobile-status-badge {
+                font-size: 0.7rem;
+                padding: 0.25rem 0.6rem;
             }
 
-            .device-image i {
-                font-size: 3rem;
-            }
-
-            .device-image-overlay {
-                font-size: 0.65rem;
-                padding: 0.5rem;
-            }
-
-            .alert-item {
-                padding: 0.5rem;
+            .mobile-alert-item {
+                padding: 0.6rem;
                 font-size: 0.75rem;
-                margin: 0.4rem 0;
             }
 
-            .alert-time {
+            .mobile-alert-time {
                 font-size: 0.65rem;
             }
 
-            .alert-message {
+            .mobile-alert-message {
                 font-size: 0.7rem;
             }
+        }
 
-            .mini-map {
-                height: 80px;
-            }
-
-            .mini-map i {
-                font-size: 1.5rem;
-            }
+        .mobile-info-panel {
+            display: none;
         }
     </style>
 </head>
@@ -983,6 +1059,68 @@
 
             <div class="map-container">
                 <div id="map"></div>
+            </div>
+
+            <div class="mobile-info-panel">
+                <div class="mobile-info-card">
+                    <h3><i class="fas fa-info-circle"></i> Información del Dispositivo</h3>
+                    <div class="mobile-info-row">
+                        <span class="mobile-info-label"><i class="fas fa-tag"></i> Dispositivo:</span>
+                        <span class="mobile-info-value" id="mobileDeviceLocation">--</span>
+                    </div>
+                    <div class="mobile-info-row">
+                        <span class="mobile-info-label"><i class="fas fa-running"></i> Estado:</span>
+                        <span class="mobile-status-badge stopped" id="mobileDeviceStatus">Detenido</span>
+                    </div>
+                    <div class="mobile-info-row">
+                        <span class="mobile-info-label"><i class="fas fa-battery-full"></i> Batería:</span>
+                        <div class="mobile-battery-indicator">
+                            <div class="mobile-battery-icon">
+                                <div class="mobile-battery-level" id="mobileBatteryLevel" style="width: 100%"></div>
+                            </div>
+                            <span class="mobile-info-value" id="mobileBatteryPercent">100%</span>
+                        </div>
+                    </div>
+                    <div class="mobile-info-row">
+                        <span class="mobile-info-label"><i class="fas fa-tachometer-alt"></i> Velocidad:</span>
+                        <span class="mobile-info-value" id="mobileCurrentSpeed">-- km/h</span>
+                    </div>
+                    <div class="mobile-info-row">
+                        <span class="mobile-info-label"><i class="fas fa-clock"></i> Última conexión:</span>
+                        <span class="mobile-status-badge active" id="mobileLastConnection">ACTIVO</span>
+                    </div>
+                </div>
+
+                <div class="mobile-info-card">
+                    <h3><i class="fas fa-signal"></i> Conexión</h3>
+                    <div class="mobile-info-row">
+                        <span class="mobile-info-label"><i class="fas fa-wifi"></i> Señal:</span>
+                        <div class="mobile-signal-bars">
+                            <div class="mobile-signal-bar"></div>
+                            <div class="mobile-signal-bar"></div>
+                            <div class="mobile-signal-bar"></div>
+                            <div class="mobile-signal-bar"></div>
+                        </div>
+                    </div>
+                    <div class="mobile-info-row">
+                        <span class="mobile-info-label"><i class="fas fa-network-wired"></i> Red:</span>
+                        <span class="mobile-info-value" id="mobileNetworkType">--</span>
+                    </div>
+                </div>
+
+                <div class="mobile-info-card">
+                    <h3><i class="fas fa-exclamation-circle"></i> Alertas Recientes</h3>
+                    <div id="mobileAlertsList">
+                        <div class="mobile-alert-item info">
+                            <div class="mobile-alert-time">15:15</div>
+                            <div class="mobile-alert-message">Ingreso Geovalla A</div>
+                        </div>
+                        <div class="mobile-alert-item warning">
+                            <div class="mobile-alert-time">08:42</div>
+                            <div class="mobile-alert-message">Inicio de Viaje</div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="right-panel">
@@ -1202,14 +1340,18 @@
         function updateLocation(data) {
             const { latitude, longitude, speed, accuracy, altitude, bearing, timestamp, device_id, battery_level, voltage, apk_battery, network_type, ram_usage } = data;
 
-            // Actualizar panel izquierdo
+            // Actualizar panel izquierdo (desktop)
             document.getElementById('deviceLocation').textContent = device_id || 'Moto #1';
             document.getElementById('latLong').textContent = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
             document.getElementById('currentSpeed').textContent = speed ? `${speed.toFixed(1)} km/h` : '-- km/h';
             document.getElementById('gpsAccuracy').textContent = accuracy ? `${accuracy.toFixed(1)} m` : '-- m';
             document.getElementById('voltage').textContent = voltage ? `${voltage.toFixed(1)} V` : '-- V';
 
-            // Actualizar estado según velocidad
+            // Actualizar panel móvil
+            document.getElementById('mobileDeviceLocation').textContent = device_id || 'Moto #1';
+            document.getElementById('mobileCurrentSpeed').textContent = speed ? `${speed.toFixed(1)} km/h` : '-- km/h';
+
+            // Actualizar estado según velocidad (desktop)
             const statusBadge = document.getElementById('deviceStatus');
             if (speed && speed > 5) {
                 statusBadge.className = 'status-badge status-moving';
@@ -1219,7 +1361,17 @@
                 statusBadge.textContent = 'Detenido';
             }
 
-            // Actualizar batería del dispositivo
+            // Actualizar estado según velocidad (móvil)
+            const mobileStatusBadge = document.getElementById('mobileDeviceStatus');
+            if (speed && speed > 5) {
+                mobileStatusBadge.className = 'mobile-status-badge moving';
+                mobileStatusBadge.textContent = 'En Movimiento';
+            } else {
+                mobileStatusBadge.className = 'mobile-status-badge stopped';
+                mobileStatusBadge.textContent = 'Detenido';
+            }
+
+            // Actualizar batería del dispositivo (desktop)
             if (battery_level !== undefined) {
                 const batteryPercent = Math.round(battery_level);
                 document.getElementById('batteryPercent').textContent = `${batteryPercent}%`;
@@ -1232,6 +1384,18 @@
                     batteryLevelEl.classList.add('low');
                 } else if (batteryPercent < 50) {
                     batteryLevelEl.classList.add('medium');
+                }
+
+                // Actualizar batería móvil
+                document.getElementById('mobileBatteryPercent').textContent = `${batteryPercent}%`;
+                const mobileBatteryLevelEl = document.getElementById('mobileBatteryLevel');
+                mobileBatteryLevelEl.style.width = `${batteryPercent}%`;
+                
+                mobileBatteryLevelEl.className = 'mobile-battery-level';
+                if (batteryPercent < 20) {
+                    mobileBatteryLevelEl.classList.add('low');
+                } else if (batteryPercent < 50) {
+                    mobileBatteryLevelEl.classList.add('medium');
                 }
             }
 
@@ -1253,12 +1417,13 @@
             // Actualizar red y RAM del APK
             if (network_type) {
                 document.getElementById('networkType').textContent = network_type;
+                document.getElementById('mobileNetworkType').textContent = network_type;
             }
             if (ram_usage) {
                 document.getElementById('ramUsage').textContent = `${ram_usage} MB`;
             }
 
-            // Actualizar última conexión
+            // Actualizar última conexión (desktop)
             const now = new Date();
             const lastUpdate = new Date(timestamp);
             const diffSeconds = Math.floor((now - lastUpdate) / 1000);
@@ -1273,6 +1438,19 @@
             } else {
                 connectionBadge.className = 'status-badge status-offline';
                 connectionBadge.textContent = 'INACTIVO';
+            }
+
+            // Actualizar última conexión (móvil)
+            const mobileConnectionBadge = document.getElementById('mobileLastConnection');
+            if (diffSeconds < 30) {
+                mobileConnectionBadge.className = 'mobile-status-badge active';
+                mobileConnectionBadge.textContent = `ACTIVO`;
+            } else if (diffSeconds < 300) {
+                mobileConnectionBadge.className = 'mobile-status-badge active';
+                mobileConnectionBadge.textContent = `ACTIVO`;
+            } else {
+                mobileConnectionBadge.className = 'mobile-status-badge offline';
+                mobileConnectionBadge.textContent = 'INACTIVO';
             }
 
             // Actualizar info del dispositivo en panel derecho
