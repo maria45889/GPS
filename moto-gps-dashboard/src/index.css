@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0B0F19;
+  --color-surface: rgba(20, 28, 43, 0.65);
+  --color-surfaceBorder: rgba(255, 255, 255, 0.08);
+  --color-accent: #00E5FF;
+  --color-accentGlow: rgba(0, 229, 255, 0.4);
+  --color-danger: #FF3366;
+  --color-success: #00E676;
+  --color-textMain: #E2E8F0;
+  --color-textMuted: #94A3B8;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --blur-md: 12px;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-textMain font-sans overflow-hidden;
+  }
+}
+
+/* Custom Scrollbar for inner components */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Leaflet map dark mode overrides */
+.leaflet-layer,
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out,
+.leaflet-control-attribution {
+  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+.leaflet-container {
+  background: #0B0F19 !important;
+}
