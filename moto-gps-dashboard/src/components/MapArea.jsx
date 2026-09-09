@@ -1,9 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Popup, ZoomControl } from 'react-leaflet';
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import MotoInfoCard from './MotoInfoCard';
 import AlertsPanel from './AlertsPanel';
+
+// Component to handle map resize
+const MapResizeHandler = () => {
+  const map = useMap();
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 100);
+    };
+
+    // Initial resize
+    handleResize();
+    
+    // Resize on window resize
+    window.addEventListener('resize', handleResize);
+    
+    // Resize on orientation change (mobile)
+    window.addEventListener('orientationchange', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, [map]);
+
+  return null;
+};
 
 // Moto icon
 const motoIcon = new L.Icon({
@@ -32,13 +61,16 @@ const MapArea = () => {
   ];
 
   return (
-    <div className="absolute inset-0 bg-[#0B0F19]">
+    <div className="absolute inset-0 bg-[#0B0F19] w-full h-full">
       <MapContainer 
         center={center} 
         zoom={14} 
         zoomControl={false}
         className="w-full h-full z-0"
+        style={{ height: '100%', width: '100%' }}
       >
+        <MapResizeHandler />
+        
         {/* Dark map tiles (CartoDB Dark Matter) */}
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -74,15 +106,24 @@ const MapArea = () => {
         </Marker>
       </MapContainer>
 
-      {/* Floating UI Elements */}
-      <MotoInfoCard />
-      <AlertsPanel />
-      
-      {/* Bottom Right Controls / Info */}
-      <div className="absolute bottom-8 right-8 z-10 flex flex-col gap-4">
-        <div className="bg-surface backdrop-blur-md border border-surfaceBorder rounded-xl p-3 flex items-center gap-3 shadow-lg pointer-events-auto cursor-pointer hover:bg-white/5 transition-colors">
-          <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
-          <span className="text-sm font-medium text-white">Conectado en tiempo real</span>
+      {/* Floating UI Elements - Adjusted for mobile */}
+      <div className="absolute inset-0 pointer-events-none z-10">
+        {/* MotoInfoCard - Adjusted positioning for mobile */}
+        <div className="absolute top-20 left-4 md:top-24 md:left-8 pointer-events-auto">
+          <MotoInfoCard />
+        </div>
+
+        {/* AlertsPanel - Adjusted positioning for mobile */}
+        <div className="absolute top-20 right-4 md:top-24 md:right-8 pointer-events-auto">
+          <AlertsPanel />
+        </div>
+        
+        {/* Bottom Right Controls / Info - Adjusted for mobile */}
+        <div className="absolute bottom-4 right-4 md:bottom-8 md:right-8 pointer-events-auto">
+          <div className="bg-surface backdrop-blur-md border border-surfaceBorder rounded-xl p-3 flex items-center gap-3 shadow-lg cursor-pointer hover:bg-white/5 transition-colors">
+            <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+            <span className="text-sm font-medium text-white">Conectado en tiempo real</span>
+          </div>
         </div>
       </div>
     </div>

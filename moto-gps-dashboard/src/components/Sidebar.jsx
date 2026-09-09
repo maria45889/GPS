@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Truck, Route, Bell, MapPin, Settings, User } from 'lucide-react';
+import { LayoutDashboard, Truck, Route, Bell, MapPin, Settings, User, X } from 'lucide-react';
 import clsx from 'clsx';
 
 const menuItems = [
@@ -11,15 +11,26 @@ const menuItems = [
   { id: 'settings', label: 'Configuración', icon: Settings },
 ];
 
-const Sidebar = () => {
+const Sidebar = ({ onClose }) => {
   return (
-    <aside className="w-64 h-full bg-[#080C14] border-r border-surfaceBorder flex flex-col justify-between py-6 z-20">
+    <aside className="w-64 h-full bg-[#080C14] border-r border-surfaceBorder flex flex-col justify-between py-6">
       <div>
-        <div className="px-6 mb-10 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
-            <span className="text-accent font-bold text-lg">R</span>
+        <div className="px-6 mb-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+              <span className="text-accent font-bold text-lg">R</span>
+            </div>
+            <h1 className="text-xl font-bold tracking-wide">RIDEGUARD</h1>
           </div>
-          <h1 className="text-xl font-bold tracking-wide">RIDEGUARD</h1>
+          {/* Mobile close button */}
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="md:hidden w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-textMuted hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <X size={18} />
+            </button>
+          )}
         </div>
 
         <nav className="flex flex-col gap-2 px-4">
@@ -34,6 +45,7 @@ const Sidebar = () => {
                     ? "bg-surface border border-surfaceBorder shadow-[0_0_15px_rgba(0,229,255,0.1)] text-white" 
                     : "text-textMuted hover:text-white hover:bg-white/5"
                 )}
+                onClick={onClose}
               >
                 <Icon size={20} className={item.active ? "text-accent" : ""} />
                 <span className="font-medium">{item.label}</span>
