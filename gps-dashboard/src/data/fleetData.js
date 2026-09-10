@@ -1,0 +1,81 @@
+﻿export const initialFleet = [
+  {
+    id: 'MT-2101',
+    name: 'Yamaha YZF-R1',
+    plate: 'XYZ-987',
+    driver: 'Alex Rivera',
+    status: 'active',
+    speed: 84,
+    battery: 92,
+    fuel: 78,
+    temp: 82,
+    odometer: '14,352 km',
+    position: [37.7660, -122.4280],
+    lastUpdate: 'En vivo',
+    route: [
+      [37.7660, -122.4280],
+      [37.7680, -122.4240],
+      [37.7695, -122.4180],
+      [37.7710, -122.4140],
+      [37.7740, -122.4100],
+      [37.7770, -122.4040],
+      [37.7760, -122.3990],
+      [37.7740, -122.3960],
+      [37.7715, -122.3970],
+      [37.7725, -122.4020],
+      [37.7790, -122.4010],
+      [37.7840, -122.4080],
+      [37.7880, -122.4030],
+      [37.7895, -122.3970],
+    ]
+  },
+  {
+    id: 'MT-3402',
+    name: 'Kawasaki Ninja ZX-6R',
+    plate: 'KWS-451',
+    driver: 'Carlos Mendoza',
+    status: 'active',
+    speed: 62,
+    battery: 88,
+    fuel: 65,
+    temp: 79,
+    odometer: '8,920 km',
+    position: [37.7840, -122.4080],
+    lastUpdate: 'Hace 1 min',
+    route: [
+      [37.7840, -122.4080],
+      [37.7800, -122.4120],
+      [37.7770, -122.4160],
+    ]
+  },
+  {
+    id: 'MT-1050',
+    name: 'Honda CBR 600RR',
+    plate: 'HND-882',
+    driver: 'Lucía Torres',
+    status: 'stopped',
+    speed: 0,
+    battery: 95,
+    fuel: 90,
+    temp: 45,
+    odometer: '21,430 km',
+    position: [37.7710, -122.4240], // Inside Home Zone
+    lastUpdate: 'Hace 12 min',
+    route: []
+  },
+  {
+    id: 'MT-8904',
+    name: 'Ducati Panigale V2',
+    plate: 'DCT-109',
+    driver: 'Marco Soria',
+    status: 'offline',
+    speed: 0,
+    battery: 18,
+    fuel: 40,
+    temp: 24,
+    odometer: '5,120 km',
+    position: [37.7660, -122.3940], // Inside Office Zone
+    lastUpdate: 'Hace 3 horas',
+    route: []
+  }
+];
