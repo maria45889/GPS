@@ -1,4 +1,5 @@
-import React from 'react';
+﻿import React from 'react';
+import { Zap, Gauge, Thermometer, Droplets, Wifi } from 'lucide-react';
 
 const MotoInfoCard = ({ vehicle }) => {
   const current = vehicle || {
@@ -15,86 +16,154 @@ const MotoInfoCard = ({ vehicle }) => {
 
   const isMoving = current.status === 'active';
 
-  return (
-    <div className="flex flex-col gap-3 pointer-events-auto w-76 sm:w-84 max-w-[calc(100vw-2rem)] select-none">
-      {/* 1. Vehicle Status Card */}
-      <div className="bg-[#101726]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-[0_15px_35px_rgba(0,0,0,0.6)]">
-        <h2 className="text-xs font-semibold text-[#94A3B8] mb-3">
-          Vehicle Status
-        </h2>
+  const statusColor = isMoving ? '#00E676'
+    : current.status === 'stopped' ? '#F59E0B'
+    : '#64748B';
 
-        <div className="flex items-center gap-3">
-          {/* Motorcycle Image */}
-          <div className="w-24 h-20 shrink-0 flex items-center justify-center relative">
-            <img 
-              src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&q=80&w=300" 
-              alt={current.name} 
-              className="w-full h-full object-contain filter drop-shadow-[0_8px_16px_rgba(0,0,0,0.7)]" 
+  const statusLabel = isMoving ? 'En Ruta'
+    : current.status === 'stopped' ? 'Detenido'
+    : 'Offline';
+
+  return (
+    <div className="flex flex-col gap-2 pointer-events-auto w-72 sm:w-80 max-w-[calc(100vw-2rem)] select-none">
+      {/* Vehicle Status Card */}
+      <div
+        style={{
+          background: 'rgba(8,14,24,0.92)',
+          border: '1px solid rgba(0,230,118,0.2)',
+          borderRadius: '16px',
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.7), 0 0 20px rgba(0,230,118,0.05)',
+          padding: '14px 16px',
+        }}
+      >
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-3">
+          <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: '#00E676', textTransform: 'uppercase' }}>
+            Estado del Vehículo
+          </span>
+          <div className="flex items-center gap-1.5">
+            <span
+              style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: statusColor,
+                boxShadow: `0 0 8px ${statusColor}`,
+                display: 'inline-block',
+                animation: isMoving ? 'pulse 2s infinite' : 'none',
+              }}
+            />
+            <span style={{ fontSize: '11px', fontWeight: 700, color: statusColor }}>{statusLabel}</span>
+          </div>
+        </div>
+
+        {/* Vehicle name + plate */}
+        <div className="flex items-center gap-3 mb-3">
+          <div
+            style={{
+              width: 80, height: 60, shrink: 0, borderRadius: 10,
+              overflow: 'hidden', background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(0,230,118,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <img
+              src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&q=80&w=300"
+              alt={current.name}
+              style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.8)) brightness(0.95)' }}
             />
           </div>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff', lineHeight: 1.2 }}>{current.name}</div>
+            <div style={{ fontSize: '11px', color: '#475569', fontFamily: 'monospace', marginTop: 3 }}>{current.plate || current.id}</div>
+          </div>
+        </div>
 
-          {/* Vehicle Stats List */}
-          <div className="flex-1 min-w-0 text-xs leading-relaxed">
-            <h3 className="font-bold text-white text-sm truncate leading-tight">
-              {current.name}
-            </h3>
-            <p className="text-[#64748B] text-[11px] mb-1 font-mono">
-              ({current.plate || current.id})
-            </p>
-
-            <div className="space-y-0.5 text-[#94A3B8] text-[11px]">
-              <div className="flex items-center gap-1.5">
-                <span>Status:</span>
-                <span className="font-medium text-white">
-                  {isMoving ? 'Moving' : current.status === 'stopped' ? 'Stopped' : 'Offline'}
-                </span>
-                <span className={`inline-block w-2 h-2 rounded-full ${
-                  isMoving ? 'bg-[#00E676] shadow-[0_0_6px_#00E676]' : 
-                  current.status === 'stopped' ? 'bg-amber-400 shadow-[0_0_6px_#F59E0B]' : 
-                  'bg-rose-500'
-                }`}></span>
-              </div>
-
-              <div>
-                <span>Speed: </span>
-                <span className="font-medium text-white font-mono">{current.speed ?? 0} km/h</span>
-              </div>
-
-              <div>
-                <span>Battery: </span>
-                <span className="font-medium text-white font-mono">{current.battery}%</span>
-              </div>
-
-              <div>
-                <span>Odometer: </span>
-                <span className="font-medium text-white font-mono">{current.odometer || '14,352 km'}</span>
-              </div>
+        {/* Speed — LARGE */}
+        <div className="flex items-end justify-between mb-3">
+          <div>
+            <div style={{ fontSize: '10px', color: '#00E676', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 2 }}>Velocidad</div>
+            <div style={{ fontSize: '36px', fontWeight: 900, color: '#ffffff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+              {current.speed ?? 0}
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#00E676', marginLeft: 4 }}>km/h</span>
             </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '10px', color: '#475569', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>Odómetro</div>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', fontFamily: 'monospace' }}>{current.odometer || '14,352 km'}</div>
+          </div>
+        </div>
+
+        {/* Battery bar */}
+        <div className="mb-2">
+          <div className="flex justify-between items-center mb-1">
+            <span style={{ fontSize: '10px', color: '#00E676', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Zap size={11} /> Batería GPS
+            </span>
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>{current.battery}%</span>
+          </div>
+          <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', width: `${current.battery}%`,
+              background: 'linear-gradient(90deg, #00E676, #00ff88)',
+              borderRadius: 6,
+              boxShadow: '0 0 8px rgba(0,230,118,0.6)',
+              transition: 'width 0.5s ease',
+            }} />
+          </div>
+        </div>
+
+        {/* Fuel bar */}
+        <div>
+          <div className="flex justify-between items-center mb-1">
+            <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Droplets size={11} color="#64748B" /> Combustible
+            </span>
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#ffffff' }}>{current.fuel ?? 78}%</span>
+          </div>
+          <div style={{ height: 5, background: 'rgba(255,255,255,0.07)', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{
+              height: '100%', width: `${current.fuel ?? 78}%`,
+              background: 'linear-gradient(90deg, #3B82F6, #60A5FA)',
+              borderRadius: 6,
+              boxShadow: '0 0 8px rgba(59,130,246,0.4)',
+              transition: 'width 0.5s ease',
+            }} />
           </div>
         </div>
       </div>
 
-      {/* 2. Live Data Card */}
-      <div className="bg-[#101726]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-3.5 shadow-[0_15px_35px_rgba(0,0,0,0.6)]">
-        <h3 className="text-xs font-semibold text-[#94A3B8] mb-2.5">
-          Live Data
-        </h3>
-
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="bg-white/[0.03] rounded-xl py-2 px-1 border border-white/5">
-            <p className="text-[10px] text-[#64748B] mb-0.5 uppercase tracking-wider font-medium">Engine Temp</p>
-            <p className="text-xs font-bold text-white font-mono">{current.temp ?? 82}°C</p>
-          </div>
-
-          <div className="bg-white/[0.03] rounded-xl py-2 px-1 border border-white/5">
-            <p className="text-[10px] text-[#64748B] mb-0.5 uppercase tracking-wider font-medium">Fuel</p>
-            <p className="text-xs font-bold text-white font-mono">{current.fuel ?? 78}%</p>
-          </div>
-
-          <div className="bg-white/[0.03] rounded-xl py-2 px-1 border border-white/5">
-            <p className="text-[10px] text-[#64748B] mb-0.5 uppercase tracking-wider font-medium">Signal</p>
-            <p className="text-xs font-bold text-[#00F0FF] font-mono">4G LTE</p>
-          </div>
+      {/* Live Data Card */}
+      <div
+        style={{
+          background: 'rgba(8,14,24,0.92)',
+          border: '1px solid rgba(0,230,118,0.2)',
+          borderRadius: '16px',
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.7)',
+          padding: '12px 16px',
+        }}
+      >
+        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', color: '#00E676', textTransform: 'uppercase', marginBottom: 10 }}>
+          Datos en Vivo
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {[
+            { icon: <Thermometer size={14} color="#FF6B6B" />, label: 'Motor', value: `${current.temp ?? 82}°C`, color: '#FF6B6B' },
+            { icon: <Gauge size={14} color="#00E676" />, label: 'RPM', value: '3,200', color: '#00E676' },
+            { icon: <Wifi size={14} color="#60A5FA" />, label: 'Señal', value: '4G LTE', color: '#60A5FA' },
+          ].map((item, i) => (
+            <div key={i} style={{
+              background: 'rgba(255,255,255,0.03)',
+              borderRadius: 10,
+              padding: '8px 6px',
+              textAlign: 'center',
+              border: '1px solid rgba(255,255,255,0.05)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>{item.icon}</div>
+              <div style={{ fontSize: '9px', color: '#475569', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.08em', marginBottom: 2 }}>{item.label}</div>
+              <div style={{ fontSize: '12px', fontWeight: 800, color: item.color, fontFamily: 'monospace' }}>{item.value}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

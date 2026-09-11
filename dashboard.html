@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diseño GPS — v3</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            color: #ffffff;
+        }
+
+        body {
+            background-color: #000000;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            height: calc(100% - 80px);
+            gap: 12px;
+            padding: 12px;
+        }
+
+        /* Panel Izquierdo — Datos del vehículo */
+        .panel-izq {
+            width: 28%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .cuadro {
+            background-color: #0a0a0a;
+            border-radius: 12px;
+            padding: 20px;
+            flex: 1;
+        }
+
+        .velocidad {
+            font-size: 72px;
+            font-weight: bold;
+        }
+
+        .unidad {
+            font-size: 24px;
+            opacity: 0.8;
+        }
+
+        .etiqueta {
+            font-size: 16px;
+            opacity: 0.6;
+            margin-bottom: 8px;
+        }
+
+        .barra-contenedor {
+            width: 100%;
+            height: 14px;
+            background-color: #222222;
+            border-radius: 7px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .barra {
+            height: 100%;
+            border-radius: 7px;
+            background: linear-gradient(90deg, #00dd66, #00ff88);
+        }
+
+        /* Panel Central — Cámara */
+        .panel-camara {
+            width: 32%;
+            background-color: #0a0a0a;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .camara-texto {
+            font-size: 22px;
+            color: #88ffaa;
+            text-align: center;
+        }
+
+        /* Panel Derecho — Mapa */
+        .panel-mapa {
+            width: 40%;
+            background-color: #0a0a0a;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            background-image: 
+                linear-gradient(rgba(0, 255, 100, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 100, 0.06) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        .ruta {
+            position: absolute;
+            top: 30%;
+            left: 20%;
+            width: 60%;
+            height: 40%;
+            border: 3px solid rgba(0, 255, 100, 0.6);
+            border-radius: 20px;
+            box-shadow: 0 0 18px rgba(0, 255, 100, 0.35);
+        }
+
+        .brujula {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 18px;
+            color: #88ffaa;
+            opacity: 0.8;
+        }
+
+        .info-mapa {
+            position: absolute;
+            bottom: 25px;
+            left: 20px;
+        }
+
+        .dato-grande {
+            font-size: 40px;
+            font-weight: bold;
+        }
+
+        .verde {
+            color: #88ffaa;
+        }
+
+        /* Barra inferior */
+        .barra-inferior {
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 25px;
+            background-color: #080808;
+            margin-top: 0;
+        }
+
+        .dato-bateria {
+            font-size: 42px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <!-- Panel Izquierdo: Datos del vehículo -->
+        <div class="panel-izq">
+            <div class="cuadro">
+                <div class="etiqueta">VELOCIDAD</div>
+                <div class="velocidad">127 <span class="unidad">km/h</span></div>
+            </div>
+            <div class="cuadro">
+                <div class="etiqueta">NIVEL DE COMBUSTIBLE</div>
+                <div class="barra-contenedor"><div class="barra" style="width: 78%"></div></div>
+                <div class="etiqueta" style="margin-top: 10px;">TEMPERATURA</div>
+                <div class="barra-contenedor"><div class="barra" style="width: 94%; background: linear-gradient(90deg, #44aaff, #66ccff);"></div></div>
+            </div>
+        </div>
+
+        <!-- Panel Central: Cámara -->
+        <div class="panel-camara">
+            <div class="camara-texto">📹 Cámara en vivo<br><span style="font-size: 15px; opacity:0.7;">Detección de objetos activa</span></div>
+        </div>
+
+        <!-- Panel Derecho: Mapa -->
+        <div class="panel-mapa">
+            <div class="brujula">N ↑</div>
+            <div class="ruta"></div>
+            <div class="info-mapa">
+                <div class="dato-grande">14 min · 7.2 km</div>
+                <div class="verde" style="font-size: 18px; margin-top: 5px;">📍 Destino: En camino</div>
+                <div class="verde" style="font-size: 15px; margin-top: 5px;">⚡ Estación de carga cercana</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra inferior -->
+    <div class="barra-inferior">
+        <div>Estado: <span class="verde">En movimiento</span></div>
+        <div class="dato-bateria verde">🔋 94%</div>
+        <div>ETA: 09:65 | Tráfico: <span style="color:#ffcc44">Moderado</span></div>
+    </div>
+
+</body>
+</html>
