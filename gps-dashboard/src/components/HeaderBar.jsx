@@ -22,7 +22,7 @@ export const HeaderBar = ({ selectedVehicle, onMenuClick }) => {
   };
 
   return (
-    <div className="relative z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[#26343b] bg-[#151e23] px-4 py-3 text-[13px] sm:px-6">
+    <div className="dashboard-header relative z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[#26343b] bg-[#151e23] px-4 py-3 text-[13px] sm:px-6">
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#b8f36b] text-[#16251a] shadow-[0_4px_14px_rgba(184,243,107,0.18)]">
           <Radio size={19} strokeWidth={2.5} />

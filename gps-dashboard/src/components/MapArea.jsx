@@ -9,8 +9,23 @@ const MapController = () => {
   const map = useMap();
   
   useEffect(() => {
+    let lastWidth = 0;
+    let lastHeight = 0;
+    let frameId = null;
+
     const handleResize = () => {
-      requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+      const container = map.getContainer();
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      if (width === lastWidth && height === lastHeight) return;
+
+      lastWidth = width;
+      lastHeight = height;
+      if (frameId) cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false, pan: false });
+      });
     };
 
     handleResize();
@@ -24,6 +39,7 @@ const MapController = () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
       resizeObserver.disconnect();
+      if (frameId) cancelAnimationFrame(frameId);
     };
   }, [map]);
 
@@ -358,8 +374,8 @@ const MapArea = ({
         
         {/* Dark GIS Basemap */}
         <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           maxZoom={16}
         />
 

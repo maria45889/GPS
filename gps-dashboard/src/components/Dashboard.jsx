@@ -56,7 +56,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#26343b] bg-[#11181d] shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:h-[calc(100vh-2.5rem)]">
+    <div className="light-dashboard relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#dbe9ef] bg-[#f7fbfc] shadow-[0_24px_80px_rgba(43,93,112,0.16)] sm:h-[calc(100vh-2.5rem)]">
 
       <div className="relative z-10 flex flex-col h-full">
         <HeaderBar
@@ -67,7 +67,7 @@ const Dashboard = () => {
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden gap-3 p-3">
           <LeftSidebarPanel selectedVehicle={selectedVehicle} />
 
-          <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#162126] shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
+          <div className="map-surface relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#cfe2e9] bg-[#eaf4f7] shadow-[0_8px_24px_rgba(43,93,112,0.12)]">
             <MapArea
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}

@@ -8,13 +8,13 @@
   }
 
   html {
-    background: #0a0f14;
-    color: #e2e8f0;
+    background: #eef5f7;
+    color: #173746;
   }
 
   body {
-    background: #0a0f14;
-    color: #e2e8f0;
+    background: #eef5f7;
+    color: #173746;
     overflow: hidden;
     font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
     letter-spacing: 0;
@@ -85,7 +85,8 @@
 
 /* Midnight green GIS filter for map tiles */
 .cyber-tiles .leaflet-tile {
-  filter: brightness(0.68) contrast(1.2) hue-rotate(94deg) saturate(1.25) !important;
+  opacity: 1 !important;
+  filter: none !important;
   transition: filter 0.5s ease;
 }
 
@@ -135,7 +136,7 @@
   }
 
   .cyber-tiles .leaflet-tile {
-    filter: brightness(0.78) contrast(1.16) hue-rotate(92deg) saturate(1.25) !important;
+    filter: none !important;
   }
 
   .leaflet-container {
@@ -250,6 +251,140 @@
     border: 1px solid #43545a;
     border-radius: 8px;
   }
+}
+
+/* Light navigation theme */
+.light-dashboard .header-status,
+.light-dashboard .header-signal-actions {
+  color: #53717d;
+}
+
+.light-dashboard .dashboard-header {
+  background: #ffffff !important;
+  border-color: #d5e6ec !important;
+}
+
+.light-dashboard > div > .relative {
+  color: #173746;
+}
+
+.light-dashboard .header-fleet-selector > div,
+.light-dashboard .header-fleet-selector button {
+  background: #f4fafb !important;
+  border-color: #c7dfe7 !important;
+  color: #1c5c70 !important;
+}
+
+.light-dashboard .header-fleet-name,
+.light-dashboard .header-action-label {
+  color: #1b5265 !important;
+}
+
+.light-dashboard .header-status > div:first-child {
+  background: #eaf8f3 !important;
+  border-color: #bce4d4 !important;
+}
+
+.light-dashboard .header-signal-actions,
+.light-dashboard .header-signal-actions svg,
+.light-dashboard .header-status span {
+  color: #21839a !important;
+}
+
+.light-dashboard .dashboard-left-panel,
+.light-dashboard .dashboard-right-panel {
+  background: #ffffff !important;
+  border-color: #d5e6ec !important;
+  box-shadow: 0 8px 22px rgba(43, 93, 112, 0.08);
+  color: #45636e !important;
+}
+
+.light-dashboard .dashboard-left-panel button {
+  color: #54727d !important;
+}
+
+.light-dashboard .dashboard-left-panel nav button:first-child {
+  background: #e5f6fa !important;
+  border-color: #a8dce8 !important;
+  color: #087d96 !important;
+}
+
+.light-dashboard .dashboard-left-panel nav button:hover,
+.light-dashboard .dashboard-right-panel button:hover {
+  background: #f0fafc !important;
+  color: #087d96 !important;
+}
+
+.light-dashboard .dashboard-left-panel h3,
+.light-dashboard .dashboard-right-panel h3 {
+  color: #6a8994 !important;
+}
+
+.light-dashboard .dashboard-left-panel strong,
+.light-dashboard .dashboard-right-panel strong {
+  color: #168ca4 !important;
+}
+
+.light-dashboard .dashboard-left-panel > div,
+.light-dashboard .dashboard-right-panel > div {
+  border-color: #e0edf1 !important;
+}
+
+.light-dashboard .dashboard-left-panel > div:nth-child(3) > div {
+  background: #fff8ea !important;
+  border-color: #f2d9a8 !important;
+}
+
+.light-dashboard .dashboard-right-panel > div > div,
+.light-dashboard .dashboard-right-panel input {
+  background: #f7fbfc !important;
+  border-color: #cfe2e9 !important;
+  color: #244e5c !important;
+}
+
+.light-dashboard .dashboard-right-panel > div:nth-child(2),
+.light-dashboard .dashboard-right-panel > div:nth-child(1) > div,
+.light-dashboard .dashboard-right-panel > div:nth-child(3) > div > div,
+.light-dashboard .dashboard-right-panel > div:nth-child(4) button {
+  background: #f7fbfc !important;
+  border-color: #cfe2e9 !important;
+}
+
+.light-dashboard .dashboard-right-panel > div:nth-child(2) span,
+.light-dashboard .dashboard-right-panel > div:nth-child(3) span,
+.light-dashboard .dashboard-right-panel > div:nth-child(4) button {
+  color: #41636f !important;
+}
+
+.light-dashboard .dashboard-right-panel input::placeholder {
+  color: #82a0aa !important;
+}
+
+.light-dashboard .dashboard-right-panel .text-white,
+.light-dashboard .dashboard-right-panel .text-slate-400 {
+  color: #41636f !important;
+}
+
+.light-dashboard .map-surface,
+.light-dashboard .leaflet-container {
+  background: #eaf4f7 !important;
+}
+
+.light-dashboard .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.86) !important;
+  color: #688792 !important;
+  border-color: #cfe2e9 !important;
+}
+
+.light-dashboard .leaflet-control-attribution a {
+  color: #168ca4 !important;
+}
+
+.light-dashboard .dark-popup .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #173746 !important;
+  border-color: #b9dce5 !important;
+  box-shadow: 0 12px 30px rgba(43, 93, 112, 0.2) !important;
 }
 
 .mobile-menu-button,
