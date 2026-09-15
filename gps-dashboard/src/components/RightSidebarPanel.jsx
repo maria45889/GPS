@@ -10,46 +10,46 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
   );
 
   return (
-    <div className="w-[300px] bg-[#071a26] border-l border-[#1dd6ff]/25 flex flex-col overflow-hidden shadow-[inset_1px_0_0_rgba(29,214,255,0.12)] p-4">
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-[#0d2330] border border-[#1dd6ff]/25 rounded-[8px] p-2 text-center">
-          <div className="text-[#8fe8ff] text-[22px] font-black">4</div>
-          <div className="text-[10px] text-slate-300 uppercase tracking-[0.12em] mt-1">Vehículos</div>
+    <div className="hidden w-[288px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#151e23] p-4 xl:flex">
+      <div className="mb-5 grid grid-cols-3 gap-2">
+        <div className="rounded-[8px] border border-[#304149] bg-[#1c282d] p-2 text-center">
+          <div className="text-[22px] font-black text-[#edf5ef]">4</div>
+          <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#73838a]">Vehículos</div>
         </div>
-        <div className="bg-[#0d2330] border border-[#1dd6ff]/25 rounded-[8px] p-2 text-center">
-          <div className="text-[#8fe8ff] text-[22px] font-black">2</div>
-          <div className="text-[10px] text-slate-300 uppercase tracking-[0.12em] mt-1">En ruta</div>
+        <div className="rounded-[8px] border border-[#304149] bg-[#1c282d] p-2 text-center">
+          <div className="text-[22px] font-black text-[#b8f36b]">2</div>
+          <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#73838a]">En ruta</div>
         </div>
-        <div className="bg-[#0d2330] border border-[#1dd6ff]/25 rounded-[8px] p-2 text-center">
-          <div className="text-[#8fe8ff] text-[22px] font-black">1</div>
-          <div className="text-[10px] text-slate-300 uppercase tracking-[0.12em] mt-1">Offline</div>
+        <div className="rounded-[8px] border border-[#304149] bg-[#1c282d] p-2 text-center">
+          <div className="text-[22px] font-black text-[#8b9ba1]">1</div>
+          <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#73838a]">Offline</div>
         </div>
       </div>
 
-      <div className="bg-[#0d2330] border border-[#1dd6ff]/25 rounded-[10px] p-3 mb-4">
-        <h3 className="text-[#90e8ff] text-[11px] font-bold uppercase tracking-[0.18em] mb-3">Ubicación actual</h3>
-        <div className="space-y-1 text-[13px] text-slate-300">
-          <div>Coordenadas: <span className="text-white">4.3891, -74.2254</span></div>
-          <div>Velocidad: <span className="text-white">82 km/h</span></div>
-          <div>Distancia: <span className="text-white">12.93 km</span></div>
-          <div>ETA: <span className="text-white">01h 45m</span></div>
+      <div className="mb-5 rounded-[10px] border border-[#304149] bg-[#1c282d] p-3">
+        <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Ubicación actual</h3>
+        <div className="space-y-1 text-[12px] text-[#9aa9ad]">
+          <div>Coordenadas: <span className="text-[#edf5ef]">4.3891, -74.2254</span></div>
+          <div>Velocidad: <span className="text-[#edf5ef]">82 km/h</span></div>
+          <div>Distancia: <span className="text-[#edf5ef]">12.93 km</span></div>
+          <div>ETA: <span className="text-[#edf5ef]">01h 45m</span></div>
         </div>
-        <button className="w-full mt-3 py-2.5 bg-[#42d4ff] text-[#061a27] rounded-[8px] font-bold uppercase tracking-[0.12em] shadow-[0_0_18px_rgba(66,212,255,0.35)]">
+          <button className="mt-3 w-full rounded-[8px] bg-[#b8f36b] py-2.5 font-bold uppercase tracking-[0.12em] text-[#172319] transition-colors hover:bg-[#d0fa9a]">
           Ver ruta
         </button>
       </div>
 
       <div className="mb-3">
-        <h3 className="text-[#90e8ff] text-[11px] font-bold uppercase tracking-[0.18em] mb-3">Lista de vehículos</h3>
+        <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Lista de vehículos</h3>
         <div className="relative mb-3">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#73838a]" />
           <input
             type="search"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Buscar vehículo"
             aria-label="Buscar vehículo"
-            className="w-full rounded-[8px] border border-[#1dd6ff]/20 bg-[#0b1d2a] py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-slate-500 focus:border-[#1dd6ff]/60 focus:outline-none"
+            className="w-full rounded-[8px] border border-[#304149] bg-[#1c282d] py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-[#73838a] focus:border-[#b8f36b]/60 focus:outline-none"
           />
         </div>
         <div className="space-y-2">
@@ -59,13 +59,13 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
               onClick={() => onSelectVehicle(vehicle)}
               className={`flex items-center justify-between gap-3 p-2.5 rounded-[8px] border cursor-pointer transition-colors ${
                 selectedVehicle?.id === vehicle.id
-                  ? 'bg-[#0d2330] border-[#1dd6ff]/50'
-                  : 'bg-[#0b1d2a] border-[#1dd6ff]/15 hover:border-[#1dd6ff]/35'
+                  ? 'border-[#b8f36b]/40 bg-[#223329]'
+                  : 'border-[#304149] bg-[#1c282d] hover:border-[#b8f36b]/35'
               }`}
             >
               <div>
-                <div className="text-white text-[14px] font-semibold">{vehicle.name}</div>
-                <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                <div className="text-[13px] font-semibold text-[#edf5ef]">{vehicle.name}</div>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-[#8b9ba1]">
                   <span className={`inline-block h-2 w-2 rounded-full ${
                     vehicle.status === 'active' ? 'bg-emerald-400' :
                     vehicle.status === 'stopped' ? 'bg-amber-400' : 'bg-slate-400'
@@ -74,8 +74,8 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[#8fe8ff] text-[13px] font-semibold">{vehicle.speed} km/h</div>
-                <div className="text-[10px] text-slate-400">{vehicle.battery}%</div>
+                <div className="text-[13px] font-semibold text-[#c8ef9b]">{vehicle.speed} km/h</div>
+                <div className="text-[10px] text-[#8b9ba1]">{vehicle.battery}%</div>
               </div>
             </div>
           ))}
@@ -83,10 +83,10 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
       </div>
 
       <div className="mt-auto space-y-2">
-        <button onClick={onViewHistory} className="w-full py-3 bg-[#0d2330] border border-[#1dd6ff]/25 text-[#8fe8ff] text-[13px] font-semibold rounded-[6px] hover:border-[#1dd6ff]/50 transition-colors">
+        <button onClick={onViewHistory} className="w-full rounded-[8px] border border-[#304149] bg-[#1c282d] py-3 text-[12px] font-semibold text-[#c8d4d0] transition-colors hover:border-[#b8f36b]/50 hover:text-[#b8f36b]">
           Historial
         </button>
-        <button onClick={onSetGeofence} className="w-full py-3 bg-[#0d2330] border border-[#1dd6ff]/25 text-[#8fe8ff] text-[13px] font-semibold rounded-[6px] hover:border-[#1dd6ff]/50 transition-colors">
+        <button onClick={onSetGeofence} className="w-full rounded-[8px] border border-[#304149] bg-[#1c282d] py-3 text-[12px] font-semibold text-[#c8d4d0] transition-colors hover:border-[#b8f36b]/50 hover:text-[#b8f36b]">
           Geocerca
         </button>
       </div>

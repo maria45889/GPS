@@ -8,16 +8,16 @@
   }
 
   html {
-    background: #050b14;
+    background: #0a0f14;
     color: #e2e8f0;
   }
 
   body {
-    background: #050b14;
+    background: #0a0f14;
     color: #e2e8f0;
     overflow: hidden;
-    font-family: 'Segoe UI', Tahoma, sans-serif;
-    letter-spacing: 0.01em;
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    letter-spacing: 0;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -43,8 +43,8 @@
   h4,
   h5,
   h6 {
-    font-family: 'Segoe UI', Tahoma, sans-serif;
-    letter-spacing: 0.01em;
+    font-family: inherit;
+    letter-spacing: 0;
   }
 
   .font-mono {

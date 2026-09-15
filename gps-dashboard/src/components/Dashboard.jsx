@@ -44,16 +44,15 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="relative flex flex-col w-full max-w-[1600px] h-[calc(100vh-1.5rem)] overflow-hidden rounded-[18px] border-[2px] border-[#1dd6ff]/55 bg-[#050f1c] shadow-[0_0_0_1px_rgba(29,214,255,0.18),0_0_35px_rgba(29,214,255,0.08),0_25px_60px_rgba(2,6,23,0.9)]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.10),_transparent_30%)] pointer-events-none" />
+    <div className="relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#26343b] bg-[#11181d] shadow-[0_24px_80px_rgba(0,0,0,0.35)] sm:h-[calc(100vh-2.5rem)]">
 
       <div className="relative z-10 flex flex-col h-full">
         <HeaderBar selectedVehicle={selectedVehicle} />
 
-        <div className="flex flex-1 overflow-hidden p-2 gap-1.5">
+        <div className="flex flex-1 overflow-hidden gap-3 p-3">
           <LeftSidebarPanel selectedVehicle={selectedVehicle} />
 
-          <div className="flex-1 overflow-hidden rounded-[10px] border border-[#1dd6ff]/25 bg-[#061a27] shadow-[inset_0_0_25px_rgba(29,214,255,0.04)] relative">
+          <div className="relative flex-1 overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#162126] shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
             <MapArea
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}

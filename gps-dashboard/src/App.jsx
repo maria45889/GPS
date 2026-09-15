@@ -3,7 +3,7 @@ import Dashboard from './components/Dashboard';
 
 function App() {
   return (
-    <div className="w-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(29,214,255,0.12),_transparent_20%),#01070d] p-3 text-slate-100 antialiased">
+    <div className="w-screen h-[100dvh] flex items-center justify-center overflow-hidden bg-[#0a0f14] p-4 text-slate-100 antialiased sm:p-5">
       <Dashboard />
     </div>
   );

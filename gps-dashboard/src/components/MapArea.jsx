@@ -291,7 +291,7 @@ const createAlertIncidentIcon = (severity) => {
           box-shadow: 0 0 12px ${color};
           font-size: 11px;
         ">
-          ${isCritical ? 'ðŸš¨' : 'âš ï¸'}
+          ${isCritical ? '!' : 'ALERTA'}
         </div>
       </div>
     `,
@@ -391,7 +391,7 @@ const MapArea = ({
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
                       <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal</p>
-                      <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'SupervisiÃ³n'}</div>
+                      <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
                 </Polygon>
@@ -421,8 +421,8 @@ const MapArea = ({
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8]">Zona Circular â€¢ Radio: {geo.radius || 600}m</p>
-                      <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'SupervisiÃ³n'}</div>
+                      <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m</p>
+                      <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
                 </Circle>
@@ -492,7 +492,7 @@ const MapArea = ({
                   </div>
                   <div className="space-y-1 text-[11px] text-[#94A3B8]">
                     <p>Velocidad: <strong className="text-white font-mono">{v.speed} km/h</strong></p>
-                    <p>BaterÃ­a GPS: <strong className="text-white font-mono">{v.battery}%</strong></p>
+                    <p>Bateria GPS: <strong className="text-white font-mono">{v.battery}%</strong></p>
                     <p>Conductor: <span className="text-white">{v.driver}</span></p>
                     <p>Placa: <span className="text-[#00E676] font-mono">{v.plate}</span></p>
                   </div>
@@ -515,7 +515,7 @@ const MapArea = ({
             <Popup className="dark-popup">
               <div className="text-xs min-w-[190px]">
                 <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
-                  <span className="text-base">{alert.severity === 'critical' ? 'ðŸš¨' : 'âš ï¸'}</span>
+                  <span className="text-base">{alert.severity === 'critical' ? '!' : 'ALERTA'}</span>
                   <div>
                     <span className="font-bold text-white text-xs block leading-tight">{alert.title}</span>
                     <span className="text-[10px] text-slate-400 font-mono">{alert.timestamp}</span>
@@ -523,13 +523,13 @@ const MapArea = ({
                 </div>
                 <p className="text-[11px] text-[#94A3B8] my-1 leading-snug">{alert.description}</p>
                 <div className="text-[10px] text-[#00E676] font-mono mt-1 mb-2">
-                  Moto: {alert.vehicleName} â€¢ {alert.speed} km/h
+                  Moto: {alert.vehicleName} - {alert.speed} km/h
                 </div>
                 <button
                   onClick={() => onSelectAlert && onSelectAlert(alert)}
                   className="w-full py-1.5 px-2 rounded-lg bg-[#00E676]/15 hover:bg-[#00E676]/25 border border-[#00E676]/40 text-[#00E676] text-[11px] font-bold transition-all shadow-[0_0_10px_rgba(0,240,255,0.2)]"
                 >
-                  ðŸ” Ver AnÃ¡lisis Forense
+                  Ver Analisis Forense
                 </button>
               </div>
             </Popup>

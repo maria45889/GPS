@@ -2,16 +2,16 @@ import React from 'react';
 
 export const LeftSidebarPanel = () => {
   return (
-    <div className="w-[260px] bg-[#071a26] border-r border-[#1dd6ff]/25 flex flex-col overflow-hidden text-[13px] shadow-[inset_-1px_0_0_rgba(29,214,255,0.12)]">
-      <div className="p-4">
+    <div className="hidden w-[224px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#151e23] text-[13px] lg:flex">
+      <div className="p-3">
         <nav className="space-y-2">
           {['Inicio', 'Mapa', 'Vehículos', 'Historial', 'Alertas', 'Configuración'].map((item, index) => (
             <button
               key={item}
-              className={`w-full text-left px-3 py-2.5 rounded-[8px] border text-[14px] transition-all ${
+              className={`w-full rounded-[8px] border px-3 py-2.5 text-left text-[13px] transition-all ${
                 index === 0
-                  ? 'bg-[#0d2330] border-[#1dd6ff]/60 text-[#9eeeff] shadow-[0_0_14px_rgba(29,214,255,0.10)]'
-                  : 'bg-[#0a1d2b] border-[#1dd6ff]/20 text-white/90 hover:border-[#1dd6ff]/50 hover:text-[#9eeeff]'
+                  ? 'border-[#b8f36b]/35 bg-[#223329] font-semibold text-[#d7f6ad]'
+                  : 'border-transparent bg-transparent text-[#9aa9ad] hover:border-[#304149] hover:bg-[#1c292e] hover:text-[#edf5ef]'
               }`}
             >
               {item}
@@ -20,33 +20,36 @@ export const LeftSidebarPanel = () => {
         </nav>
       </div>
 
-      <div className="px-4 pb-4 border-b border-[#1dd6ff]/15">
-        <h3 className="text-[#90e8ff] text-[11px] font-bold uppercase tracking-[0.18em] mb-3">Resumen</h3>
+      <div className="border-b border-[#26343b] px-4 pb-4">
+        <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Resumen de flota</h3>
 
-        <div className="space-y-2 text-[13px] text-slate-300">
+        <div className="space-y-2 text-[12px] text-[#9aa9ad]">
           <div className="flex justify-between items-center">
             <span>Vehículos</span>
-            <strong className="text-white">4</strong>
+            <strong className="text-[#edf5ef]">4</strong>
           </div>
           <div className="flex justify-between items-center">
             <span>En ruta</span>
-            <strong className="text-white">2</strong>
+            <strong className="text-[#b8f36b]">2</strong>
           </div>
           <div className="flex justify-between items-center">
             <span>Detenidos</span>
-            <strong className="text-white">1</strong>
+            <strong className="text-[#f2c66d]">1</strong>
           </div>
           <div className="flex justify-between items-center">
             <span>Offline</span>
-            <strong className="text-white">1</strong>
+            <strong className="text-[#8b9ba1]">1</strong>
           </div>
         </div>
       </div>
 
-      <div className="p-4 border-b border-[#1dd6ff]/15">
-        <h3 className="text-[#90e8ff] text-[11px] font-bold uppercase tracking-[0.18em] mb-3">Alerta reciente</h3>
-        <p className="text-slate-300 text-[13px]">Exceso de velocidad detectado.</p>
-        <button className="w-full mt-3 py-2.5 rounded-[8px] bg-gradient-to-r from-[#ff5a78] to-[#ff8c52] text-white text-[12px] font-bold uppercase tracking-[0.10em] shadow-[0_0_18px_rgba(255,94,120,0.3)]">
+      <div className="border-b border-[#26343b] p-4">
+        <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Alerta reciente</h3>
+        <div className="rounded-[8px] border border-[#5a4430] bg-[#2a2119] p-3">
+          <p className="text-[12px] font-medium text-[#f2d7a2]">Exceso de velocidad detectado.</p>
+          <p className="mt-1 text-[11px] text-[#aa9270]">Yamaha MT-07 · hace 4 min</p>
+        </div>
+        <button className="mt-3 w-full rounded-[8px] border border-[#5a4430] bg-transparent py-2.5 text-[11px] font-bold uppercase tracking-[0.10em] text-[#f2c66d] transition-colors hover:bg-[#3a2b1c]">
           Ver alerta
         </button>
       </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Signal, Wifi, User, Settings, ChevronDown } from 'lucide-react';
+import { Signal, Wifi, User, Settings, ChevronDown, Radio, MoreHorizontal } from 'lucide-react';
 
 export const HeaderBar = ({ selectedVehicle }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -22,31 +22,37 @@ export const HeaderBar = ({ selectedVehicle }) => {
   };
 
   return (
-    <div className="h-16 bg-[#081923] border-b border-[#1dd6ff]/40 flex items-center justify-between px-4 text-[13px] shadow-[inset_0_-1px_0_rgba(29,214,255,0.18)]">
+    <div className="min-h-[72px] border-b border-[#26343b] bg-[#151e23] px-5 py-3 text-[13px] sm:px-6">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="text-[#7cecff] font-black uppercase tracking-[0.14em] text-[15px]">GPS Tracker</div>
-      </div>
-
-      <div className="flex items-center gap-3 text-center">
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]"></div>
-          <span className="text-emerald-400 font-semibold uppercase tracking-[0.08em]">Activo</span>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#b8f36b] text-[#16251a] shadow-[0_4px_14px_rgba(184,243,107,0.18)]">
+          <Radio size={19} strokeWidth={2.5} />
         </div>
-        <div className="text-slate-300 truncate text-[12px] uppercase tracking-[0.14em]">
-          Conexión: activa | señal: buena
+        <div className="min-w-0">
+          <div className="truncate text-[15px] font-bold tracking-[-0.02em] text-[#f2f6f3]">RideGuard</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#73838a]">Control de flota</div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="hidden items-center gap-3 text-center md:flex">
+        <div className="flex items-center gap-2 rounded-full border border-[#30443b] bg-[#1a2925] px-3 py-1.5">
+          <div className="h-2 w-2 rounded-full bg-[#b8f36b]"></div>
+          <span className="font-semibold uppercase tracking-[0.08em] text-[#c8ef9b]">Sistema activo</span>
+        </div>
+        <div className="truncate text-[12px] text-[#8b9ba1]">
+          Última sincronización hace 12 s
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
         <div
           onClick={handleDropdownClick}
-          className="flex items-center gap-2 bg-[#0d1f2b] border border-[#1dd6ff]/30 rounded-[6px] px-3 py-2 cursor-pointer hover:border-[#1dd6ff]/60 transition-colors relative shadow-[0_0_10px_rgba(29,214,255,0.06)]"
+          className="relative flex cursor-pointer items-center gap-2 rounded-[8px] border border-[#304149] bg-[#1c282d] px-3 py-2 transition-colors hover:border-[#b8f36b]/60"
         >
-          <span className="text-[#8fe8ff] font-semibold uppercase text-[12px] tracking-[0.08em]">Scooter Enterprise</span>
-          <ChevronDown size={13} className="text-[#8fe8ff]" />
+          <span className="hidden text-[12px] font-semibold text-[#e2ebe6] sm:inline">Scooter Enterprise</span>
+          <ChevronDown size={13} className="text-[#b8f36b]" />
 
           {isDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-48 bg-[#091d2d] border border-[#1dd6ff]/30 rounded-[6px] shadow-[0_16px_30px_rgba(0,0,0,0.45)] z-50 overflow-hidden">
+            <div className="absolute top-full left-0 z-50 mt-2 w-48 overflow-hidden rounded-[8px] border border-[#304149] bg-[#1a252a] shadow-[0_16px_30px_rgba(0,0,0,0.45)]">
               <div className="p-2">
                 <div className="px-3 py-2 text-cyan-200 text-xs hover:bg-[#0e1d2d] rounded cursor-pointer">Operación principal</div>
                 <div className="px-3 py-2 text-cyan-200 text-xs hover:bg-[#0e1d2d] rounded cursor-pointer">Rutas</div>
@@ -58,27 +64,29 @@ export const HeaderBar = ({ selectedVehicle }) => {
 
         <button
           onClick={handleActionsClick}
-          className="bg-[#0d1f2b] border border-[#1dd6ff]/30 text-[#8fe8ff] px-3 py-2 rounded-[6px] text-[12px] font-semibold uppercase tracking-[0.08em] hover:border-[#1dd6ff]/60 transition-colors shadow-[0_0_10px_rgba(29,214,255,0.06)]"
+          className="flex h-9 w-9 items-center justify-center rounded-[8px] border border-[#304149] bg-[#1c282d] text-[#b8f36b] transition-colors hover:border-[#b8f36b]/60 sm:w-auto sm:px-3"
+          aria-label="Acciones"
         >
-          Acciones
+          <MoreHorizontal size={17} className="sm:hidden" />
+          <span className="hidden sm:inline">Acciones</span>
         </button>
       </div>
 
-      <div className="flex items-center gap-4 shrink-0">
-        <div className="flex items-center gap-2 text-[12px] text-slate-300 uppercase tracking-[0.08em]">
-          <span>Señales</span>
-          <Signal size={15} className="text-[#8fe8ff]" />
-          <Wifi size={15} className="text-[#8fe8ff]" />
-          <span className="text-[#8fe8ff] font-semibold">4G</span>
+      <div className="hidden shrink-0 items-center gap-4 lg:flex">
+        <div className="flex items-center gap-2 text-[12px] text-[#8b9ba1]">
+          <span>Señal</span>
+          <Signal size={15} className="text-[#b8f36b]" />
+          <Wifi size={15} className="text-[#b8f36b]" />
+          <span className="font-semibold text-[#c8ef9b]">4G</span>
         </div>
 
-        <div className="w-px h-6 bg-[#1dd6ff]/30"></div>
+        <div className="h-6 w-px bg-[#304149]"></div>
 
         <div className="flex items-center gap-2">
-          <div onClick={handleUserClick} className="w-8 h-8 rounded-full bg-[#0d1f2b] border border-[#1dd6ff]/30 flex items-center justify-center cursor-pointer hover:border-[#1dd6ff]/60 shadow-[0_0_10px_rgba(29,214,255,0.06)]">
-            <User size={15} className="text-[#8fe8ff]" />
+          <div onClick={handleUserClick} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#43545a] bg-[#27343a] hover:border-[#b8f36b]/60">
+            <User size={15} className="text-[#d3ddd8]" />
           </div>
-          <Settings onClick={handleSettingsClick} size={15} className="text-slate-300 cursor-pointer hover:text-[#8fe8ff] transition-colors" />
+          <Settings onClick={handleSettingsClick} size={15} className="cursor-pointer text-[#8b9ba1] transition-colors hover:text-[#b8f36b]" />
         </div>
       </div>
     </div>
