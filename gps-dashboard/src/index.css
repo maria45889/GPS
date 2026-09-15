@@ -85,8 +85,47 @@
 
 /* Midnight green GIS filter for map tiles */
 .cyber-tiles .leaflet-tile {
-  filter: brightness(0.5) contrast(1.4) hue-rotate(100deg) saturate(1.6) !important;
+  filter: brightness(0.68) contrast(1.2) hue-rotate(94deg) saturate(1.25) !important;
   transition: filter 0.5s ease;
+}
+
+.header-status,
+.header-signal-actions {
+  display: none;
+}
+
+.header-fleet-selector {
+  margin-left: auto;
+}
+
+.header-fleet-name,
+.header-action-label {
+  display: none;
+}
+
+.header-action-icon {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .header-status {
+    display: flex;
+  }
+
+  .header-fleet-name,
+  .header-action-label {
+    display: inline;
+  }
+
+  .header-action-icon {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .header-signal-actions {
+    display: flex;
+  }
 }
 
 @media (max-width: 1023px) {
