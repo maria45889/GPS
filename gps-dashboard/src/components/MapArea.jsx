@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Plus, Minus, Crosshair, MapPin } from 'lucide-react';
+import { Plus, Minus, Crosshair } from 'lucide-react';
 
 // Component to handle map resize
 const MapController = () => {
@@ -310,10 +310,7 @@ const MapArea = ({
   isPlacingOnMap = false,
   pendingCenter = null,
   onMapClick,
-  onOpenGeofences,
-  flyToTrigger,
-  showAlerts = true, 
-  onCloseAlerts 
+  flyToTrigger
 }) => {
   const mapRef = useRef(null);
 

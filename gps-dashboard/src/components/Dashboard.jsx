@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { VideoFeed } from './VideoFeed';
 import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
@@ -9,11 +8,10 @@ import { initialAlerts } from '../data/alertsData';
 import { initialGeofences } from '../data/geofencesData';
 
 const Dashboard = () => {
-  const [vehicles, setVehicles] = useState(initialFleet);
+  const [vehicles] = useState(initialFleet);
   const [selectedVehicle, setSelectedVehicle] = useState(initialFleet[0]);
-  const [alerts, setAlerts] = useState(initialAlerts);
-  const [geofences, setGeofences] = useState(initialGeofences);
-  const [selectedAlert, setSelectedAlert] = useState(null);
+  const [alerts] = useState(initialAlerts);
+  const [geofences] = useState(initialGeofences);
   const [flyToTrigger, setFlyToTrigger] = useState(null);
   const [isPlacingOnMap, setIsPlacingOnMap] = useState(false);
   const [pendingCenter, setPendingCenter] = useState(null);
@@ -23,7 +21,6 @@ const Dashboard = () => {
   };
 
   const handleSelectAlert = (alert) => {
-    setSelectedAlert(alert);
     if (alert.lat && alert.lng) {
       setFlyToTrigger({
         coords: [alert.lat, alert.lng],
@@ -37,19 +34,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleAddGeofence = (newGeo) => {
-    setGeofences(prev => [newGeo, ...prev]);
-    setIsPlacingOnMap(false);
-    setPendingCenter(null);
-    if (newGeo.center) {
-      setFlyToTrigger({
-        coords: newGeo.center,
-        zoom: 15,
-        timestamp: Date.now()
-      });
-    }
-  };
-
   const handleMapClickForGeofence = (latlng) => {
     setPendingCenter(latlng);
     setIsPlacingOnMap(false);
@@ -57,34 +41,20 @@ const Dashboard = () => {
 
   const handleViewHistory = () => {
     alert('Ver historial del vehículo: ' + selectedVehicle?.plate);
-    // Aquí puedes implementar la lógica para mostrar el historial
-  };
-
-  const handleReportTheft = () => {
-    if (confirm(`¿Estás seguro de reportar robo del vehículo ${selectedVehicle?.plate}?`)) {
-      alert('Robo reportado para: ' + selectedVehicle?.plate);
-      // Aquí puedes implementar la lógica para reportar robo
-    }
   };
 
   return (
-    <div className="flex flex-col w-full h-screen bg-[#0a0e1a] overflow-hidden">
-      {/* Header Bar */}
-      <HeaderBar selectedVehicle={selectedVehicle} />
-      
-      {/* Main Content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
-        <LeftSidebarPanel selectedVehicle={selectedVehicle} />
-        
-        {/* Center Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Video Feed */}
-          <VideoFeed selectedVehicle={selectedVehicle} />
-          
-          {/* Map Area */}
-          <div className="flex-1 relative overflow-hidden">
-            <MapArea 
+    <div className="relative flex flex-col w-full max-w-[1600px] h-[calc(100vh-1.5rem)] overflow-hidden rounded-[18px] border-[2px] border-[#1dd6ff]/55 bg-[#050f1c] shadow-[0_0_0_1px_rgba(29,214,255,0.18),0_0_35px_rgba(29,214,255,0.08),0_25px_60px_rgba(2,6,23,0.9)]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.10),_transparent_30%)] pointer-events-none" />
+
+      <div className="relative z-10 flex flex-col h-full">
+        <HeaderBar selectedVehicle={selectedVehicle} />
+
+        <div className="flex flex-1 overflow-hidden p-2 gap-1.5">
+          <LeftSidebarPanel selectedVehicle={selectedVehicle} />
+
+          <div className="flex-1 overflow-hidden rounded-[10px] border border-[#1dd6ff]/25 bg-[#061a27] shadow-[inset_0_0_25px_rgba(29,214,255,0.04)] relative">
+            <MapArea
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}
               onSelectVehicle={handleSelectVehicle}
@@ -94,23 +64,18 @@ const Dashboard = () => {
               isPlacingOnMap={isPlacingOnMap}
               pendingCenter={pendingCenter}
               onMapClick={handleMapClickForGeofence}
-              onOpenGeofences={() => setIsPlacingOnMap(true)}
               flyToTrigger={flyToTrigger}
-              showAlerts={false} 
-              onCloseAlerts={() => {}} 
             />
           </div>
+
+          <RightSidebarPanel
+            vehicles={vehicles}
+            selectedVehicle={selectedVehicle}
+            onSelectVehicle={handleSelectVehicle}
+            onSetGeofence={() => setIsPlacingOnMap(true)}
+            onViewHistory={handleViewHistory}
+          />
         </div>
-        
-        {/* Right Sidebar */}
-        <RightSidebarPanel 
-          vehicles={vehicles}
-          selectedVehicle={selectedVehicle}
-          onSelectVehicle={handleSelectVehicle}
-          onSetGeofence={() => setIsPlacingOnMap(true)}
-          onReportTheft={handleReportTheft}
-          onViewHistory={handleViewHistory}
-        />
       </div>
     </div>
   );

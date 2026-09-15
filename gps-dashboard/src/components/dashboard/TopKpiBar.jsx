@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { Bike, AlertTriangle, Fuel, ShieldCheck, Zap } from 'lucide-react';
+import { Bike, AlertTriangle, Fuel, ShieldCheck } from 'lucide-react';
 
 export const TopKpiBar = ({ kpis = {} }) => {
   const safeKpis = {

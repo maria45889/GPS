@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { Search, Filter, Bike, X } from 'lucide-react';
+import { Search, Bike, X } from 'lucide-react';
 import { VehicleCard } from './VehicleCard';
 
 export const FleetList = ({ vehicles, selectedVehicle, onSelectVehicle, onClose }) => {

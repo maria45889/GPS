@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldAlert, CheckCircle2, Lock, X, MapPin, Gauge, BatteryCharging, Clock, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Lock, X, MapPin, Gauge, BatteryCharging, Clock } from 'lucide-react';
 
 export const AlertDetailModal = ({ alert, onClose, onResolve, onBlockEngine }) => {
   const [engineBlocked, setEngineBlocked] = useState(false);

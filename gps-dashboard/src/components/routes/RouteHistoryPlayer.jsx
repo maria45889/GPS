@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, FastForward, Clock, Gauge, Navigation, X } from 'lucide-react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Pause, RotateCcw, FastForward, Clock, Gauge, X } from 'lucide-react';
 
 export const RouteHistoryPlayer = ({ 
   routePoints = [], 
@@ -15,7 +15,7 @@ export const RouteHistoryPlayer = ({
   const totalPoints = routePoints.length;
 
   // Calculate mock telemetry along the route
-  const getWaypointData = (idx) => {
+  const getWaypointData = useCallback((idx) => {
     const ratio = totalPoints > 1 ? idx / (totalPoints - 1) : 0;
     // Simulated time from 11:32 AM to 12:48 PM
     const startMinutes = 11 * 60 + 32;
@@ -30,7 +30,7 @@ export const RouteHistoryPlayer = ({
     const speed = simulatedSpeeds[idx % simulatedSpeeds.length];
 
     return { timeStr, speed, ratio };
-  };
+  }, [totalPoints]);
 
   const currentData = getWaypointData(currentIndex);
 
@@ -58,7 +58,7 @@ export const RouteHistoryPlayer = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isPlaying, playSpeed, totalPoints, routePoints, onProgressChange]);
+  }, [isPlaying, playSpeed, totalPoints, routePoints, onProgressChange, getWaypointData]);
 
   const handleSliderChange = (e) => {
     const newIdx = parseInt(e.target.value, 10);

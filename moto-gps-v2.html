@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Tracker Modelo 2</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #081220;
+            color: #ffffff;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 260px 1fr 320px;
+            grid-template-rows: 55px 1fr;
+            width: 100%;
+            height: 100%;
+        }
+
+        .top-bar {
+            grid-column: 1 / 4;
+            background-color: rgba(10, 25, 50, 0.95);
+            border-bottom: 1px solid rgba(0, 255, 230, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            color: #00ffe6;
+            font-size: 14px;
+        }
+
+        .top-bar .logo {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00ffe6;
+        }
+
+        .sidebar-left {
+            background-color: rgba(10, 25, 50, 0.9);
+            border-right: 1px solid rgba(0, 255, 230, 0.35);
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .sidebar-left nav {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .sidebar-left nav a {
+            display: block;
+            padding: 12px 15px;
+            background-color: rgba(0, 40, 70, 0.5);
+            border: 1px solid rgba(0, 255, 230, 0.25);
+            border-radius: 8px;
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        .sidebar-left nav a:hover,
+        .sidebar-left nav a.active {
+            background-color: rgba(0, 255, 230, 0.15);
+            border-color: #00ffe6;
+            color: #00ffe6;
+        }
+
+        .map-container {
+            position: relative;
+            background-color: #051018;
+            background-image:
+                linear-gradient(rgba(0, 255, 230, 0.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 230, 0.06) 1px, transparent 1px);
+            background-size: 50px 50px;
+            overflow: hidden;
+        }
+
+        .map-image {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(0, 255, 230, 0.05), transparent 70%);
+        }
+
+        .marker {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 25px currentColor;
+            z-index: 10;
+        }
+
+        .marker.red {
+            background-color: #ff4466;
+            color: #ff4466;
+            top: 35%;
+            left: 30%;
+        }
+
+        .marker.cyan {
+            background-color: #00ffe6;
+            color: #001a20;
+            top: 55%;
+            left: 50%;
+        }
+
+        .marker.green {
+            background-color: #88ff44;
+            color: #88ff44;
+            top: 25%;
+            right: 35%;
+        }
+
+        .sidebar-right {
+            background-color: rgba(10, 25, 50, 0.9);
+            border-left: 1px solid rgba(0, 255, 230, 0.35);
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .card {
+            background-color: rgba(0, 40, 70, 0.5);
+            border: 1px solid rgba(0, 255, 230, 0.25);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .card h4 {
+            color: #00ffe6;
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
+        .card p {
+            font-size: 14px;
+            color: #ccfff5;
+            margin: 5px 0;
+        }
+
+        .btn {
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+            background: linear-gradient(90deg, #00ffe6, #00aaff);
+            color: #001a20;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn-danger {
+            background: linear-gradient(90deg, #ff4466, #ff8800);
+            color: #ffffff;
+        }
+
+        .status-box {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .status-item {
+            flex: 1;
+            background-color: rgba(0, 40, 70, 0.5);
+            border: 1px solid rgba(0, 255, 230, 0.25);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .status-item .number {
+            font-size: 22px;
+            font-weight: bold;
+            color: #00ffe6;
+        }
+
+        .status-item .label {
+            font-size: 12px;
+            color: #88ffcc;
+        }
+
+        .vehicle-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .vehicle-list li {
+            padding: 12px;
+            margin-bottom: 10px;
+            background-color: rgba(0, 40, 70, 0.5);
+            border: 1px solid rgba(0, 255, 230, 0.25);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .vehicle-list li .status {
+            color: #88ff44;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="top-bar">
+            <div class="logo">GPS TRACKER</div>
+            <div>CONEXIÓN: ACTIVA | SEÑAL: BUENA</div>
+            <div>ADMINISTRADOR</div>
+        </div>
+
+        <div class="sidebar-left">
+            <nav>
+                <a href="#" class="active">Inicio</a>
+                <a href="#">Mapa</a>
+                <a href="#">Vehículos</a>
+                <a href="#">Historial</a>
+                <a href="#">Alertas</a>
+                <a href="#">Configuración</a>
+            </nav>
+
+            <div class="card">
+                <h4>RESUMEN</h4>
+                <p>Vehículos: 4</p>
+                <p>En ruta: 2</p>
+                <p>Detenidos: 1</p>
+                <p>Offline: 1</p>
+            </div>
+
+            <div class="card">
+                <h4>ALERTA RECIENTE</h4>
+                <p>Exceso de velocidad detectado.</p>
+                <button class="btn btn-danger">Ver Alerta</button>
+            </div>
+        </div>
+
+        <div class="map-container">
+            <div class="map-image"></div>
+            <div class="marker red">!</div>
+            <div class="marker cyan">🏍️</div>
+            <div class="marker green">●</div>
+        </div>
+
+        <div class="sidebar-right">
+            <div class="status-box">
+                <div class="status-item">
+                    <div class="number">4</div>
+                    <div class="label">Vehículos</div>
+                </div>
+                <div class="status-item">
+                    <div class="number">2</div>
+                    <div class="label">En ruta</div>
+                </div>
+                <div class="status-item">
+                    <div class="number">1</div>
+                    <div class="label">Offline</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h4>UBICACIÓN ACTUAL</h4>
+                <p>Coordenadas: 4.3891, -74.2254</p>
+                <p>Velocidad: 82 km/h</p>
+                <p>Distancia: 12.93 km</p>
+                <p>ETA: 01h 45m</p>
+                <button class="btn">Ver Ruta</button>
+            </div>
+
+            <h4 style="color:#00ffe6; margin-bottom:10px;">LISTA DE VEHÍCULOS</h4>
+
+            <ul class="vehicle-list">
+                <li>
+                    Yamaha MT-07<br>
+                    <span class="status">En ruta</span> · 82 km/h · 92%
+                </li>
+                <li>
+                    Yamaha YZF-R1<br>
+                    <span class="status">En ruta</span> · 84 km/h · 88%
+                </li>
+                <li>
+                    Honda CBR 600RR<br>
+                    <span style="color:#ffdd66">Detenido</span> · 0 km/h · 95%
+                </li>
+                <li>
+                    Ducati Panigale V2<br>
+                    <span style="color:#778899">Offline</span> · 0 km/h · 18%
+                </li>
+            </ul>
+
+            <button class="btn">Historial</button>
+            <button class="btn" style="margin-top:10px;">Geocerca</button>
+        </div>
+    </div>
+</body>
+</html>
