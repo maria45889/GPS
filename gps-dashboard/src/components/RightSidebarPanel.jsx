@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 
-export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, onSetGeofence, onViewHistory, userLocation, onLocateUser }) => {
+export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, onSetGeofence, onViewHistory, onShareRoute, isFollowingRoute, onToggleRouteFollow, userLocation, onLocateUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const activeVehicles = vehicles.filter((vehicle) => vehicle.status === 'active').length;
   const offlineVehicles = vehicles.filter((vehicle) => vehicle.status === 'offline').length;
@@ -85,6 +85,14 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
       </div>
 
       <div className="mt-auto space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={onToggleRouteFollow} className={`rounded-[8px] border py-3 text-[11px] font-semibold transition-colors ${isFollowingRoute ? 'border-[#35b9c9] bg-[#123a43] text-[#9fe9ff]' : 'border-[#304149] bg-[#1c282d] text-[#c8d4d0] hover:border-[#b8f36b]/50 hover:text-[#b8f36b]'}`}>
+            {isFollowingRoute ? 'Siguiendo ruta' : 'Seguir ruta'}
+          </button>
+          <button onClick={onShareRoute} className="rounded-[8px] border border-[#304149] bg-[#1c282d] py-3 text-[11px] font-semibold text-[#c8d4d0] transition-colors hover:border-[#b8f36b]/50 hover:text-[#b8f36b]">
+            Compartir ruta
+          </button>
+        </div>
         <button onClick={onViewHistory} className="w-full rounded-[8px] border border-[#304149] bg-[#1c282d] py-3 text-[12px] font-semibold text-[#c8d4d0] transition-colors hover:border-[#b8f36b]/50 hover:text-[#b8f36b]">
           Historial
         </button>

@@ -359,6 +359,9 @@ const MapArea = ({
   pendingCenter = null,
   onMapClick,
   flyToTrigger,
+  isFollowingRoute = false,
+  onToggleRouteFollow,
+  onShareRoute,
   userLocation = null,
   onLocationChange,
   locateUserTrigger,
@@ -403,7 +406,7 @@ const MapArea = ({
       >
         <MapController />
         <MapFlyToHandler 
-          targetPosition={selectedVehicle?.position} 
+          targetPosition={isFollowingRoute ? selectedVehicle?.position : null}
           flyToTrigger={flyToTrigger} 
         />
         <UserLocationTracker onLocationChange={onLocationChange} />
@@ -566,6 +569,24 @@ const MapArea = ({
                     <p>Conductor: <span className="text-white">{v.driver}</span></p>
                     <p>Placa: <span className="text-[#00E676] font-mono">{v.plate}</span></p>
                   </div>
+                  {isSelected && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onToggleRouteFollow?.()}
+                        className="rounded-md border border-cyan-400/30 bg-cyan-400/10 px-2 py-1.5 text-[10px] font-bold text-cyan-200"
+                      >
+                        {isFollowingRoute ? 'Siguiendo' : 'Seguir ruta'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onShareRoute?.()}
+                        className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-1.5 text-[10px] font-bold text-emerald-200"
+                      >
+                        Compartir
+                      </button>
+                    </div>
+                  )}
                 </div>
               </Popup>
             </Marker>

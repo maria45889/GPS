@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Power, ShieldAlert, X, History, MapPinned } from 'lucide-react';
+import { Power, ShieldAlert, X, History, MapPinned, Share2 } from 'lucide-react';
 import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
@@ -14,6 +14,7 @@ const Dashboard = () => {
   const { vehicles: supabaseVehicles } = useVehicles();
   const { alerts: supabaseAlerts } = useAlerts();
   const { geofences: supabaseGeofences } = useGeofences();
+  const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle');
 
   // State management with fallback to mock data
   const [vehicles, setVehicles] = useState(supabaseVehicles.length > 0 ? supabaseVehicles : initialFleet);
@@ -32,18 +33,53 @@ const Dashboard = () => {
   useEffect(() => {
     if (supabaseGeofences.length > 0) setGeofencesState(supabaseGeofences);
   }, [supabaseGeofences])
-
-  const [selectedVehicle, setSelectedVehicle] = useState(vehicles[0]);
+  const [selectedVehicle, setSelectedVehicle] = useState(
+    () => vehicles.find((vehicle) => vehicle.id === sharedVehicleId) || vehicles[0]
+  );
   const [flyToTrigger, setFlyToTrigger] = useState(null);
   const [isPlacingOnMap, setIsPlacingOnMap] = useState(false);
   const [pendingCenter, setPendingCenter] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locateUserTrigger, setLocateUserTrigger] = useState(null);
-  const [activeSection, setActiveSection] = useState('Inicio');
+  const [isFollowingRoute, setIsFollowingRoute] = useState(
+    () => new URLSearchParams(window.location.search).get('follow') === '1'
+  );
 
   const handleSelectVehicle = (vehicle) => {
     setSelectedVehicle(vehicle);
+    setFlyToTrigger({
+      coords: vehicle.position,
+      zoom: 16,
+    });
+  };
+
+  const handleToggleRouteFollow = () => {
+    setIsFollowingRoute((current) => !current);
+  };
+
+  const handleShareRoute = async () => {
+    if (!selectedVehicle) return;
+
+    const routeUrl = new URL(window.location.href);
+    routeUrl.searchParams.set('vehicle', selectedVehicle.id);
+    routeUrl.searchParams.set('follow', '1');
+    const shareData = {
+      title: `Ruta de ${selectedVehicle.name}`,
+      text: `Seguimiento GPS de ${selectedVehicle.name} (${selectedVehicle.plate})`,
+      url: routeUrl.toString(),
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareData.url);
+        alert('Enlace de ruta copiado');
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') alert('No se pudo compartir la ruta');
+    }
   };
 
   const handleSelectAlert = (alert) => {
@@ -103,6 +139,14 @@ const Dashboard = () => {
     }
   };
 
+  useEffect(() => {
+    if (!sharedVehicleId) return;
+    const sharedVehicle = vehicles.find((vehicle) => vehicle.id === sharedVehicleId);
+    if (sharedVehicle && selectedVehicle?.id !== sharedVehicle.id) {
+      setSelectedVehicle(sharedVehicle);
+      setFlyToTrigger({ coords: sharedVehicle.position, zoom: 16, timestamp: Date.now() });
+    }
+  }, [vehicles, sharedVehicleId, selectedVehicle?.id]);
   return (
     <div className="reference-dashboard relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#1a3544] bg-[#07111c] shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:h-[calc(100vh-2.5rem)]">
 
@@ -133,6 +177,9 @@ const Dashboard = () => {
                 pendingCenter={pendingCenter}
                 onMapClick={handleMapClickForGeofence}
                 flyToTrigger={flyToTrigger}
+                isFollowingRoute={isFollowingRoute}
+                onToggleRouteFollow={handleToggleRouteFollow}
+                onShareRoute={handleShareRoute}
                 userLocation={userLocation}
                 onLocationChange={setUserLocation}
                 locateUserTrigger={locateUserTrigger}
@@ -166,6 +213,14 @@ const Dashboard = () => {
                   <History size={15} />
                   <span>Historial</span>
                 </button>
+                <button type="button" onClick={handleToggleRouteFollow} className={isFollowingRoute ? 'mobile-map-action-active' : ''}>
+                  <MapPinned size={15} />
+                  <span>{isFollowingRoute ? 'Siguiendo' : 'Seguir'}</span>
+                </button>
+                <button type="button" onClick={handleShareRoute}>
+                  <Share2 size={15} />
+                  <span>Compartir</span>
+                </button>
                 <button type="button" onClick={() => setIsPlacingOnMap(true)}>
                   <MapPinned size={15} />
                   <span>Geovalla</span>
@@ -184,6 +239,9 @@ const Dashboard = () => {
             onSelectVehicle={handleSelectVehicle}
             onSetGeofence={() => setIsPlacingOnMap(true)}
             onViewHistory={handleViewHistory}
+            isFollowingRoute={isFollowingRoute}
+            onToggleRouteFollow={handleToggleRouteFollow}
+            onShareRoute={handleShareRoute}
             userLocation={userLocation}
             onLocateUser={handleLocateUser}
           />
