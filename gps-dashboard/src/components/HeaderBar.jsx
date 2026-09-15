@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Signal, Wifi, User, Settings, ChevronDown, Radio, MoreHorizontal } from 'lucide-react';
+import { Signal, Wifi, User, Settings, ChevronDown, Radio, MoreHorizontal, Menu } from 'lucide-react';
 
-export const HeaderBar = ({ selectedVehicle }) => {
+export const HeaderBar = ({ selectedVehicle, onMenuClick }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleActionsClick = () => {
@@ -22,8 +22,8 @@ export const HeaderBar = ({ selectedVehicle }) => {
   };
 
   return (
-    <div className="min-h-[72px] border-b border-[#26343b] bg-[#151e23] px-5 py-3 text-[13px] sm:px-6">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="relative z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-[#26343b] bg-[#151e23] px-4 py-3 text-[13px] sm:px-6">
+      <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#b8f36b] text-[#16251a] shadow-[0_4px_14px_rgba(184,243,107,0.18)]">
           <Radio size={19} strokeWidth={2.5} />
         </div>
@@ -32,6 +32,15 @@ export const HeaderBar = ({ selectedVehicle }) => {
           <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#73838a]">Control de flota</div>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={onMenuClick}
+        className="mobile-menu-button"
+        aria-label="Abrir menú"
+      >
+        <Menu size={18} />
+      </button>
 
       <div className="hidden items-center gap-3 text-center md:flex">
         <div className="flex items-center gap-2 rounded-full border border-[#30443b] bg-[#1a2925] px-3 py-1.5">
