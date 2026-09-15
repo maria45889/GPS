@@ -3,6 +3,7 @@ import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
 import { HeaderBar } from './HeaderBar';
+import { VideoFeed } from './VideoFeed';
 import { History, MapPinned, Power, ShieldAlert, X } from 'lucide-react';
 import { initialFleet } from '../data/fleetData';
 import { initialAlerts } from '../data/alertsData';
@@ -19,6 +20,7 @@ const Dashboard = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [locateUserTrigger, setLocateUserTrigger] = useState(null);
+  const [activeSection, setActiveSection] = useState('Inicio');
 
   const handleSelectVehicle = (vehicle) => {
     setSelectedVehicle(vehicle);
@@ -74,6 +76,13 @@ const Dashboard = () => {
     }
   };
 
+  const handleNavigate = (section) => {
+    setActiveSection(section);
+    if (section === 'Mapa') {
+      setIsMobileSidebarOpen(false);
+    }
+  };
+
   return (
     <div className="light-dashboard relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#dbe9ef] bg-[#f7fbfc] shadow-[0_24px_80px_rgba(43,93,112,0.16)] sm:h-[calc(100vh-2.5rem)]">
 
@@ -84,42 +93,49 @@ const Dashboard = () => {
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden gap-3 p-3">
-          <LeftSidebarPanel selectedVehicle={selectedVehicle} />
+          <LeftSidebarPanel
+            selectedVehicle={selectedVehicle}
+            activeSection={activeSection}
+            onNavigate={handleNavigate}
+          />
 
-          <div className="map-surface relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#cfe2e9] bg-[#eaf4f7] shadow-[0_8px_24px_rgba(43,93,112,0.12)]">
-            <MapArea
-              vehicles={vehicles}
-              selectedVehicle={selectedVehicle}
-              onSelectVehicle={handleSelectVehicle}
-              alerts={alerts}
-              onSelectAlert={handleSelectAlert}
-              geofences={geofences}
-              isPlacingOnMap={isPlacingOnMap}
-              pendingCenter={pendingCenter}
-              onMapClick={handleMapClickForGeofence}
-              flyToTrigger={flyToTrigger}
-              userLocation={userLocation}
-              onLocationChange={setUserLocation}
-              locateUserTrigger={locateUserTrigger}
-            />
+          <div className="dashboard-center min-h-0 min-w-0 flex-1">
+            <VideoFeed selectedVehicle={selectedVehicle} />
+            <div className="map-surface relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#cfe2e9] bg-[#eaf4f7] shadow-[0_8px_24px_rgba(43,93,112,0.12)]">
+              <MapArea
+                vehicles={vehicles}
+                selectedVehicle={selectedVehicle}
+                onSelectVehicle={handleSelectVehicle}
+                alerts={alerts}
+                onSelectAlert={handleSelectAlert}
+                geofences={geofences}
+                isPlacingOnMap={isPlacingOnMap}
+                pendingCenter={pendingCenter}
+                onMapClick={handleMapClickForGeofence}
+                flyToTrigger={flyToTrigger}
+                userLocation={userLocation}
+                onLocationChange={setUserLocation}
+                locateUserTrigger={locateUserTrigger}
+              />
 
-            <div className="mobile-map-actions" aria-label="Acciones rápidas">
-              <button type="button" onClick={handleActivate}>
-                <Power size={15} />
-                <span>Activar</span>
-              </button>
-              <button type="button" onClick={handleViewHistory}>
-                <History size={15} />
-                <span>Historial</span>
-              </button>
-              <button type="button" onClick={() => setIsPlacingOnMap(true)}>
-                <MapPinned size={15} />
-                <span>Geovalla</span>
-              </button>
-              <button type="button" onClick={handleReportTheft} className="mobile-map-action-danger">
-                <ShieldAlert size={15} />
-                <span>Robo</span>
-              </button>
+              <div className="mobile-map-actions" aria-label="Acciones rápidas">
+                <button type="button" onClick={handleActivate}>
+                  <Power size={15} />
+                  <span>Activar</span>
+                </button>
+                <button type="button" onClick={handleViewHistory}>
+                  <History size={15} />
+                  <span>Historial</span>
+                </button>
+                <button type="button" onClick={() => setIsPlacingOnMap(true)}>
+                  <MapPinned size={15} />
+                  <span>Geovalla</span>
+                </button>
+                <button type="button" onClick={handleReportTheft} className="mobile-map-action-danger">
+                  <ShieldAlert size={15} />
+                  <span>Robo</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -151,7 +167,7 @@ const Dashboard = () => {
               >
                 <X size={18} />
               </button>
-              <LeftSidebarPanel />
+              <LeftSidebarPanel activeSection={activeSection} onNavigate={handleNavigate} />
             </div>
           </div>
         )}

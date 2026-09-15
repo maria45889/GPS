@@ -161,6 +161,10 @@
     min-height: 280px;
   }
 
+  .dashboard-video {
+    display: none;
+  }
+
   .mobile-menu-button {
     display: flex !important;
     align-items: center;
@@ -315,6 +319,36 @@
   border-color: #d5e6ec !important;
   box-shadow: 0 8px 22px rgba(43, 93, 112, 0.08);
   color: #45636e !important;
+}
+
+.dashboard-center {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-status-dot {
+  display: block;
+  width: 9px;
+  height: 9px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #35b98a;
+  box-shadow: 0 0 0 4px rgba(53, 185, 138, 0.14);
+}
+
+.light-dashboard .dashboard-telemetry,
+.light-dashboard .dashboard-apk-card {
+  border-color: #e0edf1 !important;
+}
+
+.light-dashboard .dashboard-telemetry strong,
+.light-dashboard .dashboard-apk-card p {
+  color: #173746 !important;
+}
+
+.light-dashboard .dashboard-apk-card {
+  background: #f4fafb;
 }
 
 .light-dashboard .dashboard-left-panel button {

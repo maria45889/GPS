@@ -7,7 +7,7 @@ export const VideoFeed = ({ selectedVehicle }) => {
   };
 
   return (
-    <div className="relative w-full h-[285px] bg-black overflow-hidden border-b border-cyan-500/40 rounded-t-[18px] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]">
+    <div className="dashboard-video relative w-full h-[220px] shrink-0 bg-black overflow-hidden rounded-[12px] border border-[#cfe2e9] shadow-[0_8px_20px_rgba(43,93,112,0.12)]">
       <div className="absolute inset-0">
         <img
           src="https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&q=80&w=1200"
