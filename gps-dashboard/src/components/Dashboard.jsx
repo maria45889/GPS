@@ -84,7 +84,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="light-dashboard relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#dbe9ef] bg-[#f7fbfc] shadow-[0_24px_80px_rgba(43,93,112,0.16)] sm:h-[calc(100vh-2.5rem)]">
+    <div className="reference-dashboard relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#1a3544] bg-[#07111c] shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:h-[calc(100vh-2.5rem)]">
 
       <div className="relative z-10 flex flex-col h-full">
         <HeaderBar
@@ -117,6 +117,25 @@ const Dashboard = () => {
                 onLocationChange={setUserLocation}
                 locateUserTrigger={locateUserTrigger}
               />
+
+              <div className="map-live-card">
+                <div className="map-card-title">Live Data</div>
+                <div className="map-live-grid">
+                  <span>Engine Temp <strong>{selectedVehicle?.temp || '--'}°</strong></span>
+                  <span>Fuel <strong>{selectedVehicle?.fuel || '--'}%</strong></span>
+                  <span>Signal <strong className="signal-good">GOOD</strong></span>
+                </div>
+              </div>
+
+              <div className="map-alerts-card">
+                <div className="map-card-heading"><span>Active Alerts</span><span className="alert-count">{alerts.filter(item => item.status !== 'resolved').length}</span></div>
+                {alerts.filter(item => item.status !== 'resolved').slice(0, 3).map((item) => (
+                  <button key={item.id} type="button" onClick={() => handleSelectAlert(item)} className="map-alert-row">
+                    <span className={`alert-dot ${item.severity}`} />
+                    <span><strong>{item.title.split(' - ')[0]}</strong><small>{item.timestamp} · {item.locationName}</small></span>
+                  </button>
+                ))}
+              </div>
 
               <div className="mobile-map-actions" aria-label="Acciones rápidas">
                 <button type="button" onClick={handleActivate}>

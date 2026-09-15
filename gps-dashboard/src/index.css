@@ -509,6 +509,250 @@
   border-radius: 8px;
 }
 
+/* Reference monitoring dashboard theme */
+.reference-dashboard {
+  background: #07111c !important;
+  border-color: #183546 !important;
+}
+
+.reference-dashboard .dashboard-header {
+  min-height: 58px;
+  background: #081522 !important;
+  border-color: #173344 !important;
+}
+
+.reference-dashboard .dashboard-header > div:first-child > div:first-child {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #071c2b !important;
+  color: #1ee6ee !important;
+  box-shadow: none;
+}
+
+.reference-dashboard .dashboard-header .text-\[15px\] {
+  color: #e8f8ff !important;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.reference-dashboard .dashboard-header .header-status,
+.reference-dashboard .dashboard-header .header-signal-actions,
+.reference-dashboard .dashboard-header .header-fleet-selector {
+  color: #708a9a;
+}
+
+.reference-dashboard .dashboard-header .header-status > div:first-child {
+  padding: 0;
+  background: transparent !important;
+  border: 0;
+}
+
+.reference-dashboard .dashboard-header .header-status span,
+.reference-dashboard .dashboard-header .header-signal-actions span,
+.reference-dashboard .dashboard-header .header-signal-actions svg {
+  color: #66d9d8 !important;
+}
+
+.reference-dashboard .header-fleet-selector > div,
+.reference-dashboard .header-fleet-selector button {
+  background: #0b1b2a !important;
+  border-color: #1b4359 !important;
+  color: #b8dbe5 !important;
+}
+
+.reference-dashboard .header-fleet-name,
+.reference-dashboard .header-action-label {
+  color: #b8dbe5 !important;
+}
+
+.reference-dashboard .dashboard-left-panel,
+.reference-dashboard .dashboard-right-panel {
+  background: #0b1825 !important;
+  border-color: #18384b !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  color: #8ca7b5 !important;
+}
+
+.reference-dashboard .dashboard-left-panel {
+  width: 210px;
+}
+
+.reference-dashboard .dashboard-right-panel {
+  width: 250px;
+}
+
+.reference-dashboard .dashboard-left-panel button,
+.reference-dashboard .dashboard-right-panel button {
+  color: #8ca7b5 !important;
+}
+
+.reference-dashboard .dashboard-left-panel nav button:first-child,
+.reference-dashboard .dashboard-left-panel nav button:hover,
+.reference-dashboard .dashboard-right-panel .selected {
+  background: #102b38 !important;
+  border-color: #1fc6d1 !important;
+  color: #70e5e7 !important;
+}
+
+.reference-dashboard .dashboard-left-panel h3,
+.reference-dashboard .dashboard-right-panel h3,
+.reference-dashboard .dashboard-apk-card p,
+.reference-dashboard .dashboard-telemetry strong {
+  color: #c1dce5 !important;
+}
+
+.reference-dashboard .dashboard-left-panel > div,
+.reference-dashboard .dashboard-right-panel > div {
+  border-color: #173546 !important;
+}
+
+.reference-dashboard .dashboard-telemetry,
+.reference-dashboard .dashboard-apk-card,
+.reference-dashboard .dashboard-right-panel > div > div,
+.reference-dashboard .dashboard-right-panel input {
+  background: #0d2030 !important;
+  border-color: #1a4054 !important;
+  color: #91adba !important;
+}
+
+.reference-dashboard .dashboard-center {
+  position: relative;
+  gap: 0;
+}
+
+.reference-dashboard .dashboard-video {
+  position: absolute;
+  z-index: 30;
+  top: 12px;
+  left: 12px;
+  width: 230px;
+  height: 158px;
+  border-color: #1a5668;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38);
+}
+
+.reference-dashboard .map-surface {
+  height: 100%;
+  border-color: #163c51 !important;
+  background: #071522 !important;
+}
+
+.reference-dashboard .cyber-tiles .leaflet-tile {
+  filter: brightness(0.62) contrast(1.22) saturate(1.25) hue-rotate(100deg) !important;
+}
+
+.reference-dashboard .leaflet-container {
+  background: #071522 !important;
+}
+
+.reference-dashboard .leaflet-control-attribution {
+  background: rgba(6, 19, 31, 0.85) !important;
+  border-color: #1a4054 !important;
+}
+
+.reference-dashboard .map-live-card,
+.reference-dashboard .map-alerts-card {
+  position: absolute;
+  z-index: 25;
+  border: 1px solid #1a5668;
+  border-radius: 10px;
+  background: rgba(8, 24, 37, 0.92);
+  color: #8daab7;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+}
+
+.reference-dashboard .map-live-card {
+  top: 180px;
+  left: 12px;
+  width: 230px;
+  padding: 10px 12px;
+}
+
+.reference-dashboard .map-card-title,
+.reference-dashboard .map-card-heading {
+  color: #c4e7ed;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reference-dashboard .map-live-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 9px;
+}
+
+.reference-dashboard .map-live-grid strong {
+  display: block;
+  margin-top: 3px;
+  color: #e6fbff;
+  font-size: 11px;
+}
+
+.reference-dashboard .signal-good { color: #5be8b0 !important; }
+
+.reference-dashboard .map-alerts-card {
+  top: 12px;
+  right: 12px;
+  width: 230px;
+  padding: 12px;
+}
+
+.reference-dashboard .map-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1a4054;
+}
+
+.reference-dashboard .alert-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #ffffff;
+  background: #e75d78;
+  font-size: 10px;
+}
+
+.reference-dashboard .map-alert-row {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  padding: 9px 0;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid #173546;
+  background: transparent;
+}
+
+.reference-dashboard .map-alert-row strong,
+.reference-dashboard .map-alert-row small {
+  display: block;
+}
+
+.reference-dashboard .map-alert-row strong { color: #d9edf1; font-size: 10px; }
+.reference-dashboard .map-alert-row small { margin-top: 3px; color: #7893a0; font-size: 9px; }
+.reference-dashboard .alert-dot { width: 7px; height: 7px; margin-top: 3px; flex-shrink: 0; border-radius: 50%; background: #f1ae58; }
+.reference-dashboard .alert-dot.critical { background: #ee5e78; }
+
+@media (max-width: 1023px) {
+  .reference-dashboard .dashboard-video,
+  .reference-dashboard .map-live-card,
+  .reference-dashboard .map-alerts-card {
+    display: none;
+  }
+}
+
 /* Geofence polygon - enhanced glow effects */
 .geofence-polygon path {
   stroke-linecap: round; stroke-linejoin: round;
