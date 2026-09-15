@@ -58,7 +58,12 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
           {filteredVehicles.map(vehicle => (
             <div
               key={vehicle.id}
+              role="button"
+              tabIndex={0}
               onClick={() => onSelectVehicle(vehicle)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') onSelectVehicle(vehicle);
+              }}
               className={`flex items-center justify-between gap-3 p-2.5 rounded-[8px] border cursor-pointer transition-colors ${
                 selectedVehicle?.id === vehicle.id
                   ? 'border-[#b8f36b]/40 bg-[#223329]'

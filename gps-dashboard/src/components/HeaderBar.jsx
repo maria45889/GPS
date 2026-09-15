@@ -1,24 +1,23 @@
 import React, { useState } from 'react';
 import { Signal, Wifi, User, Settings, ChevronDown, Radio, MoreHorizontal, Menu } from 'lucide-react';
 
-export const HeaderBar = ({ selectedVehicle, onMenuClick }) => {
+export const HeaderBar = ({ onMenuClick, onNavigate }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleActionsClick = () => {
-    alert('Panel de acciones para: ' + selectedVehicle?.plate);
+    onNavigate?.('Vehículos');
   };
 
   const handleSettingsClick = () => {
-    alert('Configuración del sistema');
+    onNavigate?.('Configuración');
   };
 
   const handleUserClick = () => {
-    alert('Perfil de usuario');
+    onNavigate?.('Configuración');
   };
 
   const handleDropdownClick = () => {
     setIsDropdownOpen(!isDropdownOpen);
-    alert('Flota seleccionada: MotoGPS');
   };
 
   return (

@@ -762,6 +762,41 @@
 .reference-dashboard .alert-dot { width: 7px; height: 7px; margin-top: 3px; flex-shrink: 0; border-radius: 50%; background: #f1ae58; }
 .reference-dashboard .alert-dot.critical { background: #ee5e78; }
 
+.vehicle-detail-panel {
+  position: absolute;
+  z-index: 40;
+  top: 76px;
+  right: 24px;
+  width: min(360px, calc(100% - 48px));
+  padding: 18px;
+  color: #c9e1e8;
+  background: rgba(8, 24, 37, 0.97);
+  border: 1px solid #2a6577;
+  border-radius: 12px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.vehicle-detail-header { display: flex; justify-content: space-between; gap: 12px; }
+.vehicle-detail-eyebrow { color: #66d9d8; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.vehicle-detail-header h2 { margin: 5px 0 2px; color: #f0fbff; font-size: 20px; line-height: 1.15; }
+.vehicle-detail-header p { margin: 0; color: #89a9b5; font-size: 11px; }
+.vehicle-detail-close { display: grid; width: 32px; height: 32px; place-items: center; color: #a4c1ca; background: #102b38; border: 1px solid #28566a; border-radius: 7px; }
+.vehicle-detail-status { display: flex; align-items: center; gap: 7px; margin: 16px 0 12px; padding: 9px 10px; border-radius: 7px; font-size: 11px; }
+.vehicle-detail-status span:last-child { margin-left: auto; color: #89a9b5; }
+.vehicle-detail-status-active { color: #a9f0ca; background: rgba(53, 185, 138, .12); }
+.vehicle-detail-status-stopped { color: #f3d28c; background: rgba(242, 198, 109, .12); }
+.vehicle-detail-status-offline { color: #b4c0c5; background: rgba(139, 155, 161, .12); }
+.vehicle-detail-status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.vehicle-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.vehicle-detail-grid > div { display: flex; gap: 8px; min-width: 0; padding: 10px; color: #5bd6d8; background: #0d2030; border: 1px solid #1a4054; border-radius: 7px; }
+.vehicle-detail-grid span { min-width: 0; color: #85a5b0; font-size: 10px; }
+.vehicle-detail-grid strong { display: block; margin-top: 3px; overflow: hidden; color: #e8f8ff; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.vehicle-detail-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.vehicle-detail-actions button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 7px; color: #c8e0e7; background: #102b38; border: 1px solid #28566a; border-radius: 7px; font-size: 11px; font-weight: 700; }
+.vehicle-detail-actions button.is-active { color: #9fe9ff; background: #123a43; border-color: #35b9c9; }
+.vehicle-detail-actions .vehicle-detail-danger { color: #f3cc91; border-color: #665039; }
+
 @media (max-width: 1023px) {
   .reference-dashboard .dashboard-video,
   .reference-dashboard .dashboard-video {
@@ -817,6 +852,20 @@
   .reference-dashboard .map-alert-row small {
     font-size: 8px;
   }
+
+  .vehicle-detail-panel {
+    top: auto;
+    right: 10px;
+    bottom: 118px;
+    left: 10px;
+    width: auto;
+    max-height: min(58dvh, 430px);
+    overflow-y: auto;
+    padding: 14px;
+  }
+
+  .vehicle-detail-header h2 { font-size: 17px; }
+  .vehicle-detail-actions button { min-height: 42px; }
 }
 
 /* Geofence polygon - enhanced glow effects */

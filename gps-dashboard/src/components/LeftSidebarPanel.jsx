@@ -74,7 +74,7 @@ export const LeftSidebarPanel = ({ selectedVehicle, activeSection = 'Inicio', on
           <p className="text-[12px] font-medium text-[#f2d7a2]">Exceso de velocidad detectado.</p>
           <p className="mt-1 text-[11px] text-[#aa9270]">Yamaha MT-07 · hace 4 min</p>
         </div>
-        <button className="mt-3 w-full rounded-[8px] border border-[#5a4430] bg-transparent py-2.5 text-[11px] font-bold uppercase tracking-[0.10em] text-[#f2c66d] transition-colors hover:bg-[#3a2b1c]">
+        <button type="button" onClick={() => onNavigate?.('Alertas')} className="mt-3 w-full rounded-[8px] border border-[#5a4430] bg-transparent py-2.5 text-[11px] font-bold uppercase tracking-[0.10em] text-[#f2c66d] transition-colors hover:bg-[#3a2b1c]">
           Ver alerta
         </button>
       </div>

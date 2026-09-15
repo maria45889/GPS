@@ -9,6 +9,7 @@ import { initialFleet } from '../data/fleetData';
 import { initialAlerts } from '../data/alertsData';
 import { initialGeofences } from '../data/geofencesData';
 import { useVehicles, useAlerts, useGeofences } from '../hooks';
+import { VehicleDetailPanel } from './VehicleDetailPanel';
 
 const Dashboard = () => {
   const { vehicles: supabaseVehicles } = useVehicles();
@@ -45,9 +46,11 @@ const Dashboard = () => {
   const [isFollowingRoute, setIsFollowingRoute] = useState(
     () => new URLSearchParams(window.location.search).get('follow') === '1'
   );
+  const [isVehicleDetailOpen, setIsVehicleDetailOpen] = useState(false);
 
   const handleSelectVehicle = (vehicle) => {
     setSelectedVehicle(vehicle);
+    setIsVehicleDetailOpen(true);
     setFlyToTrigger({
       coords: vehicle.position,
       zoom: 16,
@@ -93,6 +96,7 @@ const Dashboard = () => {
     const relatedVehicle = vehicles.find(v => v.id === alert.vehicleId || v.plate === alert.plate);
     if (relatedVehicle) {
       setSelectedVehicle(relatedVehicle);
+      setIsVehicleDetailOpen(true);
     }
   };
 
@@ -115,7 +119,9 @@ const Dashboard = () => {
   };
 
   const handleViewHistory = () => {
-    alert('Ver historial del vehículo: ' + selectedVehicle?.plate);
+    setActiveSection('Historial');
+    setIsVehicleDetailOpen(false);
+    setIsFollowingRoute(true);
   };
 
   const handleLocateUser = () => {
@@ -154,6 +160,7 @@ const Dashboard = () => {
         <HeaderBar
           selectedVehicle={selectedVehicle}
           onMenuClick={() => setIsMobileSidebarOpen(true)}
+          onNavigate={handleNavigate}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden gap-3 p-3">
@@ -246,6 +253,18 @@ const Dashboard = () => {
             onLocateUser={handleLocateUser}
           />
         </div>
+
+        {isVehicleDetailOpen && (
+          <VehicleDetailPanel
+            vehicle={selectedVehicle}
+            isFollowingRoute={isFollowingRoute}
+            onClose={() => setIsVehicleDetailOpen(false)}
+            onToggleRouteFollow={handleToggleRouteFollow}
+            onShareRoute={handleShareRoute}
+            onViewHistory={handleViewHistory}
+            onReportTheft={handleReportTheft}
+          />
+        )}
       </div>
 
       {isMobileSidebarOpen && (
