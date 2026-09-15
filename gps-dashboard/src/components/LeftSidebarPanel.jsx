@@ -2,7 +2,7 @@ import React from 'react';
 
 export const LeftSidebarPanel = () => {
   return (
-    <div className="hidden w-[224px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#151e23] text-[13px] lg:flex">
+    <div className="dashboard-left-panel hidden w-[224px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#151e23] text-[13px] lg:flex">
       <div className="p-3">
         <nav className="space-y-2">
           {['Inicio', 'Mapa', 'Vehículos', 'Historial', 'Alertas', 'Configuración'].map((item, index) => (

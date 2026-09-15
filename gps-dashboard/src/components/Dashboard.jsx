@@ -49,10 +49,10 @@ const Dashboard = () => {
       <div className="relative z-10 flex flex-col h-full">
         <HeaderBar selectedVehicle={selectedVehicle} />
 
-        <div className="flex flex-1 overflow-hidden gap-3 p-3">
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden gap-3 p-3">
           <LeftSidebarPanel selectedVehicle={selectedVehicle} />
 
-          <div className="relative flex-1 overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#162126] shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
+          <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#162126] shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
             <MapArea
               vehicles={vehicles}
               selectedVehicle={selectedVehicle}

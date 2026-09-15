@@ -89,6 +89,33 @@
   transition: filter 0.5s ease;
 }
 
+@media (max-width: 1023px) {
+  .dashboard-left-panel,
+  .dashboard-right-panel {
+    display: none !important;
+  }
+
+  .cyber-tiles .leaflet-tile {
+    filter: brightness(0.78) contrast(1.16) hue-rotate(92deg) saturate(1.25) !important;
+  }
+
+  .leaflet-container {
+    min-height: 280px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-left-panel {
+    display: flex !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .dashboard-right-panel {
+    display: flex !important;
+  }
+}
+
 .leaflet-control-zoom { display: none !important; }
 
 .leaflet-control-attribution {

@@ -10,7 +10,7 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
   );
 
   return (
-    <div className="hidden w-[288px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#151e23] p-4 xl:flex">
+    <div className="dashboard-right-panel hidden w-[288px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#151e23] p-4 xl:flex">
       <div className="mb-5 grid grid-cols-3 gap-2">
         <div className="rounded-[8px] border border-[#304149] bg-[#1c282d] p-2 text-center">
           <div className="text-[22px] font-black text-[#edf5ef]">4</div>

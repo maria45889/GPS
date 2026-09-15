@@ -10,18 +10,20 @@ const MapController = () => {
   
   useEffect(() => {
     const handleResize = () => {
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 100);
+      requestAnimationFrame(() => map.invalidateSize({ animate: false }));
     };
 
     handleResize();
     window.addEventListener('resize', handleResize);
     window.addEventListener('orientationchange', handleResize);
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(map.getContainer());
     
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
+      resizeObserver.disconnect();
     };
   }, [map]);
 
@@ -339,7 +341,7 @@ const MapArea = ({
   const currentPinPosition = selectedVehicle?.position || defaultCenter;
 
   return (
-    <div className="relative w-full h-full bg-[#060911] overflow-hidden select-none">
+    <div className="relative h-full min-h-0 min-w-0 w-full overflow-hidden rounded-[10px] bg-[#162126] select-none">
       <MapContainer 
         ref={mapRef}
         center={currentPinPosition} 
