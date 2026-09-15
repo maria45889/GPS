@@ -3,6 +3,8 @@ import { Search } from 'lucide-react';
 
 export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, onSetGeofence, onViewHistory, userLocation, onLocateUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const activeVehicles = vehicles.filter((vehicle) => vehicle.status === 'active').length;
+  const offlineVehicles = vehicles.filter((vehicle) => vehicle.status === 'offline').length;
 
   const filteredVehicles = vehicles.filter(v => 
     v.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -13,15 +15,15 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
     <div className="dashboard-right-panel hidden w-[312px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#2a3a40] bg-[#151e23] p-4 xl:flex">
       <div className="mb-5 grid grid-cols-3 gap-2">
         <div className="rounded-[8px] border border-[#304149] bg-[#1c282d] p-2 text-center">
-          <div className="text-[22px] font-black text-[#edf5ef]">4</div>
+          <div className="text-[22px] font-black text-[#edf5ef]">{vehicles.length}</div>
           <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#73838a]">Vehículos</div>
         </div>
         <div className="rounded-[8px] border border-[#304149] bg-[#1c282d] p-2 text-center">
-          <div className="text-[22px] font-black text-[#b8f36b]">2</div>
+          <div className="text-[22px] font-black text-[#b8f36b]">{activeVehicles}</div>
           <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#73838a]">En ruta</div>
         </div>
         <div className="rounded-[8px] border border-[#304149] bg-[#1c282d] p-2 text-center">
-          <div className="text-[22px] font-black text-[#8b9ba1]">1</div>
+          <div className="text-[22px] font-black text-[#8b9ba1]">{offlineVehicles}</div>
           <div className="mt-1 text-[10px] uppercase tracking-[0.12em] text-[#73838a]">Offline</div>
         </div>
       </div>

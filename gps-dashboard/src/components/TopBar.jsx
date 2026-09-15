@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 import { Search, Bell, User, Menu, Cpu } from 'lucide-react';
 
-const TopBar = ({ onMenuClick, onToggleAlerts, alertCount = 1 }) => {
+const TopBar = ({ onMenuClick, onToggleAlerts, alertCount = 0 }) => {
   return (
     <header style={{
       width: '100%', height: 60, padding: '0 24px',

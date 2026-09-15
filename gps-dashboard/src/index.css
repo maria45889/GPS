@@ -148,6 +148,17 @@
 }
 
 @media (max-width: 1023px) {
+  .gps-status-pill {
+    top: 64px;
+    left: 12px;
+    right: 12px;
+    width: fit-content;
+    max-width: calc(100% - 24px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .dashboard-left-panel,
   .dashboard-right-panel {
     display: none !important;
@@ -747,9 +758,58 @@
 
 @media (max-width: 1023px) {
   .reference-dashboard .dashboard-video,
+  .reference-dashboard .dashboard-video {
+    display: none;
+  }
+
+  .reference-dashboard .map-surface {
+    min-height: 0;
+  }
+
   .reference-dashboard .map-live-card,
   .reference-dashboard .map-alerts-card {
-    display: none;
+    display: block;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    padding: 8px 10px;
+    border-radius: 8px;
+  }
+
+  .reference-dashboard .map-live-card {
+    top: 10px;
+  }
+
+  .reference-dashboard .map-alerts-card {
+    top: 64px;
+    max-height: 94px;
+    overflow: hidden;
+  }
+
+  .reference-dashboard .map-live-grid {
+    gap: 4px;
+    margin-top: 5px;
+    font-size: 8px;
+  }
+
+  .reference-dashboard .map-live-grid strong {
+    font-size: 10px;
+  }
+
+  .reference-dashboard .map-card-heading {
+    padding-bottom: 5px;
+  }
+
+  .reference-dashboard .map-alert-row {
+    padding: 5px 0;
+  }
+
+  .reference-dashboard .map-alert-row strong {
+    font-size: 9px;
+  }
+
+  .reference-dashboard .map-alert-row small {
+    font-size: 8px;
   }
 }
 

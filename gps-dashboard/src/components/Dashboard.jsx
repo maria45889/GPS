@@ -1,19 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Power, ShieldAlert, X, History, MapPinned } from 'lucide-react';
 import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
 import { HeaderBar } from './HeaderBar';
 import { VideoFeed } from './VideoFeed';
-import { History, MapPinned, Power, ShieldAlert, X } from 'lucide-react';
 import { initialFleet } from '../data/fleetData';
 import { initialAlerts } from '../data/alertsData';
 import { initialGeofences } from '../data/geofencesData';
+import { useVehicles, useAlerts, useGeofences } from '../hooks';
 
 const Dashboard = () => {
-  const [vehicles] = useState(initialFleet);
-  const [selectedVehicle, setSelectedVehicle] = useState(initialFleet[0]);
-  const [alerts] = useState(initialAlerts);
-  const [geofences, setGeofences] = useState(initialGeofences);
+  const { vehicles: supabaseVehicles } = useVehicles();
+  const { alerts: supabaseAlerts } = useAlerts();
+  const { geofences: supabaseGeofences } = useGeofences();
+
+  // State management with fallback to mock data
+  const [vehicles, setVehicles] = useState(supabaseVehicles.length > 0 ? supabaseVehicles : initialFleet);
+  const [alerts, setAlertsState] = useState(supabaseAlerts.length > 0 ? supabaseAlerts : initialAlerts);
+  const [geofences, setGeofencesState] = useState(supabaseGeofences.length > 0 ? supabaseGeofences : initialGeofences);
+
+  // Update state when Supabase data loads
+  useEffect(() => {
+    if (supabaseVehicles.length > 0) setVehicles(supabaseVehicles);
+  }, [supabaseVehicles])
+
+  useEffect(() => {
+    if (supabaseAlerts.length > 0) setAlertsState(supabaseAlerts);
+  }, [supabaseAlerts])
+
+  useEffect(() => {
+    if (supabaseGeofences.length > 0) setGeofencesState(supabaseGeofences);
+  }, [supabaseGeofences])
+
+  const [selectedVehicle, setSelectedVehicle] = useState(vehicles[0]);
   const [flyToTrigger, setFlyToTrigger] = useState(null);
   const [isPlacingOnMap, setIsPlacingOnMap] = useState(false);
   const [pendingCenter, setPendingCenter] = useState(null);
@@ -168,29 +188,29 @@ const Dashboard = () => {
             onLocateUser={handleLocateUser}
           />
         </div>
+      </div>
 
-        {isMobileSidebarOpen && (
-          <div className="mobile-drawer-layer" role="dialog" aria-modal="true" aria-label="Menú de navegación">
+      {isMobileSidebarOpen && (
+        <div className="mobile-drawer-layer" role="dialog" aria-modal="true" aria-label="Menú de navegación">
+          <button
+            type="button"
+            className="mobile-drawer-backdrop"
+            aria-label="Cerrar menú"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+          <div className="mobile-drawer-panel">
             <button
               type="button"
-              className="mobile-drawer-backdrop"
+              className="mobile-drawer-close"
               aria-label="Cerrar menú"
               onClick={() => setIsMobileSidebarOpen(false)}
-            />
-            <div className="mobile-drawer-panel">
-              <button
-                type="button"
-                className="mobile-drawer-close"
-                aria-label="Cerrar menú"
-                onClick={() => setIsMobileSidebarOpen(false)}
-              >
-                <X size={18} />
-              </button>
-              <LeftSidebarPanel activeSection={activeSection} onNavigate={handleNavigate} />
-            </div>
+            >
+              <X size={18} />
+            </button>
+            <LeftSidebarPanel activeSection={activeSection} onNavigate={handleNavigate} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

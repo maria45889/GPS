@@ -6,7 +6,7 @@ export const TopKpiBar = ({ kpis = {} }) => {
     active: kpis.active ?? 2,
     stopped: kpis.stopped ?? 1,
     offline: kpis.offline ?? 1,
-    criticalAlerts: kpis.criticalAlerts ?? 1,
+    criticalAlerts: kpis.criticalAlerts ?? 0,
     fuelEfficiency: kpis.fuelEfficiency ?? '3.8',
     safetyScore: kpis.safetyScore ?? 94,
   };

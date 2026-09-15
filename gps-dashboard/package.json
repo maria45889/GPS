@@ -10,6 +10,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/device": "^8.0.3",
+    "@capacitor/geolocation": "^8.2.2",
+    "@supabase/supabase-js": "^2.116.0",
     "@tailwindcss/postcss": "^4.3.3",
     "clsx": "^2.1.1",
     "framer-motion": "^13.2.0",
