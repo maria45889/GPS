@@ -83,6 +83,24 @@
 /* Leaflet map styling */
 .leaflet-container { background: #04060a !important; font-family: inherit !important; }
 
+.user-location-pin { background: transparent !important; border: 0 !important; }
+.user-location-dot {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  background: #168ca4;
+  box-shadow: 0 0 0 6px rgba(22, 140, 164, 0.18), 0 2px 10px rgba(22, 140, 164, 0.45);
+}
+.user-location-dot span {
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: 4px auto;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
 /* Midnight green GIS filter for map tiles */
 .cyber-tiles .leaflet-tile {
   opacity: 1 !important;
@@ -385,6 +403,17 @@
   color: #173746 !important;
   border-color: #b9dce5 !important;
   box-shadow: 0 12px 30px rgba(43, 93, 112, 0.2) !important;
+}
+
+.light-dashboard .mobile-drawer-panel {
+  background: #ffffff !important;
+  border-right-color: #cfe2e9 !important;
+}
+
+.light-dashboard .mobile-drawer-close {
+  color: #1b5265 !important;
+  background: #f4fafb !important;
+  border-color: #c7dfe7 !important;
 }
 
 .mobile-menu-button,

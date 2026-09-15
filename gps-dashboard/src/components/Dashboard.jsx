@@ -12,11 +12,13 @@ const Dashboard = () => {
   const [vehicles] = useState(initialFleet);
   const [selectedVehicle, setSelectedVehicle] = useState(initialFleet[0]);
   const [alerts] = useState(initialAlerts);
-  const [geofences] = useState(initialGeofences);
+  const [geofences, setGeofences] = useState(initialGeofences);
   const [flyToTrigger, setFlyToTrigger] = useState(null);
   const [isPlacingOnMap, setIsPlacingOnMap] = useState(false);
   const [pendingCenter, setPendingCenter] = useState(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locateUserTrigger, setLocateUserTrigger] = useState(null);
 
   const handleSelectVehicle = (vehicle) => {
     setSelectedVehicle(vehicle);
@@ -39,10 +41,27 @@ const Dashboard = () => {
   const handleMapClickForGeofence = (latlng) => {
     setPendingCenter(latlng);
     setIsPlacingOnMap(false);
+    setGeofences((currentGeofences) => [
+      {
+        id: `GEOF-${Date.now()}`,
+        name: 'Nueva geocerca',
+        type: 'circle',
+        center: latlng,
+        radius: 300,
+        color: '#168ca4',
+        rule: 'Supervisión de ubicación',
+        active: true,
+      },
+      ...currentGeofences,
+    ]);
   };
 
   const handleViewHistory = () => {
     alert('Ver historial del vehículo: ' + selectedVehicle?.plate);
+  };
+
+  const handleLocateUser = () => {
+    setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position });
   };
 
   const handleActivate = () => {
@@ -79,6 +98,9 @@ const Dashboard = () => {
               pendingCenter={pendingCenter}
               onMapClick={handleMapClickForGeofence}
               flyToTrigger={flyToTrigger}
+              userLocation={userLocation}
+              onLocationChange={setUserLocation}
+              locateUserTrigger={locateUserTrigger}
             />
 
             <div className="mobile-map-actions" aria-label="Acciones rápidas">
@@ -107,6 +129,8 @@ const Dashboard = () => {
             onSelectVehicle={handleSelectVehicle}
             onSetGeofence={() => setIsPlacingOnMap(true)}
             onViewHistory={handleViewHistory}
+            userLocation={userLocation}
+            onLocateUser={handleLocateUser}
           />
         </div>
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 
-export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, onSetGeofence, onViewHistory }) => {
+export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, onSetGeofence, onViewHistory, userLocation, onLocateUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredVehicles = vehicles.filter(v => 
@@ -29,13 +29,13 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
       <div className="mb-5 rounded-[10px] border border-[#304149] bg-[#1c282d] p-3">
         <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Ubicación actual</h3>
         <div className="space-y-1 text-[12px] text-[#9aa9ad]">
-          <div>Coordenadas: <span className="text-[#edf5ef]">4.3891, -74.2254</span></div>
-          <div>Velocidad: <span className="text-[#edf5ef]">82 km/h</span></div>
-          <div>Distancia: <span className="text-[#edf5ef]">12.93 km</span></div>
-          <div>ETA: <span className="text-[#edf5ef]">01h 45m</span></div>
+          <div>Coordenadas: <span className="text-[#edf5ef]">{userLocation ? userLocation.position.map(value => value.toFixed(5)).join(', ') : 'Solicitando ubicación...'}</span></div>
+          <div>Velocidad: <span className="text-[#edf5ef]">{userLocation?.speed ? `${Math.round(userLocation.speed * 3.6)} km/h` : 'No disponible'}</span></div>
+          <div>Precisión: <span className="text-[#edf5ef]">{userLocation ? `${Math.round(userLocation.accuracy)} m` : 'Esperando GPS'}</span></div>
+          <div>Estado: <span className="text-[#edf5ef]">{userLocation ? 'Ubicación activa' : 'Permite el GPS'}</span></div>
         </div>
-          <button className="mt-3 w-full rounded-[8px] bg-[#b8f36b] py-2.5 font-bold uppercase tracking-[0.12em] text-[#172319] transition-colors hover:bg-[#d0fa9a]">
-          Ver ruta
+          <button onClick={onLocateUser} className="mt-3 w-full rounded-[8px] bg-[#b8f36b] py-2.5 font-bold uppercase tracking-[0.12em] text-[#172319] transition-colors hover:bg-[#d0fa9a]">
+          Mi ubicación
         </button>
       </div>
 

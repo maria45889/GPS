@@ -79,6 +79,36 @@ const MapClickHandler = ({ isPlacingOnMap, onMapClick }) => {
   return null;
 };
 
+const createUserLocationIcon = () => new L.DivIcon({
+  className: 'user-location-pin',
+  html: '<div class="user-location-dot"><span></span></div>',
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+});
+
+const UserLocationTracker = ({ onLocationChange }) => {
+  useEffect(() => {
+    if (!navigator.geolocation) return undefined;
+
+    const watchId = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        const location = [coords.latitude, coords.longitude];
+        onLocationChange?.({
+          position: location,
+          accuracy: coords.accuracy,
+          speed: coords.speed,
+        });
+      },
+      () => onLocationChange?.(null),
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [onLocationChange]);
+
+  return null;
+};
+
 // Selected Vehicle Hero Pin matching the mockup
 const createHeroPinIcon = (name, id) => new L.DivIcon({
   className: 'custom-vehicle-pin',
@@ -328,7 +358,10 @@ const MapArea = ({
   isPlacingOnMap = false,
   pendingCenter = null,
   onMapClick,
-  flyToTrigger
+  flyToTrigger,
+  userLocation = null,
+  onLocationChange,
+  locateUserTrigger,
 }) => {
   const mapRef = useRef(null);
 
@@ -344,7 +377,9 @@ const MapArea = ({
   };
 
   const handleRecenter = () => {
-    if (mapRef.current && selectedVehicle?.position) {
+    if (mapRef.current && userLocation?.position) {
+      mapRef.current.flyTo(userLocation.position, 16, { animate: true, duration: 1 });
+    } else if (mapRef.current && selectedVehicle?.position) {
       mapRef.current.flyTo(selectedVehicle.position, 16, { animate: true, duration: 1 });
     }
   };
@@ -371,6 +406,10 @@ const MapArea = ({
           targetPosition={selectedVehicle?.position} 
           flyToTrigger={flyToTrigger} 
         />
+        <UserLocationTracker onLocationChange={onLocationChange} />
+        {locateUserTrigger && userLocation?.position && (
+          <MapFlyToHandler targetPosition={userLocation.position} flyToTrigger={locateUserTrigger} />
+        )}
         
         {/* Dark GIS Basemap */}
         <TileLayer
@@ -381,6 +420,19 @@ const MapArea = ({
 
         {/* Click listener for placing new geofence */}
         <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} />
+
+        {userLocation?.position && (
+          <>
+            <Circle
+              center={userLocation.position}
+              radius={userLocation.accuracy || 35}
+              pathOptions={{ color: '#168ca4', fillColor: '#5ad6e7', fillOpacity: 0.14, weight: 1.5 }}
+            />
+            <Marker position={userLocation.position} icon={createUserLocationIcon()}>
+              <Popup>Tu ubicación actual</Popup>
+            </Marker>
+          </>
+        )}
 
         {/* 1. Dynamic Geofences with Glass styling */}
         {geofences.filter(geo => geo.active).map((geo) => {
