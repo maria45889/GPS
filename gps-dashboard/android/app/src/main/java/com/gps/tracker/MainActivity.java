@@ -30,9 +30,12 @@ public class MainActivity extends BridgeActivity {
 			return;
 		}
 
-		String[] permissions = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-				? new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS}
-				: new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+		String[] permissions;
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			permissions = new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS};
+		} else {
+			permissions = new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+		}
 		ActivityCompat.requestPermissions(this, permissions, LOCATION_PERMISSION_REQUEST);
 	}
 

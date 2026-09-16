@@ -33,13 +33,18 @@ export const submitLocationToSupabase = async (payload) => {
 
   try {
     const deviceId = getDeviceId();
+    const deviceInfo = await Device.getInfo();
+    const nativeId = await Device.getId();
 
     const { error: deviceError } = await supabase.from('devices').upsert(
       {
-        id: deviceId,
+        id: nativeId.identifier || deviceId,
         status: 'online',
         last_seen: payload.timestamp,
         updated_at: payload.timestamp,
+        platform: deviceInfo.platform,
+        model: deviceInfo.model,
+        app_version: deviceInfo.appVersion,
       },
       { onConflict: 'id' }
     );
@@ -47,7 +52,7 @@ export const submitLocationToSupabase = async (payload) => {
 
     const { error } = await supabase.from('gps_locations').insert([
       {
-        device_id: deviceId,
+        device_id: nativeId.identifier || deviceId,
         latitude: payload.latitude,
         longitude: payload.longitude,
         speed: payload.speed,

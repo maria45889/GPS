@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchLatestLocations, fetchVehicles } from '../lib/queries'
 import { initialFleet } from '../data/fleetData'
 import { hasSupabaseConfig, supabase } from '../lib/supabase'
+import { deviceStatusFromLastSeen } from '../lib/mapLogic'
 
 export const useVehicles = () => {
   const [vehicles, setVehicles] = useState([])
@@ -20,7 +21,7 @@ export const useVehicles = () => {
         const merged = data.map((vehicle) => {
           const live = liveByDevice.get(vehicle.id)
           if (!live) return vehicle
-          return { ...vehicle, position: [live.latitude, live.longitude], speed: live.speed || 0, lastUpdate: live.timestamp }
+          return { ...vehicle, position: [live.latitude, live.longitude], speed: live.speed || 0, bearing: live.bearing || 0, status: deviceStatusFromLastSeen(live.timestamp), lastUpdate: live.timestamp }
         })
         const knownIds = new Set(merged.map((vehicle) => vehicle.id))
         for (const live of liveLocations) {
@@ -30,13 +31,14 @@ export const useVehicles = () => {
               name: live.device_id,
               plate: live.device_id,
               driver: 'Dispositivo GPS',
-              status: 'active',
+              status: deviceStatusFromLastSeen(live.timestamp),
               speed: live.speed || 0,
               battery: 0,
               fuel: 0,
               temp: 0,
               odometer: '0 km',
               position: [live.latitude, live.longitude],
+              bearing: live.bearing || 0,
               location: 'Ubicación GPS',
               lastUpdate: live.timestamp,
               route: [],

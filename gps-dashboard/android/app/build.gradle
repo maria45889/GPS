@@ -16,10 +16,32 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    def releaseStoreFile = findProperty('GPS_RELEASE_STORE_FILE') ?: System.getenv('GPS_RELEASE_STORE_FILE')
+    def releaseStorePassword = findProperty('GPS_RELEASE_STORE_PASSWORD') ?: System.getenv('GPS_RELEASE_STORE_PASSWORD')
+    def releaseKeyAlias = findProperty('GPS_RELEASE_KEY_ALIAS') ?: System.getenv('GPS_RELEASE_KEY_ALIAS')
+    def releaseKeyPassword = findProperty('GPS_RELEASE_KEY_PASSWORD') ?: System.getenv('GPS_RELEASE_KEY_PASSWORD')
+
+    signingConfigs {
+        release {
+            if (releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+                enableV1Signing false
+                enableV2Signing true
+                enableV3Signing true
+                enableV4Signing true
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

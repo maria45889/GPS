@@ -107,10 +107,13 @@ export const fetchLatestLocations = async () => {
 
   if (error) throw error
 
+  return latestLocationsByDevice(data)
+}
+
+export const latestLocationsByDevice = (locations = []) => {
   const latestByDevice = new Map()
-  for (const location of data || []) {
+  for (const location of locations) {
     if (!latestByDevice.has(location.device_id)) latestByDevice.set(location.device_id, location)
   }
-
   return [...latestByDevice.values()]
 }

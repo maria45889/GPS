@@ -1,5 +1,6 @@
 import React from 'react';
 import { Battery, Gauge, MapPin, Navigation, Share2, Thermometer, X } from 'lucide-react';
+import { VehicleControlCard } from './VehicleControlCard';
 
 const statusLabels = {
   active: 'En ruta',
@@ -13,7 +14,9 @@ export const VehicleDetailPanel = ({
   onClose,
   onToggleRouteFollow,
   onShareRoute,
-  onViewHistory,
+  onControlVehicle,
+  onDeleteVehicle,
+  isControlBusy,
 }) => {
   if (!vehicle) return null;
 
@@ -59,11 +62,8 @@ export const VehicleDetailPanel = ({
           <Share2 size={16} />
           Compartir
         </button>
-        <button type="button" onClick={onViewHistory}>
-          <Gauge size={16} />
-          Historial
-        </button>
       </div>
+      <VehicleControlCard vehicle={vehicle} onControl={onControlVehicle} onDelete={onDeleteVehicle} isBusy={isControlBusy} />
     </aside>
   );
 };

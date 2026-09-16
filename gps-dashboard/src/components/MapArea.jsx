@@ -1,8 +1,9 @@
-﻿import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, useMap, useMapEvents } from 'react-leaflet';
+﻿import React, { useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Plus, Minus, Crosshair, Navigation, Share2, ExternalLink } from 'lucide-react';
+import { Plus, Minus, Crosshair, Navigation, Share2, ExternalLink, Compass, Maximize, Layers } from 'lucide-react';
+import { isVehicleInsideCircle, routeColorForSpeed } from '../lib/mapLogic';
 
 // Component to handle map resize
 const MapController = () => {
@@ -63,6 +64,19 @@ const MapFlyToHandler = ({ targetPosition, flyToTrigger }) => {
       });
     }
   }, [targetPosition, flyToTrigger, map]);
+
+  return null;
+};
+
+const AlertFocusHandler = ({ focusTrigger, markerRefs }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!focusTrigger?.coords) return;
+    map.flyTo(focusTrigger.coords, focusTrigger.zoom || 16, { animate: true, duration: 1 });
+    const marker = markerRefs.current[focusTrigger.id];
+    if (marker) window.setTimeout(() => marker.openPopup(), 700);
+  }, [focusTrigger, map, markerRefs]);
 
   return null;
 };
@@ -286,6 +300,18 @@ const createWaypointIcon = (label, color = '#00E676') => new L.DivIcon({
   iconAnchor: [14, 14],
 });
 
+const createHeadingIcon = (bearing = 0) => new L.DivIcon({
+  className: 'heading-arrow-pin',
+  html: `<div class="heading-arrow" style="transform: rotate(${Number(bearing) || 0}deg)">▲</div>`,
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+});
+
+const isInsideGeofence = (vehicle, geofence) => {
+  if (!vehicle?.position || !geofence?.center || geofence.type === 'polygon') return false;
+  return isVehicleInsideCircle(vehicle.position, geofence.center, Number(geofence.radius || 600));
+};
+
 // Zone label badge
 const createZoneLabel = (name, color = '#00E676') => new L.DivIcon({
   className: 'zone-label-icon',
@@ -355,6 +381,7 @@ const MapArea = ({
   onOpenDetail,
   alerts = [],
   onSelectAlert,
+  focusTrigger,
   geofences = [],
   isPlacingOnMap = false,
   pendingCenter = null,
@@ -369,6 +396,8 @@ const MapArea = ({
   locateUserTrigger,
 }) => {
   const mapRef = useRef(null);
+  const alertMarkerRefs = useRef({});
+  const [baseLayer, setBaseLayer] = useState('dark');
 
   // Default fallback center - Bogotá coordinates
   const defaultCenter = [4.6097, -74.0817];
@@ -388,6 +417,17 @@ const MapArea = ({
       mapRef.current.flyTo(selectedVehicle.position, 16, { animate: true, duration: 1 });
     }
   };
+
+  const handleFitFleet = () => {
+    const positions = vehicles.filter((vehicle) => vehicle.position).map((vehicle) => vehicle.position);
+    if (mapRef.current && positions.length > 0) mapRef.current.fitBounds(L.latLngBounds(positions), { padding: [36, 36], maxZoom: 15 });
+  };
+
+  const handleResetNorth = () => {
+    if (mapRef.current) mapRef.current.setView(mapRef.current.getCenter(), mapRef.current.getZoom(), { animate: true });
+  };
+
+  const routeColor = routeColorForSpeed(selectedVehicle?.speed);
 
   // Active route to render
   const activeRoute = selectedVehicle?.route && selectedVehicle.route.length > 0
@@ -411,6 +451,7 @@ const MapArea = ({
           targetPosition={isFollowingRoute ? selectedVehicle?.position : null}
           flyToTrigger={flyToTrigger} 
         />
+        <AlertFocusHandler focusTrigger={focusTrigger} markerRefs={alertMarkerRefs} />
         <UserLocationTracker onLocationChange={onLocationChange} />
         {locateUserTrigger && userLocation?.position && (
           <MapFlyToHandler targetPosition={userLocation.position} flyToTrigger={locateUserTrigger} />
@@ -418,9 +459,11 @@ const MapArea = ({
         
         {/* Dark GIS Basemap */}
         <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
-          attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
-          maxZoom={16}
+          url={baseLayer === 'satellite'
+            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'}
+          attribution={baseLayer === 'satellite' ? '&copy; Esri' : '&copy; Esri'}
+          maxZoom={18}
         />
 
         {/* Click listener for placing new geofence */}
@@ -442,7 +485,8 @@ const MapArea = ({
         {/* 1. Dynamic Geofences with Glass styling */}
         {geofences.filter(geo => geo.active).map((geo) => {
           const isPolygon = geo.type === 'polygon' && geo.positions && geo.positions.length > 0;
-          const geoColor = geo.color || '#00E676';
+          const isBreach = isInsideGeofence(selectedVehicle, geo);
+          const geoColor = isBreach ? '#ef5c72' : geo.color || '#00E676';
 
           if (isPolygon) {
             return (
@@ -465,7 +509,7 @@ const MapArea = ({
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal</p>
+                      <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal{isBreach ? ' · Intrusión detectada' : ''}</p>
                       <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
@@ -496,7 +540,7 @@ const MapArea = ({
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m</p>
+                      <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m{isBreach ? ' · Intrusión detectada' : ''}</p>
                       <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
@@ -526,13 +570,13 @@ const MapArea = ({
         {/* 2. Active Vehicle Glowing Route */}
         {activeRoute.length > 0 && (
           <>
-            <Polyline 
-              positions={activeRoute} 
-              pathOptions={{ color: '#00E676', weight: 14, opacity: 0.35 }} 
+            <Polyline
+              positions={activeRoute}
+              pathOptions={{ color: routeColor, weight: 14, opacity: 0.25 }}
             />
-            <Polyline 
-              positions={activeRoute} 
-              pathOptions={{ color: '#00E676', weight: 3.5, opacity: 1 }} 
+            <Polyline
+              positions={activeRoute}
+              pathOptions={{ color: routeColor, weight: 3.5, opacity: 1 }}
             />
 
             {/* Waypoint A (Start) and B (End) */}
@@ -546,14 +590,20 @@ const MapArea = ({
           const isSelected = selectedVehicle?.id === v.id;
 
           return (
-            <Marker 
-              key={v.id} 
-              position={v.position} 
-              icon={isSelected ? createHeroPinIcon(v.name, v.id) : createFleetPinIcon(v.status)}
-              eventHandlers={{
-                click: () => onSelectVehicle && onSelectVehicle(v),
-              }}
-            >
+            <React.Fragment key={v.id}>
+              {v.bearing !== undefined && (
+                <Marker position={v.position} icon={createHeadingIcon(v.bearing)} interactive={false} />
+              )}
+              <Marker
+                position={v.position}
+                icon={isSelected ? createHeroPinIcon(v.name, v.id) : createFleetPinIcon(v.status)}
+                eventHandlers={{
+                  click: () => onSelectVehicle && onSelectVehicle(v),
+                }}
+              >
+              <Tooltip direction="top" offset={[0, -18]} opacity={0.95}>
+                <span>{v.speed || 0} km/h · precisión {v.accuracy || '--'} m · {v.lastUpdate || 'sin reporte'}</span>
+              </Tooltip>
               <Popup className="dark-popup">
                 <div className="text-xs min-w-[170px]">
                   <div className="flex items-center justify-between mb-1.5 pb-1.5 border-b border-white/10">
@@ -591,7 +641,8 @@ const MapArea = ({
                   )}
                 </div>
               </Popup>
-            </Marker>
+              </Marker>
+            </React.Fragment>
           );
         })}
 
@@ -599,6 +650,7 @@ const MapArea = ({
         {alerts.filter(a => a.status !== 'resolved' && a.lat && a.lng).map((alert) => (
           <Marker
             key={alert.id}
+            ref={(marker) => { if (marker) alertMarkerRefs.current[alert.id] = marker; }}
             position={[alert.lat, alert.lng]}
             icon={createAlertIncidentIcon(alert.severity)}
             eventHandlers={{
@@ -660,7 +712,10 @@ const MapArea = ({
       <div className="absolute inset-0 pointer-events-none z-10 p-4 flex flex-col justify-between">
         {/* Zoom Controls */}
         <div className="flex justify-end pointer-events-auto">
-          <div className="bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl flex flex-col">
+          <div className="map-control-stack bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl flex flex-col">
+            <button onClick={handleResetNorth} title="Restablecer orientación norte" className="map-control-button">
+              <Compass size={18} />
+            </button>
             <button
               onClick={handleZoomIn}
               className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors border-b border-cyan-500/20"
@@ -676,17 +731,15 @@ const MapArea = ({
           </div>
         </div>
 
+        <div className="map-secondary-controls pointer-events-auto">
+          <button onClick={handleRecenter} title="Centrar vehículo activo"><Crosshair size={16} /></button>
+          <button onClick={handleFitFleet} title="Ver toda la flota"><Maximize size={16} /></button>
+          <button onClick={() => setBaseLayer((current) => current === 'dark' ? 'satellite' : 'dark')} title="Cambiar capa del mapa"><Layers size={16} /><span>{baseLayer === 'dark' ? 'Satélite' : 'Oscuro'}</span></button>
+        </div>
+
         {/* Bottom Controls */}
         <div className="flex justify-between items-end pointer-events-auto">
-          <div className="bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl p-2">
-            <button
-              onClick={handleRecenter}
-              className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-            >
-              <Crosshair size={18} />
-            </button>
-          </div>
-          
+          <div />
           {/* Map attribution */}
           <div className="text-gray-500 text-xs">
             <span>© </span>

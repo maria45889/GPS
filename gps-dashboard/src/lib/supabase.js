@@ -21,6 +21,8 @@ export const getDeviceId = () => {
   return deviceId;
 };
 
+export const getStoredDeviceId = () => localStorage.getItem('gps_device_id');
+
 export const supabase = hasSupabaseConfig
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {

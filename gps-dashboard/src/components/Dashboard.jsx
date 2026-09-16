@@ -10,6 +10,7 @@ import { initialAlerts } from '../data/alertsData';
 import { initialGeofences } from '../data/geofencesData';
 import { useVehicles, useAlerts, useGeofences } from '../hooks';
 import { VehicleDetailPanel } from './VehicleDetailPanel';
+import { deleteVehicle, sendVehicleCommand, updateVehicleStatus } from '../lib/vehicleActions';
 
 const Dashboard = () => {
   const { vehicles: supabaseVehicles } = useVehicles();
@@ -48,6 +49,8 @@ const Dashboard = () => {
   );
   const [isVehicleDetailOpen, setIsVehicleDetailOpen] = useState(false);
   const [operationMessage, setOperationMessage] = useState('');
+  const [alertFocusTrigger, setAlertFocusTrigger] = useState(null);
+  const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false);
 
   const handleSelectVehicle = (vehicle, openDetail = false) => {
     setSelectedVehicle(vehicle);
@@ -93,6 +96,7 @@ const Dashboard = () => {
         zoom: 16,
         timestamp: Date.now()
       });
+      setAlertFocusTrigger({ id: alert.id, coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() });
     }
     const relatedVehicle = vehicles.find(v => v.id === alert.vehicleId || v.plate === alert.plate);
     if (relatedVehicle) {
@@ -119,21 +123,39 @@ const Dashboard = () => {
     ]);
   };
 
-  const handleViewHistory = () => {
-    setActiveSection('Historial');
-    setIsVehicleDetailOpen(false);
-    setIsFollowingRoute(true);
-  };
-
   const handleLocateUser = () => {
     setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position });
   };
 
-  const handleNavigate = (section) => {
-    setActiveSection(section);
-    if (section === 'Mapa') {
-      setIsMobileSidebarOpen(false);
-    }
+  const handleVehicleControl = async (command) => {
+    if (!selectedVehicle || isVehicleControlBusy) return;
+    setIsVehicleControlBusy(true);
+    const nextStatus = command === 'activate' ? 'active' : 'stopped';
+    const result = await updateVehicleStatus(selectedVehicle.id, nextStatus);
+    if (command === 'immobilize') await sendVehicleCommand(selectedVehicle.id, command);
+
+    const nextVehicle = {
+      ...selectedVehicle,
+      status: nextStatus,
+      controlState: command === 'immobilize' ? 'immobilized' : undefined,
+      lastUpdate: 'Ahora',
+    };
+    setVehicles((current) => current.map((vehicle) => vehicle.id === selectedVehicle.id ? nextVehicle : vehicle));
+    setSelectedVehicle(nextVehicle);
+    setOperationMessage(result.remote ? `Comando ${command} enviado` : `Comando ${command} aplicado en este panel`);
+    setIsVehicleControlBusy(false);
+  };
+
+  const handleDeleteVehicle = async (vehicleId) => {
+    if (isVehicleControlBusy) return;
+    setIsVehicleControlBusy(true);
+    const result = await deleteVehicle(vehicleId);
+    const remainingVehicles = vehicles.filter((vehicle) => vehicle.id !== vehicleId);
+    setVehicles(remainingVehicles);
+    setSelectedVehicle(remainingVehicles[0] || null);
+    setIsVehicleDetailOpen(false);
+    setOperationMessage(result.remote ? 'Vehículo eliminado de Supabase' : 'Vehículo eliminado del panel local');
+    setIsVehicleControlBusy(false);
   };
 
   useEffect(() => {
@@ -151,21 +173,20 @@ const Dashboard = () => {
         <HeaderBar
           selectedVehicle={selectedVehicle}
           onMenuClick={() => setIsMobileSidebarOpen(true)}
-          onNavigate={handleNavigate}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden gap-3 p-3">
           <LeftSidebarPanel
+            vehicles={vehicles}
             selectedVehicle={selectedVehicle}
-            activeSection={activeSection}
-            onNavigate={handleNavigate}
+            onControlVehicle={handleVehicleControl}
+            onDeleteVehicle={handleDeleteVehicle}
+            isControlBusy={isVehicleControlBusy}
           />
 
           <div className="dashboard-center min-h-0 min-w-0 flex-1">
             <VideoFeed
               selectedVehicle={selectedVehicle}
-              onOpenDetail={() => setIsVehicleDetailOpen(true)}
-              onOperationMessage={setOperationMessage}
             />
             <div className="map-surface relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#cfe2e9] bg-[#eaf4f7] shadow-[0_8px_24px_rgba(43,93,112,0.12)]">
               <MapArea
@@ -175,6 +196,7 @@ const Dashboard = () => {
                 onOpenDetail={() => setIsVehicleDetailOpen(true)}
                 alerts={alerts}
                 onSelectAlert={handleSelectAlert}
+                focusTrigger={alertFocusTrigger}
                 geofences={geofences}
                 isPlacingOnMap={isPlacingOnMap}
                 pendingCenter={pendingCenter}
@@ -216,10 +238,6 @@ const Dashboard = () => {
             selectedVehicle={selectedVehicle}
             onSelectVehicle={(vehicle) => handleSelectVehicle(vehicle, true)}
             onSetGeofence={() => setIsPlacingOnMap(true)}
-            onViewHistory={handleViewHistory}
-            isFollowingRoute={isFollowingRoute}
-            onToggleRouteFollow={handleToggleRouteFollow}
-            onShareRoute={handleShareRoute}
             userLocation={userLocation}
             onLocateUser={handleLocateUser}
           />
@@ -232,7 +250,9 @@ const Dashboard = () => {
             onClose={() => setIsVehicleDetailOpen(false)}
             onToggleRouteFollow={handleToggleRouteFollow}
             onShareRoute={handleShareRoute}
-            onViewHistory={handleViewHistory}
+            onControlVehicle={handleVehicleControl}
+            onDeleteVehicle={handleDeleteVehicle}
+            isControlBusy={isVehicleControlBusy}
           />
         )}
       </div>
@@ -260,7 +280,7 @@ const Dashboard = () => {
             >
               <X size={18} />
             </button>
-            <LeftSidebarPanel activeSection={activeSection} onNavigate={handleNavigate} />
+            <LeftSidebarPanel vehicles={vehicles} selectedVehicle={selectedVehicle} onControlVehicle={handleVehicleControl} onDeleteVehicle={handleDeleteVehicle} isControlBusy={isVehicleControlBusy} />
           </div>
         </div>
       )}

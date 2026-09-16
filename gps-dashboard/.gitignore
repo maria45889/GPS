@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env
 android/app/src/main/res/values/supabase_config.xml
+android/keystore/
+android/local.properties
+android/.gradle/
+android/app/build/

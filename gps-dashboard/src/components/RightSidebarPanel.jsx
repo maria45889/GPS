@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
 
-export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, onSetGeofence, onViewHistory, userLocation, onLocateUser }) => {
+export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, onSetGeofence, userLocation, onLocateUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const activeVehicles = vehicles.filter((vehicle) => vehicle.status === 'active').length;
   const offlineVehicles = vehicles.filter((vehicle) => vehicle.status === 'offline').length;
@@ -90,9 +90,6 @@ export const RightSidebarPanel = ({ vehicles, selectedVehicle, onSelectVehicle, 
       </div>
 
       <div className="mt-auto space-y-2">
-        <button onClick={onViewHistory} className="w-full rounded-[8px] border border-[#304149] bg-[#1c282d] py-3 text-[12px] font-semibold text-[#c8d4d0] transition-colors hover:border-[#b8f36b]/50 hover:text-[#b8f36b]">
-          Historial
-        </button>
         <button onClick={onSetGeofence} className="w-full rounded-[8px] border border-[#304149] bg-[#1c282d] py-3 text-[12px] font-semibold text-[#c8d4d0] transition-colors hover:border-[#b8f36b]/50 hover:text-[#b8f36b]">
           Geocerca
         </button>

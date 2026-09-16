@@ -66,6 +66,23 @@
   }
 }
 
+.auth-shell { display: grid; min-height: 100%; place-items: center; padding: 24px; background: radial-gradient(circle at 20% 10%, #123a43 0, #07111c 42%, #040910 100%); }
+.auth-card { width: min(420px, 100%); padding: 30px; color: #c9e1e8; background: rgba(8,24,37,.96); border: 1px solid #28566a; border-radius: 14px; box-shadow: 0 24px 70px rgba(0,0,0,.42); }
+.auth-mark { display: grid; width: 40px; height: 40px; margin-bottom: 18px; place-items: center; color: #07111c; background: #b8f36b; border-radius: 10px; }
+.auth-eyebrow { color: #66d9d8; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.auth-card h1 { margin: 10px 0 6px; color: #effcff; font-size: 24px; }
+.auth-card p { margin: 0; color: #89a9b5; font-size: 13px; line-height: 1.5; }
+.auth-form { display: grid; gap: 14px; margin-top: 24px; }
+.auth-form label { display: grid; gap: 6px; color: #a9c3cc; font-size: 11px; font-weight: 700; }
+.auth-form input { min-height: 42px; padding: 0 12px; color: #effcff; background: #0d2030; border: 1px solid #28566a; border-radius: 7px; outline: none; }
+.auth-form input:focus { border-color: #35b9c9; box-shadow: 0 0 0 3px rgba(53,185,201,.12); }
+.auth-form > button { min-height: 42px; color: #14251a; background: #b8f36b; border-radius: 7px; font-size: 12px; font-weight: 800; }
+.auth-form > button:disabled { opacity: .55; }
+.auth-switch { display: flex; align-items: center; gap: 6px; margin-top: 16px; color: #66d9d8; font-size: 11px; }
+.auth-error, .auth-message { padding: 9px; border-radius: 6px; font-size: 11px; }
+.auth-error { color: #ffdfe2; background: rgba(239,92,114,.12); border: 1px solid #70434b; }
+.auth-message { color: #c8ef9b; background: rgba(53,185,138,.12); border: 1px solid #2d725e; }
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); border-radius: 10px; }
@@ -261,8 +278,9 @@
     top: 0;
     bottom: 0;
     left: 0;
-    width: min(292px, calc(100% - 48px));
-    padding: 12px;
+    width: min(336px, calc(100% - 32px));
+    padding: 58px 14px 14px;
+    overflow: hidden;
     background: #11181d;
     border-right: 1px solid #304149;
     box-shadow: 16px 0 32px rgba(0, 0, 0, 0.3);
@@ -272,7 +290,18 @@
     display: flex !important;
     width: 100%;
     height: 100%;
+    max-height: 100%;
+    gap: 12px;
+    padding: 0;
     border: 0;
+  }
+
+  .mobile-drawer-panel .dashboard-left-panel > div {
+    margin: 0;
+  }
+
+  .mobile-drawer-panel .dashboard-left-panel > div:not(:first-child) {
+    padding: 14px;
   }
 
   .mobile-drawer-close {
@@ -342,6 +371,53 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Keep side panels readable when telemetry grows. */
+.reference-dashboard .dashboard-left-panel,
+.reference-dashboard .dashboard-right-panel {
+  gap: 12px;
+  padding: 14px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.reference-dashboard .dashboard-left-panel > div,
+.reference-dashboard .dashboard-right-panel > div {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.reference-dashboard .dashboard-left-panel > div:not(:first-child),
+.reference-dashboard .dashboard-right-panel > div {
+  border: 1px solid #1a4054;
+  border-radius: 10px;
+  background: #0d2030;
+}
+
+.reference-dashboard .dashboard-left-panel > div:first-child {
+  padding: 14px;
+}
+
+.reference-dashboard .dashboard-left-panel nav {
+  display: grid;
+  gap: 6px;
+}
+
+.reference-dashboard .dashboard-right-panel {
+  width: 286px;
+}
+
+.reference-dashboard .dashboard-right-panel > div:nth-child(3) {
+  border: 0;
+  background: transparent;
+}
+
+.reference-dashboard .dashboard-right-panel > div:last-child {
+  margin-top: auto;
+  padding-top: 2px;
+  border: 0;
+  background: transparent;
 }
 
 .dashboard-status-dot {
@@ -796,6 +872,32 @@
 .vehicle-detail-actions button { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 7px; color: #c8e0e7; background: #102b38; border: 1px solid #28566a; border-radius: 7px; font-size: 11px; font-weight: 700; }
 .vehicle-detail-actions button.is-active { color: #9fe9ff; background: #123a43; border-color: #35b9c9; }
 .vehicle-detail-actions .vehicle-detail-danger { color: #f3cc91; border-color: #665039; }
+.vehicle-control-card { padding: 14px; color: #c9e1e8; background: #102b38; border: 1px solid #28566a; border-radius: 10px; }
+.vehicle-control-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.vehicle-control-eyebrow { display: block; color: #66d9d8; font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.vehicle-control-heading strong { display: block; margin-top: 4px; color: #effcff; font-size: 13px; }
+.vehicle-control-heading small { display: block; margin-top: 2px; color: #89a9b5; font-size: 10px; }
+.vehicle-control-state { flex-shrink: 0; padding: 4px 6px; color: #a9f0ca; background: rgba(53,185,138,.14); border-radius: 5px; font-size: 9px; font-weight: 700; }
+.vehicle-control-state.stopped { color: #f3d28c; background: rgba(242,198,109,.14); }
+.vehicle-control-state.offline { color: #b4c0c5; background: rgba(139,155,161,.14); }
+.vehicle-control-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin-top: 12px; }
+.vehicle-control-actions button, .vehicle-delete-button, .vehicle-delete-confirmation button { display: flex; align-items: center; justify-content: center; gap: 4px; min-height: 34px; padding: 5px; color: #c8e0e7; background: #123a43; border: 1px solid #28566a; border-radius: 6px; font-size: 9px; font-weight: 700; }
+.vehicle-control-actions button:hover:not(:disabled) { color: #9fe9ff; border-color: #35b9c9; }
+.vehicle-control-actions button:disabled, .vehicle-delete-button:disabled { opacity: .45; }
+.vehicle-control-actions .vehicle-control-warning { color: #f3cc91; border-color: #665039; }
+.vehicle-delete-button { width: 100%; margin-top: 8px; color: #f0a0a9; background: transparent; border-color: #70434b; }
+.vehicle-delete-button:hover { background: rgba(239,92,114,.12); }
+.vehicle-delete-confirmation { margin-top: 8px; padding: 8px; color: #f3cc91; background: rgba(239,92,114,.08); border: 1px solid #70434b; border-radius: 6px; font-size: 10px; }
+.vehicle-delete-confirmation > div { display: flex; gap: 5px; margin-top: 7px; }
+.vehicle-delete-confirmation button { flex: 1; min-height: 30px; }
+.vehicle-delete-confirmation .confirm-delete { color: #ffdfe2; background: #7b3040; border-color: #b34b5e; }
+.heading-arrow-pin { background: transparent !important; border: 0 !important; pointer-events: none; }
+.heading-arrow { color: #dffcff; font-size: 18px; line-height: 24px; text-shadow: 0 0 8px #17d9dc; transform-origin: 50% 50%; }
+.leaflet-marker-icon { transition: transform .65s cubic-bezier(.22,.61,.36,1); }
+.map-control-button { display: flex; width: 40px; height: 40px; align-items: center; justify-content: center; color: #67e8f9; border-bottom: 1px solid rgba(34,211,238,.2); }
+.map-secondary-controls { display: flex; gap: 6px; align-items: center; padding: 6px; background: rgba(13,20,36,.9); border: 1px solid rgba(34,211,238,.3); border-radius: 10px; backdrop-filter: blur(14px); }
+.map-secondary-controls button { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 36px; min-height: 34px; padding: 0 8px; color: #67e8f9; border-radius: 6px; font-size: 10px; font-weight: 700; }
+.map-secondary-controls button:hover { background: rgba(34,211,238,.16); }
 
 .dashboard-toast {
   position: absolute;
