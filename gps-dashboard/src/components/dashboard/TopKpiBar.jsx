@@ -67,25 +67,25 @@ export const TopKpiBar = ({ kpis = {} }) => {
   ];
 
   return (
-    <div style={{ width: '100%', padding: '10px 16px 0', zIndex: 20, userSelect: 'none' }}>
+    <div style={{ width: '100%', padding: '10px 14px 0', zIndex: 20, userSelect: 'none' }}>
       <div style={{
-        background: 'rgba(8,14,24,0.88)',
-        border: '1px solid rgba(0,230,118,0.12)',
-        borderRadius: 14,
-        backdropFilter: 'blur(24px)',
-        padding: '10px 16px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        background: 'rgba(12,20,29,0.96)',
+        border: '1px solid rgba(23,52,68,0.9)',
+        borderRadius: 12,
+        backdropFilter: 'blur(18px)',
+        padding: '8px 12px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
         overflowX: 'auto',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        boxShadow: '0 12px 22px rgba(0,0,0,0.18)',
       }}>
         {items.map((item, i) => (
           <div
             key={i}
             className={item.hideOnMobile ? 'hidden md:flex' : item.hideOnSmall ? 'hidden lg:flex' : 'flex'}
-            style={{ alignItems: 'center', gap: 10, flexShrink: 0, borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none', paddingLeft: i > 0 ? 14 : 0 }}
+            style={{ alignItems: 'center', gap: 8, flexShrink: 0, borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none', paddingLeft: i > 0 ? 12 : 0 }}
           >
             <div style={{
-              width: 32, height: 32, borderRadius: 9,
+              width: 30, height: 30, borderRadius: 8,
               background: item.iconBg, border: `1px solid ${item.iconBorder}`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: item.iconColor,
@@ -95,7 +95,7 @@ export const TopKpiBar = ({ kpis = {} }) => {
               {item.icon}
             </div>
             <div>
-              <div style={{ fontSize: 9, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, marginBottom: 2 }}>{item.label}</div>
+              <div style={{ fontSize: 8, color: '#6b82a0', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700, marginBottom: 2 }}>{item.label}</div>
               {item.value}
             </div>
           </div>
