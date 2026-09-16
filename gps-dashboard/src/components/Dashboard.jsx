@@ -93,8 +93,14 @@ const Dashboard = () => {
   }
 
   // --- Listas por categoría ---
-  const devicesList = useMemo(() => devices.filter((d) => d.position), [devices])
+  const devicesList = devices
   const vehiclesList = vehicles
+
+  // Dispositivos con posición para el mapa (no filtra el sidebar)
+  const devicesWithPosition = useMemo(
+    () => devices.filter((d) => d.position),
+    [devices],
+  )
 
   // Entidad actual según la categoría
   const selectedEntityId = selectedEntity?.id
@@ -138,7 +144,7 @@ const Dashboard = () => {
 
   // --- Alertas ---
   const handleSelectAlert = (alert) => {
-    if (alert.lat && alert.lng) {
+    if (Number.isFinite(alert.lat) && Number.isFinite(alert.lng)) {
       setFlyToTrigger({ coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() })
       setAlertFocusTrigger({ id: alert.id, coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() })
     }
@@ -175,8 +181,21 @@ const Dashboard = () => {
     if (!selectedEntity || category !== 'vehicles' || isVehicleControlBusy) return
     setIsVehicleControlBusy(true)
     const nextStatus = command === 'activate' ? 'active' : 'stopped'
-    const result = await updateVehicleStatus(selectedEntity.id, nextStatus)
-    if (command === 'immobilize') await sendVehicleCommand(selectedEntity.id, command)
+
+    const commandResult = await sendVehicleCommand(selectedEntity.id, command, selectedEntity.deviceId || null)
+    if (commandResult.error) {
+      setOperationMessage(`No se pudo enviar el comando ${command}`)
+      setIsVehicleControlBusy(false)
+      return
+    }
+
+    const statusResult = await updateVehicleStatus(selectedEntity.id, nextStatus)
+    if (statusResult.error) {
+      setOperationMessage('No se pudo actualizar el vehículo')
+      setIsVehicleControlBusy(false)
+      return
+    }
+
     const nextVehicle = {
       ...selectedEntity,
       status: nextStatus,
@@ -186,8 +205,8 @@ const Dashboard = () => {
     setLocalVehicles((current) => current.map((v) => (v.id === selectedEntity.id ? nextVehicle : v)))
     setSelectedEntity(nextVehicle)
     setOperationMessage(
-      result.remote
-        ? `Comando ${command} enviado`
+      commandResult.remote
+        ? `Comando ${command} en cola para el dispositivo`
         : `Comando ${command} aplicado en este panel`,
     )
     setIsVehicleControlBusy(false)
@@ -197,6 +216,11 @@ const Dashboard = () => {
     if (category !== 'vehicles' || isVehicleControlBusy) return
     setIsVehicleControlBusy(true)
     const result = await deleteVehicle(vehicleId)
+    if (result.error) {
+      setOperationMessage('No se pudo eliminar el vehículo')
+      setIsVehicleControlBusy(false)
+      return
+    }
     setLocalVehicles((prev) => {
       const remaining = prev.filter((v) => v.id !== vehicleId)
       setSelectedEntity(remaining[0] || null)
@@ -226,10 +250,10 @@ const Dashboard = () => {
     return lastUpdate
   }, [selectedEntity?.lastUpdate])
 
-  // --- Entidades para el mapa ---
+  // --- Entidades para el mapa (solo con posición) ---
   const mapEntities = useMemo(
-    () => (category === 'devices' ? devicesList.map(buildMapEntity) : vehiclesList.map(buildMapEntity)),
-    [category, devicesList, vehiclesList],
+    () => (category === 'devices' ? devicesWithPosition.map(buildMapEntity) : vehiclesList.map(buildMapEntity)),
+    [category, devicesWithPosition, vehiclesList],
   )
 
   const activeAlerts = useMemo(() => alerts.filter((a) => a.status !== 'resolved'), [alerts])

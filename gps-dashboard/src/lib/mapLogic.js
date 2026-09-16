@@ -19,6 +19,26 @@ export const isVehicleInsideCircle = (vehiclePosition, center, radiusMeters) => 
   return distance <= radiusMeters
 }
 
+// Ray casting: devuelve true si [lat,lng] está dentro del polígono.
+// polygonPositions es un array de pares [lat, lng].
+export const isVehicleInsidePolygon = (vehiclePosition, polygonPositions) => {
+  if (!vehiclePosition || !Array.isArray(polygonPositions) || polygonPositions.length < 3) return false
+
+  const [lat, lng] = vehiclePosition.map(Number)
+  let inside = false
+
+  for (let i = 0, j = polygonPositions.length - 1; i < polygonPositions.length; j = i++) {
+    const [lati, lngi] = polygonPositions[i].map(Number)
+    const [latj, lngj] = polygonPositions[j].map(Number)
+
+    if (((lati > lat) !== (latj > lat)) && (lng < (lngj - lngi) * (lat - lati) / (latj - lati) + lngi)) {
+      inside = !inside
+    }
+  }
+
+  return inside
+}
+
 export const fleetPositions = (vehicles = []) => vehicles
   .filter((vehicle) => Array.isArray(vehicle.position) && vehicle.position.length === 2)
   .map((vehicle) => vehicle.position)

@@ -1,4 +1,6 @@
+// @vitest-environment jsdom
 import React from 'react';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LoginScreen } from '../components/auth/LoginScreen';

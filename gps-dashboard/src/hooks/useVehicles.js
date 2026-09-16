@@ -55,6 +55,7 @@ export const useVehicles = () => {
         .channel('gps-dashboard-vehicles')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'gps_locations' }, loadVehicles)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, loadVehicles)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, loadVehicles)
         .subscribe()
 
       return () => {
