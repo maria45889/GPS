@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, Tool
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Plus, Minus, Crosshair, Navigation, Share2, Maximize, Layers } from 'lucide-react';
-import { isVehicleInsideCircle, routeColorForSpeed } from '../lib/mapLogic';
+import { isVehicleInsideCircle, isVehicleInsidePolygon, routeColorForSpeed } from '../lib/mapLogic';
 
 // Component to handle map resize
 const MapController = () => {
@@ -308,8 +308,21 @@ const createHeadingIcon = (bearing = 0) => new L.DivIcon({
 });
 
 const isInsideGeofence = (vehicle, geofence) => {
-  if (!vehicle?.position || !geofence?.center || geofence.type === 'polygon') return false;
+  if (!vehicle?.position) return false;
+  if (geofence.type === 'polygon') {
+    return isVehicleInsidePolygon(vehicle.position, geofence.positions);
+  }
+  if (!geofence?.center) return false;
   return isVehicleInsideCircle(vehicle.position, geofence.center, Number(geofence.radius || 600));
+};
+
+// Devuelve true si hay violación de la geocerca según su regla.
+// rule='outside' (por defecto): zona permitida → violación si está FUERA.
+// rule='inside': zona prohibida → violación si está DENTRO.
+const isGeofenceBreach = (vehicle, geofence) => {
+  const inside = isInsideGeofence(vehicle, geofence);
+  const rule = geofence.rule || 'outside';
+  return rule === 'inside' ? inside : !inside;
 };
 
 // Zone label badge
@@ -485,7 +498,7 @@ const MapArea = ({
         {/* 1. Dynamic Geofences with Glass styling */}
         {geofences.filter(geo => geo.active).map((geo) => {
           const isPolygon = geo.type === 'polygon' && geo.positions && geo.positions.length > 0;
-          const isBreach = isInsideGeofence(selectedVehicle, geo);
+          const isBreach = isGeofenceBreach(selectedVehicle, geo);
           const geoColor = isBreach ? '#ef5c72' : geo.color || '#00E676';
 
           if (isPolygon) {
@@ -509,7 +522,7 @@ const MapArea = ({
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal{isBreach ? ' · Intrusión detectada' : ''}</p>
+                      <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal{isBreach ? (geo.rule === 'inside' ? ' · Dentro de zona prohibida' : ' · Fuera de zona permitida') : ''}</p>
                       <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
@@ -540,7 +553,7 @@ const MapArea = ({
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m{isBreach ? ' · Intrusión detectada' : ''}</p>
+                      <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m{isBreach ? (geo.rule === 'inside' ? ' · Dentro de zona prohibida' : ' · Fuera de zona permitida') : ''}</p>
                       <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
@@ -654,7 +667,7 @@ const MapArea = ({
         })}
 
         {/* 4. Active Incident Alarms on Map */}
-        {alerts.filter(a => a.status !== 'resolved' && a.lat && a.lng).map((alert) => (
+        {alerts.filter(a => a.status !== 'resolved' && Number.isFinite(a.lat) && Number.isFinite(a.lng)).map((alert) => (
           <Marker
             key={alert.id}
             ref={(marker) => { if (marker) alertMarkerRefs.current[alert.id] = marker; }}

@@ -31,6 +31,10 @@ export const VehicleControlCard = ({ vehicle, onControl, onDelete, isBusy = fals
         </button>
       </div>
 
+      <p className="mt-2 text-[9px] leading-snug text-[#89a9b5]">
+        Los comandos se encolan para el dispositivo; el corte físico de la ignición requiere un módulo GPS/relé instalado en la moto.
+      </p>
+
       {!confirmDelete ? (
         <button type="button" disabled={isBusy} onClick={() => setConfirmDelete(true)} className="vehicle-delete-button">
           <Trash2 size={14} /> Eliminar vehículo
