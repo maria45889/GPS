@@ -45,6 +45,7 @@ export const submitLocationToSupabase = async (payload) => {
         platform: deviceInfo.platform,
         model: deviceInfo.model,
         app_version: deviceInfo.appVersion,
+        battery: payload.battery != null ? Math.round(payload.battery) : null,
       },
       { onConflict: 'id' }
     );

@@ -1,114 +1,157 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
 import { HeaderBar } from './HeaderBar';
-import { VideoFeed } from './VideoFeed';
 import { initialFleet } from '../data/fleetData';
 import { initialAlerts } from '../data/alertsData';
 import { initialGeofences } from '../data/geofencesData';
-import { useVehicles, useAlerts, useGeofences } from '../hooks';
+import { useVehicles, useDevices, useAlerts, useGeofences } from '../hooks';
 import { VehicleDetailPanel } from './VehicleDetailPanel';
 import { deleteVehicle, sendVehicleCommand, updateVehicleStatus } from '../lib/vehicleActions';
 
+// Construye la entidad mostrada en el mapa con los campos que MapArea espera
+const buildMapEntity = (source) => ({
+  id: source.id,
+  name: source.name,
+  plate: source.plate || source.id,
+  driver: source.driver || null,
+  status: source.status || 'offline',
+  speed: source.speed || 0,
+  bearing: source.bearing || 0,
+  battery: source.battery || 0,
+  accuracy: source.accuracy || null,
+  lastUpdate: source.lastUpdate || '--',
+  position: source.position || null,
+  route: source.route || [],
+  controlState: source.controlState,
+})
+
 const Dashboard = () => {
-  const { vehicles: supabaseVehicles } = useVehicles();
-  const { alerts: supabaseAlerts } = useAlerts();
-  const { geofences: supabaseGeofences } = useGeofences();
-  const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle');
+  const { vehicles: supabaseVehicles } = useVehicles()
+  const { devices: supabaseDevices } = useDevices()
+  const { alerts: supabaseAlerts } = useAlerts()
+  const { geofences: supabaseGeofences } = useGeofences()
 
-  // State management with fallback to mock data
-  const [vehicles, setVehicles] = useState(supabaseVehicles.length > 0 ? supabaseVehicles : initialFleet);
-  const [alerts, setAlertsState] = useState(supabaseAlerts.length > 0 ? supabaseAlerts : initialAlerts);
-  const [geofences, setGeofencesState] = useState(supabaseGeofences.length > 0 ? supabaseGeofences : initialGeofences);
+  const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle')
 
-  // Update state when Supabase data loads
+  // --- Estado persistente de vista ---
+  const [category, setCategory] = useState(() => {
+    const stored = localStorage.getItem('rg_category')
+    return stored === 'vehicles' ? 'vehicles' : 'devices'
+  })
+
+  const handleCategoryChange = (next) => {
+    setCategory(next)
+    localStorage.setItem('rg_category', next)
+    setSelectedEntity(null)
+    setFlyToTrigger(null)
+    setIsVehicleDetailOpen(false)
+  }
+
+  // --- Datos con fallback ---
+  const [vehicles, setVehicles] = useState(supabaseVehicles.length > 0 ? supabaseVehicles : initialFleet)
+  const [devices, setDevices] = useState(supabaseDevices)
+  const [alerts, setAlertsState] = useState(supabaseAlerts.length > 0 ? supabaseAlerts : initialAlerts)
+  const [geofences, setGeofencesState] = useState(supabaseGeofences.length > 0 ? supabaseGeofences : initialGeofences)
+
   useEffect(() => {
-    if (supabaseVehicles.length > 0) setVehicles(supabaseVehicles);
+    if (supabaseVehicles.length > 0) setVehicles(supabaseVehicles)
   }, [supabaseVehicles])
 
   useEffect(() => {
-    if (supabaseAlerts.length > 0) setAlertsState(supabaseAlerts);
+    setDevices(supabaseDevices)
+  }, [supabaseDevices])
+
+  useEffect(() => {
+    if (supabaseAlerts.length > 0) setAlertsState(supabaseAlerts)
   }, [supabaseAlerts])
 
   useEffect(() => {
-    if (supabaseGeofences.length > 0) setGeofencesState(supabaseGeofences);
+    if (supabaseGeofences.length > 0) setGeofencesState(supabaseGeofences)
   }, [supabaseGeofences])
-  const [selectedVehicle, setSelectedVehicle] = useState(
-    () => vehicles.find((vehicle) => vehicle.id === sharedVehicleId) || vehicles[0]
-  );
-  const [flyToTrigger, setFlyToTrigger] = useState(null);
-  const [isPlacingOnMap, setIsPlacingOnMap] = useState(false);
-  const [pendingCenter, setPendingCenter] = useState(null);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
-  const [locateUserTrigger, setLocateUserTrigger] = useState(null);
+
+  // --- Selección ---
+  const [selectedEntity, setSelectedEntity] = useState(null)
+  const [flyToTrigger, setFlyToTrigger] = useState(null)
+  const [isPlacingOnMap, setIsPlacingOnMap] = useState(false)
+  const [pendingCenter, setPendingCenter] = useState(null)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  const [userLocation, setUserLocation] = useState(null)
+  const [locateUserTrigger, setLocateUserTrigger] = useState(null)
   const [isFollowingRoute, setIsFollowingRoute] = useState(
-    () => new URLSearchParams(window.location.search).get('follow') === '1'
-  );
-  const [isVehicleDetailOpen, setIsVehicleDetailOpen] = useState(false);
-  const [operationMessage, setOperationMessage] = useState('');
-  const [alertFocusTrigger, setAlertFocusTrigger] = useState(null);
-  const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false);
+    () => new URLSearchParams(window.location.search).get('follow') === '1',
+  )
+  const [isVehicleDetailOpen, setIsVehicleDetailOpen] = useState(false)
+  const [operationMessage, setOperationMessage] = useState('')
+  const [alertFocusTrigger, setAlertFocusTrigger] = useState(null)
+  const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false)
 
-  const handleSelectVehicle = (vehicle, openDetail = false) => {
-    setSelectedVehicle(vehicle);
-    setIsVehicleDetailOpen(openDetail);
-    setFlyToTrigger({
-      coords: vehicle.position,
-      zoom: 16,
-    });
-  };
+  const handleLogout = async () => {
+    if (supabase) await supabase.auth.signOut()
+  }
 
-  const handleToggleRouteFollow = () => {
-    setIsFollowingRoute((current) => !current);
-  };
+  // --- Listas por categoría ---
+  const devicesList = useMemo(() => devices.filter((d) => d.position), [devices])
+  const vehiclesList = vehicles
 
+  // Entidad actual según la categoría
+  const selectedEntityId = selectedEntity?.id
+
+  useEffect(() => {
+    if (category === 'devices') {
+      if (!selectedEntityId && devicesList.length > 0) setSelectedEntity(devicesList[0])
+    } else {
+      if (!selectedEntityId && vehiclesList.length > 0) setSelectedEntity(vehiclesList[0])
+    }
+  }, [category, devicesList, vehiclesList, selectedEntityId])
+
+  const selectEntity = (entity, openDetail = false) => {
+    if (!entity?.position) return
+    setSelectedEntity({ ...entity, controlState: undefined })
+    setIsVehicleDetailOpen(openDetail)
+    setFlyToTrigger({ coords: entity.position, zoom: 16, timestamp: Date.now() })
+  }
+
+  // --- Compartir ---
   const handleShareRoute = async () => {
-    if (!selectedVehicle) return;
-
-    const routeUrl = new URL(window.location.href);
-    routeUrl.searchParams.set('vehicle', selectedVehicle.id);
-    routeUrl.searchParams.set('follow', '1');
+    if (!selectedEntity) return
+    const routeUrl = new URL(window.location.href)
+    routeUrl.searchParams.set('vehicle', selectedEntity.id)
+    routeUrl.searchParams.set('follow', '1')
     const shareData = {
-      title: `Ruta de ${selectedVehicle.name}`,
-      text: `Seguimiento GPS de ${selectedVehicle.name} (${selectedVehicle.plate})`,
+      title: `Ubicación de ${selectedEntity.name}`,
+      text: `Ubicación GPS de ${selectedEntity.name} (${selectedEntity.plate || selectedEntity.id})`,
       url: routeUrl.toString(),
-    };
-
+    }
     try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        await navigator.clipboard.writeText(shareData.url);
-        setOperationMessage('Enlace de ruta copiado');
+      if (navigator.share) await navigator.share(shareData)
+      else {
+        await navigator.clipboard.writeText(shareData.url)
+        setOperationMessage('Enlace copiado')
       }
     } catch (error) {
-      if (error?.name !== 'AbortError') setOperationMessage('No se pudo compartir la ruta');
+      if (error?.name !== 'AbortError') setOperationMessage('No se pudo compartir')
     }
-  };
+  }
 
+  // --- Alertas ---
   const handleSelectAlert = (alert) => {
     if (alert.lat && alert.lng) {
-      setFlyToTrigger({
-        coords: [alert.lat, alert.lng],
-        zoom: 16,
-        timestamp: Date.now()
-      });
-      setAlertFocusTrigger({ id: alert.id, coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() });
+      setFlyToTrigger({ coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() })
+      setAlertFocusTrigger({ id: alert.id, coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() })
     }
-    const relatedVehicle = vehicles.find(v => v.id === alert.vehicleId || v.plate === alert.plate);
-    if (relatedVehicle) {
-      setSelectedVehicle(relatedVehicle);
-      setIsVehicleDetailOpen(true);
-    }
-  };
+    const related = vehiclesList.find((v) => v.id === alert.vehicleId) || devicesList.find((d) => d.id === alert.vehicleId)
+    if (related) selectEntity(related, true)
+  }
 
+  // --- Geocerca ---
   const handleMapClickForGeofence = (latlng) => {
-    setPendingCenter(latlng);
-    setIsPlacingOnMap(false);
-    setGeofences((currentGeofences) => [
+    setPendingCenter(latlng)
+    setIsPlacingOnMap(false)
+    setGeofencesState((prev) => [
       {
         id: `GEOF-${Date.now()}`,
         name: 'Nueva geocerca',
@@ -119,81 +162,111 @@ const Dashboard = () => {
         rule: 'Supervisión de ubicación',
         active: true,
       },
-      ...currentGeofences,
-    ]);
-  };
+      ...prev,
+    ])
+  }
 
+  // --- Ubicación del operador ---
   const handleLocateUser = () => {
-    setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position });
-  };
+    setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position })
+  }
 
+  // --- Control vehicular (solo categoría motos) ---
   const handleVehicleControl = async (command) => {
-    if (!selectedVehicle || isVehicleControlBusy) return;
-    setIsVehicleControlBusy(true);
-    const nextStatus = command === 'activate' ? 'active' : 'stopped';
-    const result = await updateVehicleStatus(selectedVehicle.id, nextStatus);
-    if (command === 'immobilize') await sendVehicleCommand(selectedVehicle.id, command);
-
+    if (!selectedEntity || category !== 'vehicles' || isVehicleControlBusy) return
+    setIsVehicleControlBusy(true)
+    const nextStatus = command === 'activate' ? 'active' : 'stopped'
+    const result = await updateVehicleStatus(selectedEntity.id, nextStatus)
+    if (command === 'immobilize') await sendVehicleCommand(selectedEntity.id, command)
     const nextVehicle = {
-      ...selectedVehicle,
+      ...selectedEntity,
       status: nextStatus,
       controlState: command === 'immobilize' ? 'immobilized' : undefined,
       lastUpdate: 'Ahora',
-    };
-    setVehicles((current) => current.map((vehicle) => vehicle.id === selectedVehicle.id ? nextVehicle : vehicle));
-    setSelectedVehicle(nextVehicle);
-    setOperationMessage(result.remote ? `Comando ${command} enviado` : `Comando ${command} aplicado en este panel`);
-    setIsVehicleControlBusy(false);
-  };
+    }
+    setVehicles((current) => current.map((v) => (v.id === selectedEntity.id ? nextVehicle : v)))
+    setSelectedEntity(nextVehicle)
+    setOperationMessage(
+      result.remote
+        ? `Comando ${command} enviado`
+        : `Comando ${command} aplicado en este panel`,
+    )
+    setIsVehicleControlBusy(false)
+  }
 
   const handleDeleteVehicle = async (vehicleId) => {
-    if (isVehicleControlBusy) return;
-    setIsVehicleControlBusy(true);
-    const result = await deleteVehicle(vehicleId);
-    const remainingVehicles = vehicles.filter((vehicle) => vehicle.id !== vehicleId);
-    setVehicles(remainingVehicles);
-    setSelectedVehicle(remainingVehicles[0] || null);
-    setIsVehicleDetailOpen(false);
-    setOperationMessage(result.remote ? 'Vehículo eliminado de Supabase' : 'Vehículo eliminado del panel local');
-    setIsVehicleControlBusy(false);
-  };
+    if (category !== 'vehicles' || isVehicleControlBusy) return
+    setIsVehicleControlBusy(true)
+    const result = await deleteVehicle(vehicleId)
+    setVehicles((prev) => {
+      const remaining = prev.filter((v) => v.id !== vehicleId)
+      setSelectedEntity(remaining[0] || null)
+      setIsVehicleDetailOpen(false)
+      return remaining
+    })
+    setOperationMessage(result.remote ? 'Vehículo eliminado' : 'Eliminado del panel local')
+    setIsVehicleControlBusy(false)
+  }
 
+  // --- Seguir ruta ---
+  const handleToggleRouteFollow = () => setIsFollowingRoute((v) => !v)
+
+  // --- Compartido ---
   useEffect(() => {
-    if (!sharedVehicleId) return;
-    const sharedVehicle = vehicles.find((vehicle) => vehicle.id === sharedVehicleId);
-    if (sharedVehicle && selectedVehicle?.id !== sharedVehicle.id) {
-      setSelectedVehicle(sharedVehicle);
-      setFlyToTrigger({ coords: sharedVehicle.position, zoom: 16, timestamp: Date.now() });
-    }
-  }, [vehicles, sharedVehicleId, selectedVehicle?.id]);
+    if (!sharedVehicleId) return
+    const shared = vehiclesList.find((v) => v.id === sharedVehicleId) || devicesList.find((d) => d.id === sharedVehicleId)
+    if (shared && selectedEntity?.id !== shared.id) selectEntity(shared)
+  }, [sharedVehicleId, vehiclesList, devicesList]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- Última sincronización ---
+  const lastSyncLabel = useMemo(() => {
+    const lastUpdate = selectedEntity?.lastUpdate
+    if (!lastUpdate || lastUpdate === '--') return 'Sin reporte'
+    if (lastUpdate === 'En línea') return 'En línea'
+    if (lastUpdate === 'Ahora') return 'Actualizado'
+    return lastUpdate
+  }, [selectedEntity?.lastUpdate])
+
+  // --- Entidades para el mapa ---
+  const mapEntities = useMemo(
+    () => (category === 'devices' ? devicesList.map(buildMapEntity) : vehiclesList.map(buildMapEntity)),
+    [category, devicesList, vehiclesList],
+  )
+
+  const activeAlerts = useMemo(() => alerts.filter((a) => a.status !== 'resolved'), [alerts])
+
   return (
     <div className="reference-dashboard relative flex flex-col w-full max-w-[1680px] h-[calc(100vh-2rem)] overflow-hidden rounded-[14px] border border-[#1a3544] bg-[#07111c] shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:h-[calc(100vh-2.5rem)]">
-
       <div className="relative z-10 flex flex-col h-full">
         <HeaderBar
-          selectedVehicle={selectedVehicle}
+          category={category}
+          onCategoryChange={handleCategoryChange}
+          lastSyncLabel={lastSyncLabel}
+          onLogout={handleLogout}
           onMenuClick={() => setIsMobileSidebarOpen(true)}
         />
 
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden gap-3 p-3">
           <LeftSidebarPanel
-            vehicles={vehicles}
-            selectedVehicle={selectedVehicle}
-            onControlVehicle={handleVehicleControl}
-            onDeleteVehicle={handleDeleteVehicle}
+            category={category}
+            entity={selectedEntity}
+            vehicles={vehiclesList}
+            onControlVehicle={category === 'vehicles' ? handleVehicleControl : undefined}
+            onDeleteVehicle={category === 'vehicles' ? handleDeleteVehicle : undefined}
             isControlBusy={isVehicleControlBusy}
+            userLocation={userLocation}
+            isFollowingRoute={isFollowingRoute}
+            onToggleRouteFollow={handleToggleRouteFollow}
+            onShareRoute={handleShareRoute}
           />
 
           <div className="dashboard-center min-h-0 min-w-0 flex-1">
-            <VideoFeed
-              selectedVehicle={selectedVehicle}
-            />
             <div className="map-surface relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#cfe2e9] bg-[#eaf4f7] shadow-[0_8px_24px_rgba(43,93,112,0.12)]">
               <MapArea
-                vehicles={vehicles}
-                selectedVehicle={selectedVehicle}
-                onSelectVehicle={handleSelectVehicle}
-                onOpenDetail={() => setIsVehicleDetailOpen(true)}
+                category={category}
+                vehicles={mapEntities}
+                selectedVehicle={selectedEntity ? buildMapEntity(selectedEntity) : null}
+                onSelectVehicle={(entity) => selectEntity(entity)}
                 alerts={alerts}
                 onSelectAlert={handleSelectAlert}
                 focusTrigger={alertFocusTrigger}
@@ -211,47 +284,48 @@ const Dashboard = () => {
                 locateUserTrigger={locateUserTrigger}
               />
 
-              <div className="map-live-card">
-                <div className="map-card-title">Live Data</div>
-                <div className="map-live-grid">
-                  <span>Engine Temp <strong>{selectedVehicle?.temp || '--'}°</strong></span>
-                  <span>Fuel <strong>{selectedVehicle?.fuel || '--'}%</strong></span>
-                  <span>Signal <strong className="signal-good">GOOD</strong></span>
+              {/* Alerts */}
+              {activeAlerts.length > 0 && (
+                <div className="reference-dashboard map-alerts-card absolute left-4 bottom-4 z-10">
+                  <div className="map-card-heading">
+                    <span>Alertas activas</span>
+                    <span className="alert-count">{activeAlerts.length}</span>
+                  </div>
+                  {activeAlerts.slice(0, 3).map((item) => (
+                    <button key={item.id} type="button" onClick={() => handleSelectAlert(item)} className="map-alert-row">
+                      <span className={`alert-dot ${item.severity}`} />
+                      <span>
+                        <strong>{item.title.split(' - ')[0]}</strong>
+                        <small>{item.timestamp} · {item.locationName}</small>
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              <div className="map-alerts-card">
-                <div className="map-card-heading"><span>Active Alerts</span><span className="alert-count">{alerts.filter(item => item.status !== 'resolved').length}</span></div>
-                {alerts.filter(item => item.status !== 'resolved').slice(0, 3).map((item) => (
-                  <button key={item.id} type="button" onClick={() => handleSelectAlert(item)} className="map-alert-row">
-                    <span className={`alert-dot ${item.severity}`} />
-                    <span><strong>{item.title.split(' - ')[0]}</strong><small>{item.timestamp} · {item.locationName}</small></span>
-                  </button>
-                ))}
-              </div>
-
+              )}
             </div>
           </div>
 
           <RightSidebarPanel
-            vehicles={vehicles}
-            selectedVehicle={selectedVehicle}
-            onSelectVehicle={(vehicle) => handleSelectVehicle(vehicle, true)}
+            category={category}
+            entities={category === 'devices' ? devicesList : vehiclesList}
+            selectedEntity={selectedEntity}
+            onSelectEntity={(entity) => selectEntity(entity, true)}
             onSetGeofence={() => setIsPlacingOnMap(true)}
             userLocation={userLocation}
             onLocateUser={handleLocateUser}
           />
         </div>
 
-        {isVehicleDetailOpen && (
+        {isVehicleDetailOpen && selectedEntity && (
           <VehicleDetailPanel
-            vehicle={selectedVehicle}
+            category={category}
+            entity={selectedEntity}
             isFollowingRoute={isFollowingRoute}
             onClose={() => setIsVehicleDetailOpen(false)}
             onToggleRouteFollow={handleToggleRouteFollow}
             onShareRoute={handleShareRoute}
-            onControlVehicle={handleVehicleControl}
-            onDeleteVehicle={handleDeleteVehicle}
+            onControlVehicle={category === 'vehicles' ? handleVehicleControl : undefined}
+            onDeleteVehicle={category === 'vehicles' ? handleDeleteVehicle : undefined}
             isControlBusy={isVehicleControlBusy}
           />
         )}
@@ -265,27 +339,28 @@ const Dashboard = () => {
 
       {isMobileSidebarOpen && (
         <div className="mobile-drawer-layer" role="dialog" aria-modal="true" aria-label="Menú de navegación">
-          <button
-            type="button"
-            className="mobile-drawer-backdrop"
-            aria-label="Cerrar menú"
-            onClick={() => setIsMobileSidebarOpen(false)}
-          />
+          <button type="button" className="mobile-drawer-backdrop" aria-label="Cerrar menú" onClick={() => setIsMobileSidebarOpen(false)} />
           <div className="mobile-drawer-panel">
-            <button
-              type="button"
-              className="mobile-drawer-close"
-              aria-label="Cerrar menú"
-              onClick={() => setIsMobileSidebarOpen(false)}
-            >
+            <button type="button" className="mobile-drawer-close" aria-label="Cerrar menú" onClick={() => setIsMobileSidebarOpen(false)}>
               <X size={18} />
             </button>
-            <LeftSidebarPanel vehicles={vehicles} selectedVehicle={selectedVehicle} onControlVehicle={handleVehicleControl} onDeleteVehicle={handleDeleteVehicle} isControlBusy={isVehicleControlBusy} />
+            <LeftSidebarPanel
+              category={category}
+              entity={selectedEntity}
+              vehicles={vehiclesList}
+              onControlVehicle={category === 'vehicles' ? handleVehicleControl : undefined}
+              onDeleteVehicle={category === 'vehicles' ? handleDeleteVehicle : undefined}
+              isControlBusy={isVehicleControlBusy}
+              userLocation={userLocation}
+              isFollowingRoute={isFollowingRoute}
+              onToggleRouteFollow={handleToggleRouteFollow}
+              onShareRoute={handleShareRoute}
+            />
           </div>
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default Dashboard;
+export default Dashboard

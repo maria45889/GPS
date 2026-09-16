@@ -4,22 +4,48 @@
 import { supabase } from '../lib/supabase'
 
 // Transform raw Supabase vehicle data to UI format
-export const transformVehicle = (dbVehicle) => ({
-  id: dbVehicle.id,
-  name: dbVehicle.name || dbVehicle.plate,
-  plate: dbVehicle.plate,
-  driver: dbVehicle.driver || 'Desconocido',
-  status: dbVehicle.status || 'offline',
-  speed: dbVehicle.speed || 0,
-  battery: dbVehicle.battery || 0,
-  fuel: dbVehicle.fuel !== undefined ? dbVehicle.fuel : 75,
-  temp: dbVehicle.temp || 24,
-  odometer: dbVehicle.odometer || '0 km',
-  position: dbVehicle.position || [4.6097, -74.0817], // Bogotá default
-  location: dbVehicle.location || 'Ubicación actual',
-  lastUpdate: dbVehicle.lastUpdate || 'Now',
-  route: dbVehicle.route || [[4.6097, -74.0817], [4.6100, -74.0820]],
-})
+export const transformVehicle = (dbVehicle) => {
+  const route = Array.isArray(dbVehicle.route) ? dbVehicle.route : [];
+  return {
+    id: dbVehicle.id,
+    deviceId: dbVehicle.device_id || null,
+    name: dbVehicle.name || dbVehicle.plate || dbVehicle.id,
+    plate: dbVehicle.plate || dbVehicle.id,
+    driver: dbVehicle.driver || 'Desconocido',
+    status: dbVehicle.status || 'offline',
+    speed: dbVehicle.speed || 0,
+    battery: dbVehicle.battery || 0,
+    fuel: dbVehicle.fuel !== undefined ? dbVehicle.fuel : 75,
+    temp: dbVehicle.temp || 24,
+    odometer: dbVehicle.odometer || '0 km',
+    position: dbVehicle.position || [4.6097, -74.0817], // Bogotá default
+    location: dbVehicle.location || 'Ubicación actual',
+    lastUpdate: dbVehicle.lastUpdate || 'Now',
+    route,
+  };
+}
+
+// Transform a GPS device (devices table + latest gps_location)
+export const transformDevice = (dbDevice, live = null) => {
+  const isOnline = dbDevice.status === 'online' || dbDevice.status === 'active'
+  return {
+    id: dbDevice.id,
+    name: dbDevice.label || dbDevice.id,
+    deviceId: dbDevice.id,
+    status: isOnline ? 'active' : dbDevice.status || 'offline',
+    platform: dbDevice.platform || null,
+    model: dbDevice.model || null,
+    appVersion: dbDevice.app_version || null,
+    battery: dbDevice.battery || 0,
+    lastSeen: dbDevice.last_seen || null,
+    lastUpdate: dbDevice.last_seen || '--',
+    position: live ? [live.latitude, live.longitude] : null,
+    speed: live?.speed || 0,
+    accuracy: live?.accuracy || null,
+    bearing: live?.bearing || 0,
+    route: [],
+  }
+}
 
 // Transform raw Supabase alert data to UI format
 export const transformAlert = (dbAlert) => ({
@@ -70,6 +96,19 @@ export const fetchVehicles = async () => {
 
   if (error) throw error
   return data ? data.map(transformVehicle) : []
+}
+
+// Fetch registered GPS devices from Supabase
+export const fetchDevices = async () => {
+  if (!supabase) return []
+
+  const { data, error } = await supabase
+    .from('devices')
+    .select('id, status, last_seen, platform, model, app_version, battery, label')
+    .order('last_seen', { ascending: false })
+
+  if (error) throw error
+  return data || []
 }
 
 // Fetch alerts from Supabase - returns raw data
