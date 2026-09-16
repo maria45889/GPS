@@ -443,6 +443,10 @@ const MapArea = ({
     ? selectedVehicle.route
     : [];
 
+  const guidanceLine = isFollowingRoute && selectedVehicle?.position && userLocation?.position
+    ? [selectedVehicle.position, userLocation.position]
+    : null;
+
   const currentPinPosition = selectedVehicle?.position || defaultCenter;
 
   return (
@@ -577,6 +581,13 @@ const MapArea = ({
         )}
 
         {/* 2. Active Vehicle Glowing Route */}
+        {guidanceLine && (
+          <Polyline
+            positions={guidanceLine}
+            pathOptions={{ color: '#8be9fd', weight: 3, opacity: 0.9, dashArray: '10 12' }}
+          />
+        )}
+
         {activeRoute.length > 0 && (
           <>
             <Polyline
