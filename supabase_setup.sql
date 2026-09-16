@@ -257,3 +257,86 @@ create policy "geofences_authenticated_all"
   to authenticated
   using (true)
   with check (true);
+
+-- =====================================================================
+-- Login por dispositivo (multitenant)
+-- Cada dispositivo puede tener una cuenta Auth propia. Al instalar el APK,
+-- una Edge Function (service_role) crea el usuario Auth del dispositivo y
+-- guarda su auth_user_id en devices. El operador (fila en profiles) puede
+-- ver toda la flota; el dispositivo autenticado solo ve su propia data.
+-- =====================================================================
+
+alter table public.devices add column if not exists auth_user_id uuid references auth.users(id) on delete cascade;
+create unique index if not exists devices_auth_user_id_idx
+  on public.devices (auth_user_id)
+  where auth_user_id is not null;
+
+-- True si el usuario actual es un operador del panel (tiene fila en profiles).
+-- security definer: evita recursion con las politicas de la misma tabla.
+create or replace function public.is_operator()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles p where p.user_id = auth.uid()
+  );
+$$;
+
+-- Dispositivos: el operador ve toda la flota; el dispositivo solo su fila.
+drop policy if exists "devices_authenticated_read" on public.devices;
+create policy "devices_authenticated_read"
+  on public.devices for select
+  to authenticated
+  using (public.is_operator() or auth_user_id = auth.uid());
+
+-- Ubicaciones: el operador ve todo; el dispositivo solo las suyas.
+drop policy if exists "gps_locations_authenticated_read" on public.gps_locations;
+create policy "gps_locations_authenticated_read"
+  on public.gps_locations for select
+  to authenticated
+  using (
+    public.is_operator()
+    or exists (
+      select 1 from public.devices d
+      where d.id = public.gps_locations.device_id
+        and d.auth_user_id = auth.uid()
+    )
+  );
+
+-- Flota, alertas, geocercas y comandos: solo operador (el dispositivo no
+-- debe leer ni controlar datos que no son de su dispositivo).
+drop policy if exists "vehicles_authenticated_all" on public.vehicles;
+create policy "vehicles_authenticated_all"
+  on public.vehicles for all
+  to authenticated
+  using (public.is_operator())
+  with check (public.is_operator());
+
+drop policy if exists "alerts_authenticated_all" on public.alerts;
+create policy "alerts_authenticated_all"
+  on public.alerts for all
+  to authenticated
+  using (public.is_operator())
+  with check (public.is_operator());
+
+drop policy if exists "geofences_authenticated_all" on public.geofences;
+create policy "geofences_authenticated_all"
+  on public.geofences for all
+  to authenticated
+  using (public.is_operator())
+  with check (public.is_operator());
+
+drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
+create policy "vehicle_commands_authenticated_insert"
+  on public.vehicle_commands for insert
+  to authenticated
+  with check (public.is_operator());
+
+drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
+create policy "vehicle_commands_authenticated_read"
+  on public.vehicle_commands for select
+  to authenticated
+  using (public.is_operator());
