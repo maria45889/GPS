@@ -1,4 +1,10 @@
-# Entrega GPS: Supabase, Vercel y APK
+insert into public.profiles (user_id, organization_id, full_name, role)
+values (
+  '1e6a1bd9-d753-4b48-99cc-3130e3337bf5',
+  '553d6f10-b0b4-45d3-bb5a-254567f83199',
+  'Administrador',
+  'owner'
+);# Entrega GPS: Supabase, Vercel y APK
 
 ## Como trabajar sin romper el proyecto
 

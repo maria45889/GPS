@@ -4,7 +4,10 @@ import { AuthGate } from './components/AuthGate';
 import { Capacitor } from '@capacitor/core';
 
 function App() {
-  const [gpsStatus, setGpsStatus] = useState('GPS inicializando...');
+  const isNativePlatform = Capacitor.isNativePlatform();
+  const [gpsStatus, setGpsStatus] = useState(() => (
+    isNativePlatform ? 'GPS inicializando...' : 'Panel protegido'
+  ));
 
   useEffect(() => {
     setGpsStatus(Capacitor.isNativePlatform() ? 'GPS nativo activo' : 'Panel protegido');
@@ -17,7 +20,7 @@ function App() {
       <div className="gps-status-pill pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#2bd1d1]/30 bg-[#0b1d22]/80 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#b9f4f1] uppercase shadow-lg backdrop-blur-sm">
         {gpsStatus}
       </div>
-      {Capacitor.isNativePlatform() ? dashboard : <AuthGate>{dashboard}</AuthGate>}
+      {isNativePlatform ? dashboard : <AuthGate>{dashboard}</AuthGate>}
     </div>
   );
 }

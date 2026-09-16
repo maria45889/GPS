@@ -327,6 +327,158 @@
   background: #35b98a;
   box-shadow: 0 0 0 4px rgba(53, 185, 138, 0.14);
 }
+.dashboard-status-dot.active,
+.dashboard-status-dot.online {
+  background: #b8f36b;
+  box-shadow: 0 0 0 4px rgba(184, 243, 107, 0.14);
+}
+.dashboard-status-dot.stopped {
+  background: #f2c66d;
+  box-shadow: 0 0 0 4px rgba(242, 198, 109, 0.14);
+}
+.dashboard-status-dot.offline,
+.dashboard-status-dot.unknown {
+  background: #8b9ba1;
+  box-shadow: 0 0 0 4px rgba(139, 155, 161, 0.14);
+}
+
+.device-info-card,
+.vehicle-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(13, 25, 35, 0.98) 0%, rgba(10, 17, 24, 0.98) 100%);
+  border: 1px solid rgba(48, 90, 110, 0.7);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 24px rgba(0,0,0,0.16);
+}
+
+.card-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.eyebrow-text {
+  margin: 0 0 6px;
+  color: #66d9d8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.card-title {
+  margin: 0;
+  color: #edf5ef;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.card-subtitle {
+  display: block;
+  margin-top: 4px;
+  color: #7fa1ad;
+  font-size: 11px;
+}
+
+.stat-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  font-size: 11px;
+}
+
+.stat-metric-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 8px;
+  color: #cfe7ec;
+  background: rgba(15, 37, 48, 0.8);
+  border: 1px solid rgba(36, 76, 92, 0.8);
+  border-radius: 8px;
+}
+
+.stat-metric-grid span {
+  color: #6d8e9a;
+  font-size: 10px;
+}
+
+.stat-metric-grid strong {
+  color: #edf5ef;
+  font-size: 12px;
+}
+
+.action-button-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.panel-primary-button,
+.panel-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 800;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.panel-primary-button {
+  color: #0d1519;
+  background: linear-gradient(135deg, #b8f36b 0%, #9fe6ff 100%);
+  box-shadow: 0 8px 18px rgba(184, 243, 107, 0.14);
+}
+
+.panel-primary-button.is-active {
+  color: #dffcff;
+  background: linear-gradient(135deg, #123a43 0%, #081e2d 100%);
+  border-color: rgba(53, 185, 201, 0.8);
+}
+
+.panel-secondary-button {
+  color: #dceef2;
+  background: rgba(17, 36, 44, 0.9);
+  border-color: rgba(53, 110, 131, 0.8);
+}
+
+.panel-primary-button:hover,
+.panel-secondary-button:hover {
+  transform: translateY(-1px);
+}
+
+.panel-helper-text {
+  padding: 9px 10px;
+  color: #95b0b9;
+  background: rgba(15, 37, 48, 0.65);
+  border: 1px solid rgba(48, 90, 110, 0.8);
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.bar-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(22, 42, 52, 0.9);
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2bd1d1 0%, #b8f36b 100%);
+}
 
 .mobile-menu-button,
 .mobile-drawer-layer {
@@ -757,6 +909,151 @@
   .map-selection-identity { margin-bottom: 9px; }
   .map-selection-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .map-selection-actions button { justify-content: center; min-height: 36px; padding: 0 4px; }
+}
+
+.right-panel-stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 76px;
+  padding: 10px 8px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(13, 25, 35, 0.96) 0%, rgba(10, 17, 24, 0.96) 100%);
+  border: 1px solid #203d4d;
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.right-panel-stat-card.accent-green {
+  border-color: rgba(94, 230, 168, 0.4);
+}
+
+.right-panel-stat-card.accent-muted {
+  border-color: rgba(139, 155, 161, 0.35);
+}
+
+.right-panel-stat-value {
+  color: #edf5ef;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.right-panel-stat-label {
+  margin-top: 6px;
+  color: #7da1b0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.right-panel-operator-card,
+.right-panel-search,
+.right-panel-secondary-button,
+.right-panel-item {
+  border: 1px solid #203d4d;
+  background: linear-gradient(180deg, rgba(13, 25, 35, 0.94) 0%, rgba(8, 18, 24, 0.94) 100%);
+}
+
+.right-panel-operator-card {
+  padding: 12px 12px 10px;
+  border-radius: 10px;
+}
+
+.right-panel-operator-card h3 {
+  color: #7da1b0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.right-panel-action-button,
+.right-panel-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  border-radius: 8px;
+  color: #0d1519;
+  background: linear-gradient(135deg, #b8f36b 0%, #9fe6ff 100%);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.right-panel-secondary-button {
+  color: #dceef2;
+  background: #122b38;
+  border: 1px solid #28566a;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.right-panel-search {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.right-panel-search input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px 0 32px;
+  color: #edf5ef;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: 12px;
+}
+
+.right-panel-search input::placeholder {
+  color: #6c8792;
+}
+
+.right-panel-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  color: #dfeaf0;
+  text-align: left;
+  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.right-panel-item:hover,
+.right-panel-item:focus-visible {
+  border-color: rgba(103, 232, 249, 0.5);
+  background: linear-gradient(180deg, rgba(18, 49, 62, 0.95) 0%, rgba(14, 29, 37, 0.95) 100%);
+  outline: none;
+}
+
+.right-panel-item.selected {
+  border-color: rgba(184, 243, 107, 0.45);
+  background: linear-gradient(180deg, rgba(18, 62, 46, 0.94) 0%, rgba(12, 28, 31, 0.92) 100%);
+  box-shadow: 0 8px 18px rgba(184, 243, 107, 0.08);
+}
+
+.scrollable-list {
+  scrollbar-gutter: stable;
+}
+
+.right-panel-item strong,
+.right-panel-item span {
+  line-height: 1.3;
+}
+
+@media (max-width: 1279px) {
+  .dashboard-right-panel {
+    display: none !important;
+  }
 }
 
 /* Geofence polygon - enhanced glow effects */
