@@ -91,9 +91,9 @@ export const fetchVehicles = async () => {
   if (!supabase) return []
 
   const { data, error } = await supabase
-    .from('devices')
-    .select('id, status, last_seen, updated_at, platform, model, app_version')
-    .order('last_seen', { ascending: false, nullsFirst: false })
+    .from('vehicles')
+    .select('id, device_id, name, plate, driver, status, speed, battery, fuel, temp, odometer, location, route, last_update')
+    .order('last_update', { ascending: false, nullsFirst: false })
 
   if (error) throw error
   return data ? data.map(transformVehicle) : []

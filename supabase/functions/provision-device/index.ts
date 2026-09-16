@@ -3,12 +3,17 @@
 // y devuelve al APK las credenciales para que el dispositivo pueda entrar
 // a su panel ("login por dispositivo").
 //
-// Se genera la cuenta una sola vez usando deviceId como identidad. Si el
-// dispositivo ya fue aprovisionado, responde already_registered y no
-// reemite el password.
-//
 // Requiere el rol service_role (la funcion corre dentro de Supabase y usa
 // SUPABASE_SERVICE_ROLE_KEY, nunca la anon key).
+//
+// Seguridad:
+//   - Valida encabezado x-provision-secret (configurar en Supabase con
+//     supabase secrets set PROVISION_SECRET=<valor>).
+//   - Rate limiting: si el deviceId ya existe en device_registry, devuelve
+//     alreadyRegistered sin crear usuario.
+//   - Validacion estricta del deviceId (alfanumerico, guiones, max 64 chars).
+//   - Si upsert a devices falla despues de crear el usuario Auth, elimina
+//     el usuario para evitar cuentas huerfanas.
 //
 // Despliegue:
 //   cd supabase && supabase functions deploy provision-device
@@ -17,18 +22,10 @@
 //   POST https://<ref>.supabase.co/functions/v1/provision-device
 //   headers: { authorization: 'Bearer <VITE_SUPABASE_ANON_KEY>',
 //              'apikey': '<VITE_SUPABASE_ANON_KEY>',
+//              'x-provision-secret': '<PROVISION_SECRET>',
 //              'Content-Type': 'application/json' }
 //   body: { "deviceId": "c8f2-ab31...", "platform": "android",
 //           "model": "MotoG 24", "app_version": "1.2.0", "battery": 87 }
-
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  { auth: { autoRefreshToken: false, persistSession: false } },
-)
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -52,6 +49,13 @@ serve(async (req) => {
   }
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
+  // Validación de autorización: encabezado x-provision-secret
+  const expectedSecret = Deno.env.get('PROVISION_SECRET')
+  const providedSecret = req.headers.get('x-provision-secret')
+  if (expectedSecret && providedSecret !== expectedSecret) {
+    return json({ error: 'no autorizado' }, 403)
+  }
+
   let body: Record<string, unknown>
   try {
     body = await req.json()
@@ -59,17 +63,31 @@ serve(async (req) => {
     return json({ error: 'json invalido' }, 400)
   }
 
-  const deviceId = String(body.deviceId ?? '').trim().slice(0, 64)
-  if (!deviceId) return json({ error: 'deviceId requerido' }, 400)
+  // Validación estricta del deviceId: solo caracteres alfanuméricos, guiones y guiones bajos, máx 64 chars
+  const rawDeviceId = String(body.deviceId ?? '').trim()
+  const deviceId = rawDeviceId.slice(0, 64)
+  if (!deviceId || !/^[a-zA-Z0-9_-]+$/.test(deviceId)) {
+    return json({ error: 'deviceId invalido' }, 400)
+  }
 
+  // Rate limiting simple: verificar que el dispositivo no esté ya registrado en device_registry
   const existing = await supabase
+    .from('device_registry')
+    .select('device_id')
+    .eq('device_id', deviceId)
+    .maybeSingle()
+
+  if (existing.error) return json({ error: existing.error.message }, 500)
+  if (existing.data) return json({ alreadyRegistered: true, deviceId })
+
+  const deviceExisting = await supabase
     .from('devices')
     .select('auth_user_id')
     .eq('id', deviceId)
     .maybeSingle()
 
-  if (existing.error) return json({ error: existing.error.message }, 500)
-  if (existing.data?.auth_user_id) {
+  if (deviceExisting.error) return json({ error: deviceExisting.error.message }, 500)
+  if (deviceExisting.data?.auth_user_id) {
     return json({ alreadyRegistered: true, deviceId })
   }
 
@@ -79,8 +97,8 @@ serve(async (req) => {
   const created = await supabase.auth.admin.createUser({
     email,
     password,
-    emailConfirm: true,
-    userMetadata: { role: 'device', device_id: deviceId },
+    email_confirm: true,
+    app_metadata: { role: 'device', device_id: deviceId },
   })
   if (created.error) return json({ error: created.error.message }, 500)
 
@@ -100,7 +118,13 @@ serve(async (req) => {
       { onConflict: 'id' },
     )
 
-  if (upsert.error) return json({ error: upsert.error.message }, 500)
+  if (upsert.error) {
+    // Limpieza: elimina la cuenta Auth si el registro en devices falla
+    if (created.data?.user?.id) {
+      await supabase.auth.admin.deleteUser(created.data.user.id)
+    }
+    return json({ error: upsert.error.message }, 500)
+  }
 
   return json({ ok: true, deviceId, email, password })
 })

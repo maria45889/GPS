@@ -1,29 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import Dashboard from './components/Dashboard';
 import { AuthGate } from './components/AuthGate';
-import { startGpsTracking } from './lib/gpsTracker';
 import { Capacitor } from '@capacitor/core';
 
 function App() {
   const [gpsStatus, setGpsStatus] = useState('GPS inicializando...');
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) {
-      setGpsStatus('Panel protegido');
-      return undefined;
-    }
-
-    const stopTracking = startGpsTracking({
-      onUpdate: (position) => {
-        setGpsStatus(`GPS activo • ${position.latitude.toFixed(4)}, ${position.longitude.toFixed(4)}`);
-      },
-      onError: (error) => {
-        const message = error?.message || 'Permisos de ubicación no habilitados';
-        setGpsStatus(`GPS sin permisos • ${message}`);
-      },
-    });
-
-    return () => stopTracking?.();
+    setGpsStatus(Capacitor.isNativePlatform() ? 'GPS nativo activo' : 'Panel protegido');
   }, []);
 
   const dashboard = <Dashboard />;

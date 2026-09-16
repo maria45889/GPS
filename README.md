@@ -13,7 +13,7 @@ Panel web y aplicación Android para monitorear dispositivos GPS en tiempo real.
 - Aplicación Android con envío GPS cada 30 segundos.
 - Tests unitarios y build de producción con Vite.
 
-> Los comandos `activate`, `stop` e `immobilize` se registran en `vehicle_commands`. El APK del teléfono no puede cortar físicamente la ignición; para eso hace falta un módulo GPS/relé instalado en la moto.
+> Los comandos `activate`, `stop` e `immobilize` se registran en `vehicle_commands`. El servicio GPS nativo del APK los consulta cada 30 s y los acusa (`status = received`), cerrando la cola. El teléfono no puede cortar físicamente la ignición; para eso hace falta un módulo GPS/relé instalado en la moto.
 
 ## Estructura
 
@@ -58,15 +58,18 @@ No subas `.env`, `service_role`, contraseñas, keystores ni archivos de configur
 2. Ejecuta completo [`supabase_setup.sql`](supabase_setup.sql) en SQL Editor.
 3. Activa Authentication con Email.
 4. Crea el usuario real del panel desde Authentication > Users.
-5. Crea una organización y relaciona el UUID del usuario en `public.profiles` con rol `owner` o `admin`.
-6. Configura las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en Vercel para Production, Preview y Development.
-7. Haz Redeploy desde `main`.
+5. Crea una organización y relaciona el UUID del usuario en `public.profiles` con rol `owner` o `admin` (el bloque comentado al final de `supabase_setup.sql` sirve de plantilla).
+6. Despliega la Edge Function que aprovisiona los dispositivos: `cd supabase && supabase functions deploy provision-device`. Configura la variable de entorno de la función: `supabase secrets set PROVISION_SECRET=<valor-aleatorio>` (el APK la envía como encabezado `x-provision-secret`).
+7. Configura las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en Vercel para Production, Preview y Development.
+8. Haz Redeploy desde `main`.
 
 El flujo esperado es:
 
 ```text
-APK -> devices + gps_locations -> panel React -> mapa y estado offline
+APK (provision-device -> Auth propio) -> devices + gps_locations -> panel React -> mapa y estado offline
 ```
+
+Cada dispositivo se aprovisiona una sola vez: la Edge Function crea su cuenta Auth, guarda `devices.auth_user_id` y devuelve email/password al APK, que los guarda en `SharedPreferences`. El APK ya no escribe como `anon`; usa el JWT del dispositivo (`app_metadata.device_id`) y las políticas RLS lo obligan a tocar solo su propia fila y sus posiciones.
 
 Un dispositivo se considera offline después de aproximadamente 90 segundos sin actualizar `last_seen`.
 
