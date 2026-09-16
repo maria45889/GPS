@@ -6,6 +6,13 @@ Este es el flujo oficial. Si lo sigues tal cual, nada se rompe y yo puedo fusion
 
 ## PARTE A — Tu flujo de trabajo (último entregado)
 
+### División de trabajo
+
+- **Tú (diseño):** archivos de presentación: `src/index.css`, `src/App.css` no existe, y el markup visual dentro de `src/components/*.jsx` (clases, estructura visual, tarjetas, popups).
+- **Nosotros (lógica):** hooks, `src/lib/*`, supabase, comandos de vehículo, tests y build. Eso NO lo tocas, para no chocar con nuestro trabajo.
+
+Regla simple: si no es un color, tipografía o disposición visual, no es tuyo. Pregunta antes de modificar algo que "no se ve".
+
 ### Paso 1. Actualiza y crea tu rama (hazlo SIEMPRE)
 
 Abre la terminal dentro de la carpeta del proyecto y ejecuta:
