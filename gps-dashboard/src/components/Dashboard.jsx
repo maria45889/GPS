@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Power, ShieldAlert, X, History, MapPinned, Share2 } from 'lucide-react';
+import { X } from 'lucide-react';
 import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
@@ -49,9 +49,9 @@ const Dashboard = () => {
   const [isVehicleDetailOpen, setIsVehicleDetailOpen] = useState(false);
   const [operationMessage, setOperationMessage] = useState('');
 
-  const handleSelectVehicle = (vehicle) => {
+  const handleSelectVehicle = (vehicle, openDetail = false) => {
     setSelectedVehicle(vehicle);
-    setIsVehicleDetailOpen(true);
+    setIsVehicleDetailOpen(openDetail);
     setFlyToTrigger({
       coords: vehicle.position,
       zoom: 16,
@@ -129,24 +129,6 @@ const Dashboard = () => {
     setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position });
   };
 
-  const handleActivate = () => {
-    if (!selectedVehicle) return;
-    setVehicles((currentVehicles) => currentVehicles.map((vehicle) => (
-      vehicle.id === selectedVehicle.id ? { ...vehicle, status: 'active', lastUpdate: 'Ahora' } : vehicle
-    )));
-    setSelectedVehicle((vehicle) => vehicle ? { ...vehicle, status: 'active', lastUpdate: 'Ahora' } : vehicle);
-    setOperationMessage(`${selectedVehicle.plate} activado`);
-  };
-
-  const handleReportTheft = () => {
-    if (!selectedVehicle) return;
-    setVehicles((currentVehicles) => currentVehicles.map((vehicle) => (
-      vehicle.id === selectedVehicle.id ? { ...vehicle, status: 'offline', lastUpdate: 'Incidente reportado' } : vehicle
-    )));
-    setSelectedVehicle((vehicle) => vehicle ? { ...vehicle, status: 'offline', lastUpdate: 'Incidente reportado' } : vehicle);
-    setOperationMessage(`Incidente reportado para ${selectedVehicle.plate}`);
-  };
-
   const handleNavigate = (section) => {
     setActiveSection(section);
     if (section === 'Mapa') {
@@ -190,6 +172,7 @@ const Dashboard = () => {
                 vehicles={vehicles}
                 selectedVehicle={selectedVehicle}
                 onSelectVehicle={handleSelectVehicle}
+                onOpenDetail={() => setIsVehicleDetailOpen(true)}
                 alerts={alerts}
                 onSelectAlert={handleSelectAlert}
                 geofences={geofences}
@@ -200,6 +183,7 @@ const Dashboard = () => {
                 isFollowingRoute={isFollowingRoute}
                 onToggleRouteFollow={handleToggleRouteFollow}
                 onShareRoute={handleShareRoute}
+                isVehicleDetailOpen={isVehicleDetailOpen}
                 userLocation={userLocation}
                 onLocationChange={setUserLocation}
                 locateUserTrigger={locateUserTrigger}
@@ -224,39 +208,13 @@ const Dashboard = () => {
                 ))}
               </div>
 
-              <div className="mobile-map-actions" aria-label="Acciones rápidas">
-                <button type="button" onClick={handleActivate}>
-                  <Power size={15} />
-                  <span>Activar</span>
-                </button>
-                <button type="button" onClick={handleViewHistory}>
-                  <History size={15} />
-                  <span>Historial</span>
-                </button>
-                <button type="button" onClick={handleToggleRouteFollow} className={isFollowingRoute ? 'mobile-map-action-active' : ''}>
-                  <MapPinned size={15} />
-                  <span>{isFollowingRoute ? 'Siguiendo' : 'Seguir'}</span>
-                </button>
-                <button type="button" onClick={handleShareRoute}>
-                  <Share2 size={15} />
-                  <span>Compartir</span>
-                </button>
-                <button type="button" onClick={() => setIsPlacingOnMap(true)}>
-                  <MapPinned size={15} />
-                  <span>Geovalla</span>
-                </button>
-                <button type="button" onClick={handleReportTheft} className="mobile-map-action-danger">
-                  <ShieldAlert size={15} />
-                  <span>Robo</span>
-                </button>
-              </div>
             </div>
           </div>
 
           <RightSidebarPanel
             vehicles={vehicles}
             selectedVehicle={selectedVehicle}
-            onSelectVehicle={handleSelectVehicle}
+            onSelectVehicle={(vehicle) => handleSelectVehicle(vehicle, true)}
             onSetGeofence={() => setIsPlacingOnMap(true)}
             onViewHistory={handleViewHistory}
             isFollowingRoute={isFollowingRoute}
@@ -275,7 +233,6 @@ const Dashboard = () => {
             onToggleRouteFollow={handleToggleRouteFollow}
             onShareRoute={handleShareRoute}
             onViewHistory={handleViewHistory}
-            onReportTheft={handleReportTheft}
           />
         )}
       </div>

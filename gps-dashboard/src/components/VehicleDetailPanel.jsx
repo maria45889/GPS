@@ -1,5 +1,5 @@
 import React from 'react';
-import { Battery, Gauge, MapPin, Navigation, Share2, Thermometer, X, Zap } from 'lucide-react';
+import { Battery, Gauge, MapPin, Navigation, Share2, Thermometer, X } from 'lucide-react';
 
 const statusLabels = {
   active: 'En ruta',
@@ -14,7 +14,6 @@ export const VehicleDetailPanel = ({
   onToggleRouteFollow,
   onShareRoute,
   onViewHistory,
-  onReportTheft,
 }) => {
   if (!vehicle) return null;
 
@@ -63,10 +62,6 @@ export const VehicleDetailPanel = ({
         <button type="button" onClick={onViewHistory}>
           <Gauge size={16} />
           Historial
-        </button>
-        <button type="button" onClick={onReportTheft} className="vehicle-detail-danger">
-          <Zap size={16} />
-          Reportar incidente
         </button>
       </div>
     </aside>

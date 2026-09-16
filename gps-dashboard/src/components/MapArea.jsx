@@ -352,6 +352,7 @@ const MapArea = ({
   vehicles = [], 
   selectedVehicle, 
   onSelectVehicle, 
+  onOpenDetail,
   alerts = [],
   onSelectAlert,
   geofences = [],
@@ -362,6 +363,7 @@ const MapArea = ({
   isFollowingRoute = false,
   onToggleRouteFollow,
   onShareRoute,
+  isVehicleDetailOpen = false,
   userLocation = null,
   onLocationChange,
   locateUserTrigger,
@@ -628,7 +630,7 @@ const MapArea = ({
         ))}
       </MapContainer>
 
-      {selectedVehicle && (
+      {selectedVehicle && !isVehicleDetailOpen && (
         <div className="map-selection-bar" aria-label={`Acciones para ${selectedVehicle.name}`}>
           <div className="map-selection-identity">
             <span className={`map-selection-dot ${selectedVehicle.status}`} />
@@ -638,7 +640,7 @@ const MapArea = ({
             </div>
           </div>
           <div className="map-selection-actions">
-            <button type="button" onClick={() => onSelectVehicle?.(selectedVehicle)} title="Abrir detalle del vehículo">
+            <button type="button" onClick={onOpenDetail} title="Abrir detalle del vehículo">
               <ExternalLink size={15} />
               <span>Detalle</span>
             </button>
