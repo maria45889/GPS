@@ -797,6 +797,37 @@
 .vehicle-detail-actions button.is-active { color: #9fe9ff; background: #123a43; border-color: #35b9c9; }
 .vehicle-detail-actions .vehicle-detail-danger { color: #f3cc91; border-color: #665039; }
 
+.map-selection-bar {
+  position: absolute;
+  z-index: 30;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  color: #c9e1e8;
+  background: rgba(8, 24, 37, 0.96);
+  border: 1px solid #2a6577;
+  border-radius: 10px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, .35);
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+}
+.map-selection-identity { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.map-selection-identity > div { min-width: 0; }
+.map-selection-identity strong, .map-selection-identity span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-selection-identity strong { color: #effcff; font-size: 12px; }
+.map-selection-identity span { margin-top: 2px; color: #89a9b5; font-size: 10px; }
+.map-selection-dot { width: 9px; height: 9px; flex-shrink: 0; border-radius: 50%; background: #8b9ba1; box-shadow: 0 0 0 4px rgba(139, 155, 161, .12); }
+.map-selection-dot.active { background: #58e6b0; box-shadow: 0 0 0 4px rgba(88, 230, 176, .14); }
+.map-selection-dot.stopped { background: #f2c66d; box-shadow: 0 0 0 4px rgba(242, 198, 109, .14); }
+.map-selection-actions { display: flex; flex-shrink: 0; gap: 6px; }
+.map-selection-actions button { display: flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 9px; color: #b8dbe5; background: #102b38; border: 1px solid #28566a; border-radius: 6px; font-size: 10px; font-weight: 700; }
+.map-selection-actions button:hover, .map-selection-actions button.is-active { color: #9fe9ff; background: #123a43; border-color: #35b9c9; }
+
 @media (max-width: 1023px) {
   .reference-dashboard .dashboard-video,
   .reference-dashboard .dashboard-video {
@@ -866,6 +897,18 @@
 
   .vehicle-detail-header h2 { font-size: 17px; }
   .vehicle-detail-actions button { min-height: 42px; }
+
+  .map-selection-bar {
+    right: 10px;
+    bottom: 112px;
+    left: 10px;
+    display: block;
+    padding: 10px;
+  }
+
+  .map-selection-identity { margin-bottom: 9px; }
+  .map-selection-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .map-selection-actions button { justify-content: center; min-height: 36px; padding: 0 4px; }
 }
 
 /* Geofence polygon - enhanced glow effects */

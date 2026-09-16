@@ -2,7 +2,7 @@
 import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Plus, Minus, Crosshair } from 'lucide-react';
+import { Plus, Minus, Crosshair, Navigation, Share2, ExternalLink } from 'lucide-react';
 
 // Component to handle map resize
 const MapController = () => {
@@ -627,6 +627,32 @@ const MapArea = ({
           </Marker>
         ))}
       </MapContainer>
+
+      {selectedVehicle && (
+        <div className="map-selection-bar" aria-label={`Acciones para ${selectedVehicle.name}`}>
+          <div className="map-selection-identity">
+            <span className={`map-selection-dot ${selectedVehicle.status}`} />
+            <div>
+              <strong>{selectedVehicle.name}</strong>
+              <span>{selectedVehicle.plate || selectedVehicle.id} · {selectedVehicle.speed || 0} km/h</span>
+            </div>
+          </div>
+          <div className="map-selection-actions">
+            <button type="button" onClick={() => onSelectVehicle?.(selectedVehicle)} title="Abrir detalle del vehículo">
+              <ExternalLink size={15} />
+              <span>Detalle</span>
+            </button>
+            <button type="button" onClick={onToggleRouteFollow} className={isFollowingRoute ? 'is-active' : ''} title="Seguir vehículo en el mapa">
+              <Navigation size={15} />
+              <span>{isFollowingRoute ? 'Siguiendo' : 'Seguir'}</span>
+            </button>
+            <button type="button" onClick={onShareRoute} title="Compartir ubicación y ruta">
+              <Share2 size={15} />
+              <span>Compartir</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Simplified Floating UI Overlays */}
       <div className="absolute inset-0 pointer-events-none z-10 p-4 flex flex-col justify-between">
