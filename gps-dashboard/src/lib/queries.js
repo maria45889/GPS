@@ -2,6 +2,7 @@
 // These fetch data from Supabase and transform it to the UI expected format
 
 import { supabase } from '../lib/supabase'
+import { deviceStatusFromLastSeen } from './mapLogic'
 
 // Transform raw Supabase vehicle data to UI format
 export const transformVehicle = (dbVehicle) => {
@@ -9,10 +10,10 @@ export const transformVehicle = (dbVehicle) => {
   return {
     id: dbVehicle.id,
     deviceId: dbVehicle.device_id || null,
-    name: dbVehicle.name || dbVehicle.plate || dbVehicle.id,
-    plate: dbVehicle.plate || dbVehicle.id,
-    driver: dbVehicle.driver || 'Desconocido',
-    status: dbVehicle.status || 'offline',
+    name: dbVehicle.label || dbVehicle.name || dbVehicle.plate || dbVehicle.id,
+    plate: dbVehicle.vehicle_id || dbVehicle.plate || dbVehicle.id,
+    driver: dbVehicle.driver || (dbVehicle.platform ? 'Dispositivo GPS' : 'Desconocido'),
+    status: dbVehicle.last_seen ? deviceStatusFromLastSeen(dbVehicle.last_seen) : (dbVehicle.status || 'offline'),
     speed: dbVehicle.speed || 0,
     battery: dbVehicle.battery || 0,
     fuel: dbVehicle.fuel !== undefined ? dbVehicle.fuel : 75,
@@ -20,7 +21,7 @@ export const transformVehicle = (dbVehicle) => {
     odometer: dbVehicle.odometer || '0 km',
     position: dbVehicle.position || [4.6097, -74.0817], // Bogotá default
     location: dbVehicle.location || 'Ubicación actual',
-    lastUpdate: dbVehicle.lastUpdate || 'Now',
+    lastUpdate: dbVehicle.lastUpdate || dbVehicle.last_seen || 'Now',
     route,
   };
 }
@@ -90,9 +91,9 @@ export const fetchVehicles = async () => {
   if (!supabase) return []
 
   const { data, error } = await supabase
-    .from('vehicles')
-    .select('*')
-    .order('last_update', { ascending: false })
+    .from('devices')
+    .select('id, status, last_seen, updated_at, platform, model, app_version')
+    .order('last_seen', { ascending: false, nullsFirst: false })
 
   if (error) throw error
   return data ? data.map(transformVehicle) : []

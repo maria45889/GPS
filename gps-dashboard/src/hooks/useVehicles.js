@@ -54,7 +54,7 @@ export const useVehicles = () => {
       const channel = supabase
         .channel('gps-dashboard-vehicles')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'gps_locations' }, loadVehicles)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, loadVehicles)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, loadVehicles)
         .subscribe()
 
       return () => {
