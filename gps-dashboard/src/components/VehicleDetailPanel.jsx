@@ -1,15 +1,16 @@
 import React from 'react';
-import { Battery, Gauge, MapPin, Navigation, Share2, Thermometer, X } from 'lucide-react';
+import { Battery, Gauge, MapPin, Navigation, Share2, Thermometer, X, Crosshair } from 'lucide-react';
 import { VehicleControlCard } from './VehicleControlCard';
 
 const statusLabels = {
-  active: 'En ruta',
+  active: 'En ruta / En línea',
   stopped: 'Detenido',
   offline: 'Sin conexión',
 };
 
 export const VehicleDetailPanel = ({
-  vehicle,
+  category = 'devices',
+  entity,
   isFollowingRoute,
   onClose,
   onToggleRouteFollow,
@@ -18,22 +19,27 @@ export const VehicleDetailPanel = ({
   onDeleteVehicle,
   isControlBusy,
 }) => {
-  if (!vehicle) return null;
+  if (!entity) return null;
 
-  const statusLabel = statusLabels[vehicle.status] || 'Desconocido';
-  const statusClass = vehicle.status === 'active'
+  const statusKey = entity.status === 'active' || entity.status === 'online' ? 'active' : entity.status
+  const statusLabel = statusLabels[statusKey] || 'Desconocido';
+  const statusClass = statusKey === 'active'
     ? 'vehicle-detail-status-active'
-    : vehicle.status === 'stopped'
+    : statusKey === 'stopped'
       ? 'vehicle-detail-status-stopped'
       : 'vehicle-detail-status-offline';
 
+  const isDevices = category === 'devices'
+
   return (
-    <aside className="vehicle-detail-panel" aria-label={`Detalle de ${vehicle.name}`}>
+    <aside className="vehicle-detail-panel" aria-label={`Detalle de ${entity.name}`}>
       <div className="vehicle-detail-header">
         <div>
-          <span className="vehicle-detail-eyebrow">Vehículo seleccionado</span>
-          <h2>{vehicle.name}</h2>
-          <p>{vehicle.plate || vehicle.id} · {vehicle.driver || 'Conductor no asignado'}</p>
+          <span className="vehicle-detail-eyebrow">{isDevices ? 'Dispositivo seleccionado' : 'Vehículo seleccionado'}</span>
+          <h2>{entity.name}</h2>
+          <p>{isDevices
+            ? `${entity.model || 'Dispositivo GPS'}${entity.platform ? ` · ${entity.platform}` : ''}`
+            : `${entity.plate || entity.id} · ${entity.driver || 'Conductor no asignado'}`}</p>
         </div>
         <button type="button" className="vehicle-detail-close" onClick={onClose} aria-label="Cerrar detalle">
           <X size={18} />
@@ -43,27 +49,34 @@ export const VehicleDetailPanel = ({
       <div className={`vehicle-detail-status ${statusClass}`}>
         <span className="vehicle-detail-status-dot" />
         <strong>{statusLabel}</strong>
-        <span>{vehicle.lastUpdate || 'Sin actualización'}</span>
+        <span>{entity.lastUpdate || 'Sin actualización'}</span>
       </div>
 
       <div className="vehicle-detail-grid">
-        <div><Gauge size={16} /><span>Velocidad<strong>{vehicle.speed || 0} km/h</strong></span></div>
-        <div><Battery size={16} /><span>Batería<strong>{vehicle.battery || 0}%</strong></span></div>
-        <div><Thermometer size={16} /><span>Motor<strong>{vehicle.temp || 0}°C</strong></span></div>
-        <div><MapPin size={16} /><span>Ubicación<strong>{vehicle.location || 'GPS activo'}</strong></span></div>
+        <div><Gauge size={16} /><span>Velocidad<strong>{entity.speed || 0} km/h</strong></span></div>
+        <div><Battery size={16} /><span>Batería<strong>{entity.battery ? `${entity.battery}%` : '--'}</strong></span></div>
+        {isDevices ? (
+          <div><Crosshair size={16} /><span>Precisión<strong>{entity.accuracy ? `${Math.round(entity.accuracy)} m` : '--'}</strong></span></div>
+        ) : (
+          <div><Thermometer size={16} /><span>Motor<strong>{entity.temp || 0}°C</strong></span></div>
+        )}
+        <div><MapPin size={16} /><span>Ubicación<strong>{entity.position ? `${entity.position[0].toFixed(5)}, ${entity.position[1].toFixed(5)}` : 'GPS activo'}</strong></span></div>
       </div>
 
       <div className="vehicle-detail-actions">
         <button type="button" onClick={onToggleRouteFollow} className={isFollowingRoute ? 'is-active' : ''}>
           <Navigation size={16} />
-          {isFollowingRoute ? 'Siguiendo ruta' : 'Seguir ruta'}
+          {isFollowingRoute ? 'Siguiendo' : 'Seguir'}
         </button>
         <button type="button" onClick={onShareRoute}>
           <Share2 size={16} />
           Compartir
         </button>
       </div>
-      <VehicleControlCard vehicle={vehicle} onControl={onControlVehicle} onDelete={onDeleteVehicle} isBusy={isControlBusy} />
+
+      {!isDevices && (
+        <VehicleControlCard vehicle={entity} onControl={onControlVehicle} onDelete={onDeleteVehicle} isBusy={isControlBusy} />
+      )}
     </aside>
   );
 };

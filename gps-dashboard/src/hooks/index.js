@@ -1,3 +1,4 @@
 export { useVehicles } from './useVehicles'
+export { useDevices } from './useDevices'
 export { useAlerts } from './useAlerts'
 export { useGeofences } from './useGeofences'

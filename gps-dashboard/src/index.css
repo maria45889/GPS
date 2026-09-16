@@ -189,10 +189,6 @@
     min-height: 280px;
   }
 
-  .dashboard-video {
-    display: none;
-  }
-
   .mobile-menu-button {
     display: flex !important;
     align-items: center;
@@ -204,58 +200,6 @@
     background: #1c282d;
     border: 1px solid #304149;
     border-radius: 8px;
-  }
-
-  .mobile-map-actions {
-    position: absolute;
-    z-index: 20;
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    padding: 6px;
-    border: 1px solid rgba(48, 65, 73, 0.95);
-    border-radius: 10px;
-    background: rgba(17, 24, 29, 0.92);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(12px);
-  }
-
-  .mobile-map-actions button {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    min-height: 36px;
-    padding: 0 4px;
-    overflow: hidden;
-    color: #d3ddd8;
-    background: #1c282d;
-    border: 1px solid #304149;
-    border-radius: 7px;
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .mobile-map-actions button:first-child {
-    color: #c8ef9b;
-    border-color: rgba(184, 243, 107, 0.4);
-  }
-
-  .mobile-map-action-active {
-    color: #9fe9ff !important;
-    border-color: rgba(91, 232, 176, 0.65) !important;
-    background: #123a43 !important;
-  }
-
-  .mobile-map-action-danger {
-    color: #f2c66d !important;
-    border-color: rgba(242, 198, 109, 0.4) !important;
   }
 
   .mobile-drawer-layer {
@@ -321,52 +265,6 @@
   }
 }
 
-/* Light navigation theme */
-.light-dashboard .header-status,
-.light-dashboard .header-signal-actions {
-  color: #53717d;
-}
-
-.light-dashboard .dashboard-header {
-  background: #ffffff !important;
-  border-color: #d5e6ec !important;
-}
-
-.light-dashboard > div > .relative {
-  color: #173746;
-}
-
-.light-dashboard .header-fleet-selector > div,
-.light-dashboard .header-fleet-selector button {
-  background: #f4fafb !important;
-  border-color: #c7dfe7 !important;
-  color: #1c5c70 !important;
-}
-
-.light-dashboard .header-fleet-name,
-.light-dashboard .header-action-label {
-  color: #1b5265 !important;
-}
-
-.light-dashboard .header-status > div:first-child {
-  background: #eaf8f3 !important;
-  border-color: #bce4d4 !important;
-}
-
-.light-dashboard .header-signal-actions,
-.light-dashboard .header-signal-actions svg,
-.light-dashboard .header-status span {
-  color: #21839a !important;
-}
-
-.light-dashboard .dashboard-left-panel,
-.light-dashboard .dashboard-right-panel {
-  background: #ffffff !important;
-  border-color: #d5e6ec !important;
-  box-shadow: 0 8px 22px rgba(43, 93, 112, 0.08);
-  color: #45636e !important;
-}
-
 .dashboard-center {
   display: flex;
   flex-direction: column;
@@ -430,121 +328,7 @@
   box-shadow: 0 0 0 4px rgba(53, 185, 138, 0.14);
 }
 
-.light-dashboard .dashboard-telemetry,
-.light-dashboard .dashboard-apk-card {
-  border-color: #e0edf1 !important;
-}
-
-.light-dashboard .dashboard-telemetry strong,
-.light-dashboard .dashboard-apk-card p {
-  color: #173746 !important;
-}
-
-.light-dashboard .dashboard-apk-card {
-  background: #f4fafb;
-}
-
-.light-dashboard .dashboard-left-panel button {
-  color: #54727d !important;
-}
-
-.light-dashboard .dashboard-left-panel nav button:first-child {
-  background: #e5f6fa !important;
-  border-color: #a8dce8 !important;
-  color: #087d96 !important;
-}
-
-.light-dashboard .dashboard-left-panel nav button:hover,
-.light-dashboard .dashboard-right-panel button:hover {
-  background: #f0fafc !important;
-  color: #087d96 !important;
-}
-
-.light-dashboard .dashboard-left-panel h3,
-.light-dashboard .dashboard-right-panel h3 {
-  color: #6a8994 !important;
-}
-
-.light-dashboard .dashboard-left-panel strong,
-.light-dashboard .dashboard-right-panel strong {
-  color: #168ca4 !important;
-}
-
-.light-dashboard .dashboard-left-panel > div,
-.light-dashboard .dashboard-right-panel > div {
-  border-color: #e0edf1 !important;
-}
-
-.light-dashboard .dashboard-left-panel > div:nth-child(3) > div {
-  background: #fff8ea !important;
-  border-color: #f2d9a8 !important;
-}
-
-.light-dashboard .dashboard-right-panel > div > div,
-.light-dashboard .dashboard-right-panel input {
-  background: #f7fbfc !important;
-  border-color: #cfe2e9 !important;
-  color: #244e5c !important;
-}
-
-.light-dashboard .dashboard-right-panel > div:nth-child(2),
-.light-dashboard .dashboard-right-panel > div:nth-child(1) > div,
-.light-dashboard .dashboard-right-panel > div:nth-child(3) > div > div,
-.light-dashboard .dashboard-right-panel > div:nth-child(4) button {
-  background: #f7fbfc !important;
-  border-color: #cfe2e9 !important;
-}
-
-.light-dashboard .dashboard-right-panel > div:nth-child(2) span,
-.light-dashboard .dashboard-right-panel > div:nth-child(3) span,
-.light-dashboard .dashboard-right-panel > div:nth-child(4) button {
-  color: #41636f !important;
-}
-
-.light-dashboard .dashboard-right-panel input::placeholder {
-  color: #82a0aa !important;
-}
-
-.light-dashboard .dashboard-right-panel .text-white,
-.light-dashboard .dashboard-right-panel .text-slate-400 {
-  color: #41636f !important;
-}
-
-.light-dashboard .map-surface,
-.light-dashboard .leaflet-container {
-  background: #eaf4f7 !important;
-}
-
-.light-dashboard .leaflet-control-attribution {
-  background: rgba(255, 255, 255, 0.86) !important;
-  color: #688792 !important;
-  border-color: #cfe2e9 !important;
-}
-
-.light-dashboard .leaflet-control-attribution a {
-  color: #168ca4 !important;
-}
-
-.light-dashboard .dark-popup .leaflet-popup-content-wrapper {
-  background: #ffffff !important;
-  color: #173746 !important;
-  border-color: #b9dce5 !important;
-  box-shadow: 0 12px 30px rgba(43, 93, 112, 0.2) !important;
-}
-
-.light-dashboard .mobile-drawer-panel {
-  background: #ffffff !important;
-  border-right-color: #cfe2e9 !important;
-}
-
-.light-dashboard .mobile-drawer-close {
-  color: #1b5265 !important;
-  background: #f4fafb !important;
-  border-color: #c7dfe7 !important;
-}
-
 .mobile-menu-button,
-.mobile-map-actions,
 .mobile-drawer-layer {
   display: none;
 }
@@ -714,18 +498,6 @@
   gap: 0;
 }
 
-.reference-dashboard .dashboard-video {
-  position: absolute;
-  z-index: 30;
-  top: 12px;
-  left: 12px;
-  width: 230px;
-  height: 158px;
-  border-color: #1a5668;
-  border-radius: 10px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.38);
-}
-
 .reference-dashboard .map-surface {
   height: 100%;
   border-color: #163c51 !important;
@@ -745,7 +517,6 @@
   border-color: #1a4054 !important;
 }
 
-.reference-dashboard .map-live-card,
 .reference-dashboard .map-alerts-card {
   position: absolute;
   z-index: 25;
@@ -757,14 +528,6 @@
   backdrop-filter: blur(14px);
 }
 
-.reference-dashboard .map-live-card {
-  top: 180px;
-  left: 12px;
-  width: 230px;
-  padding: 10px 12px;
-}
-
-.reference-dashboard .map-card-title,
 .reference-dashboard .map-card-heading {
   color: #c4e7ed;
   font-size: 10px;
@@ -772,23 +535,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-
-.reference-dashboard .map-live-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 9px;
-}
-
-.reference-dashboard .map-live-grid strong {
-  display: block;
-  margin-top: 3px;
-  color: #e6fbff;
-  font-size: 11px;
-}
-
-.reference-dashboard .signal-good { color: #5be8b0 !important; }
 
 .reference-dashboard .map-alerts-card {
   top: 12px;
@@ -894,7 +640,6 @@
 .heading-arrow-pin { background: transparent !important; border: 0 !important; pointer-events: none; }
 .heading-arrow { color: #dffcff; font-size: 18px; line-height: 24px; text-shadow: 0 0 8px #17d9dc; transform-origin: 50% 50%; }
 .leaflet-marker-icon { transition: transform .65s cubic-bezier(.22,.61,.36,1); }
-.map-control-button { display: flex; width: 40px; height: 40px; align-items: center; justify-content: center; color: #67e8f9; border-bottom: 1px solid rgba(34,211,238,.2); }
 .map-secondary-controls { display: flex; gap: 6px; align-items: center; padding: 6px; background: rgba(13,20,36,.9); border: 1px solid rgba(34,211,238,.3); border-radius: 10px; backdrop-filter: blur(14px); }
 .map-secondary-controls button { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 36px; min-height: 34px; padding: 0 8px; color: #67e8f9; border-radius: 6px; font-size: 10px; font-weight: 700; }
 .map-secondary-controls button:hover { background: rgba(34,211,238,.16); }
@@ -915,30 +660,6 @@
   font-size: 12px;
   font-weight: 700;
 }
-
-.video-feed-menu {
-  position: absolute;
-  z-index: 20;
-  top: 48px;
-  right: 12px;
-  display: grid;
-  width: 172px;
-  padding: 6px;
-  background: rgba(8, 24, 37, .98);
-  border: 1px solid #2a6577;
-  border-radius: 8px;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, .35);
-}
-
-.video-feed-menu button {
-  padding: 9px 10px;
-  color: #c9e1e8;
-  text-align: left;
-  border-radius: 5px;
-  font-size: 11px;
-}
-
-.video-feed-menu button:hover { color: #9fe9ff; background: #123a43; }
 
 .map-selection-bar {
   position: absolute;
@@ -972,43 +693,20 @@
 .map-selection-actions button:hover, .map-selection-actions button.is-active { color: #9fe9ff; background: #123a43; border-color: #35b9c9; }
 
 @media (max-width: 1023px) {
-  .reference-dashboard .dashboard-video,
-  .reference-dashboard .dashboard-video {
-    display: none;
-  }
-
   .reference-dashboard .map-surface {
     min-height: 0;
   }
 
-  .reference-dashboard .map-live-card,
   .reference-dashboard .map-alerts-card {
     display: block;
     left: 10px;
     right: 10px;
-    width: auto;
-    padding: 8px 10px;
-    border-radius: 8px;
-  }
-
-  .reference-dashboard .map-live-card {
-    top: 10px;
-  }
-
-  .reference-dashboard .map-alerts-card {
     top: 64px;
+    width: auto;
     max-height: 94px;
     overflow: hidden;
-  }
-
-  .reference-dashboard .map-live-grid {
-    gap: 4px;
-    margin-top: 5px;
-    font-size: 8px;
-  }
-
-  .reference-dashboard .map-live-grid strong {
-    font-size: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
   }
 
   .reference-dashboard .map-card-heading {
@@ -1186,4 +884,33 @@
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { 
   background: rgba(0,230,118,0.4); 
+}
+
+/* Device / vehicle status dots */
+.dashboard-status-dot.stopped {
+  background: #f2c66d;
+  box-shadow: 0 0 0 4px rgba(242, 198, 109, 0.14);
+}
+.dashboard-status-dot.offline,
+.dashboard-status-dot.unknown {
+  background: #8b9ba1;
+  box-shadow: 0 0 0 4px rgba(139, 155, 161, 0.14);
+}
+
+/* Scrollable lists (right panel) */
+.scrollable-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 230, 118, 0.25) transparent;
+}
+.scrollable-list::-webkit-scrollbar { width: 4px; }
+.scrollable-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 230, 118, 0.2);
+  border-radius: 4px;
+}
+
+/* Shared link card */
+.share-note {
+  color: #5f7e87;
+  font-size: 10px;
+  line-height: 1.5;
 }
