@@ -14,20 +14,26 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
-import android.provider.Settings;
+import android.text.TextUtils;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,12 +46,14 @@ public class LocationService extends Service implements LocationListener {
 
     private LocationManager locationManager;
     private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
+    private DeviceAuthManager authManager;
 
     @Override
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, buildNotification("Esperando ubicación GPS"));
+        authManager = new DeviceAuthManager(this);
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         requestLocationUpdates();
     }
@@ -87,13 +95,21 @@ public class LocationService extends Service implements LocationListener {
         uploadExecutor.execute(() -> {
             HttpURLConnection connection = null;
             try {
+                String token = authManager.getAccessToken();
+                if (token == null) {
+                    updateNotification("Dispositivo sin autenticar");
+                    return;
+                }
+
                 String baseUrl = getString(R.string.supabase_url);
-                String apiKey = getString(R.string.supabase_publishable_key);
-                String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+                String deviceId = authManager.getDeviceId();
                 String timestamp = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new Date());
 
+                upsertDevice(deviceId, timestamp);
+                pollCommands(deviceId, timestamp);
+
                 JSONObject body = new JSONObject();
-                body.put("device_id", deviceId == null ? "android-device" : deviceId);
+                body.put("device_id", deviceId);
                 body.put("latitude", location.getLatitude());
                 body.put("longitude", location.getLongitude());
                 body.put("speed", Math.max(0, location.getSpeed() * 3.6));
@@ -105,8 +121,8 @@ public class LocationService extends Service implements LocationListener {
                 URL url = new URL(baseUrl + "/rest/v1/gps_locations");
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("POST");
-                connection.setRequestProperty("apikey", apiKey);
-                connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+                connection.setRequestProperty("apikey", getString(R.string.supabase_publishable_key));
+                connection.setRequestProperty("Authorization", "Bearer " + token);
                 connection.setRequestProperty("Content-Type", "application/json");
                 connection.setRequestProperty("Prefer", "return=minimal");
                 connection.setDoOutput(true);
@@ -126,6 +142,120 @@ public class LocationService extends Service implements LocationListener {
                 if (connection != null) connection.disconnect();
             }
         });
+    }
+
+    private void upsertDevice(String deviceId, String timestamp) {
+        uploadExecutor.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String token = authManager.getAccessToken();
+                if (token == null) return;
+
+                JSONObject body = new JSONObject();
+                body.put("id", deviceId);
+                body.put("auth_user_id", authManager.getUserId());
+                body.put("status", "online");
+                body.put("last_seen", timestamp);
+                body.put("updated_at", timestamp);
+                body.put("platform", "android");
+                body.put("model", Build.MODEL);
+                body.put("app_version", authManager.getAppVersion());
+                body.put("battery", JSONObject.NULL);
+
+                URL url = new URL(getString(R.string.supabase_url) + "/rest/v1/devices?on_conflict=id");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setRequestProperty("apikey", getString(R.string.supabase_publishable_key));
+                connection.setRequestProperty("Authorization", "Bearer " + token);
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("Prefer", "resolution=merge-duplicates,return=minimal");
+                connection.setDoOutput(true);
+
+                byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream output = connection.getOutputStream()) {
+                    output.write(payload);
+                }
+
+                connection.getResponseCode();
+            } catch (Exception ignored) {
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        });
+    }
+
+    private void pollCommands(String deviceId, String timestamp) {
+        uploadExecutor.execute(() -> {
+            HttpURLConnection connection = null;
+            try {
+                String token = authManager.getAccessToken();
+                if (token == null) return;
+
+                String query = getString(R.string.supabase_url)
+                        + "/rest/v1/vehicle_commands?select=id,command&status=eq.pending&device_id=eq."
+                        + URLEncoder.encode(deviceId, StandardCharsets.UTF_8.name());
+
+                URL url = new URL(query);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setRequestProperty("apikey", getString(R.string.supabase_publishable_key));
+                connection.setRequestProperty("Authorization", "Bearer " + token);
+                connection.setRequestProperty("Accept", "application/json");
+
+                int responseCode = connection.getResponseCode();
+                if (responseCode < 200 || responseCode >= 300) return;
+
+                StringBuilder body = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) body.append(line);
+                }
+
+                JSONArray rows = new JSONArray(body.toString());
+                if (rows.length() == 0) return;
+
+                List<String> ids = new ArrayList<>();
+                for (int i = 0; i < rows.length(); i += 1) {
+                    ids.add(rows.getJSONObject(i).getString("id"));
+                }
+
+                ackCommands(token, timestamp, ids);
+                updateNotification("Comando recibido (" + ids.size() + ")");
+            } catch (Exception ignored) {
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        });
+    }
+
+    private void ackCommands(String token, String timestamp, List<String> ids) {
+        HttpURLConnection connection = null;
+        try {
+            String idFilter = "in.(" + TextUtils.join(",", ids) + ")";
+
+            JSONObject body = new JSONObject();
+            body.put("status", "received");
+            body.put("acknowledged_at", timestamp);
+
+            URL url = new URL(getString(R.string.supabase_url) + "/rest/v1/vehicle_commands?id=" + URLEncoder.encode(idFilter, StandardCharsets.UTF_8.name()));
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("PATCH");
+            connection.setRequestProperty("apikey", getString(R.string.supabase_publishable_key));
+            connection.setRequestProperty("Authorization", "Bearer " + token);
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Prefer", "return=minimal");
+            connection.setDoOutput(true);
+
+            byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream output = connection.getOutputStream()) {
+                output.write(payload);
+            }
+
+            connection.getResponseCode();
+        } catch (Exception ignored) {
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
     }
 
     private Notification buildNotification(String message) {

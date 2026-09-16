@@ -38,6 +38,84 @@ create policy "profiles_self_read" on public.profiles for select to authenticate
 drop policy if exists "profiles_self_update" on public.profiles;
 create policy "profiles_self_update" on public.profiles for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+-- =====================================================================
+-- Roles y permisos (RBAC)
+-- ---------------------------------------------------------------------
+-- role: owner/admin = administración completa; operator = lectura y
+-- operaciones (comandos, marcar alertas, actualizar estado); viewer = solo
+-- lectura. Un dispositivo Auth (role 'device') no tiene fila en profiles,
+-- por lo que ninguna de estas funciones devuelve verdadero para él.
+-- =====================================================================
+
+-- Rol del usuario autenticado (null si es un dispositivo o no tiene perfil).
+create or replace function public.current_profile_role()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.role from public.profiles p where p.user_id = auth.uid();
+$$;
+
+-- Cualquier operador del panel (viewer incluido) puede leer.
+create or replace function public.has_profile()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles p where p.user_id = auth.uid()
+  );
+$$;
+
+-- operator, admin u owner pueden ejecutar operaciones.
+create or replace function public.is_operator()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_profile_role() in ('operator', 'admin', 'owner');
+$$;
+
+-- Solo admin y owner administran (altas, bajas y configuración).
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_profile_role() in ('admin', 'owner');
+$$;
+
+-- Evita que un usuario se auto-escale cambiando su rol u organización.
+-- Solo un admin puede modificar esos campos; el resto solo full_name.
+create or replace function public.protect_profile_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if (new.role is distinct from old.role
+      or new.organization_id is distinct from old.organization_id)
+     and not public.is_admin() then
+    raise exception 'No autorizado para cambiar rol u organizacion';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_protect_fields on public.profiles;
+create trigger profiles_protect_fields
+  before update on public.profiles
+  for each row execute function public.protect_profile_fields();
+
 drop policy if exists "device_registry_authenticated_read" on public.device_registry;
 create policy "device_registry_authenticated_read" on public.device_registry for select to authenticated using (
   organization_id in (select organization_id from public.profiles where user_id = auth.uid())
@@ -70,17 +148,9 @@ alter table public.gps_locations enable row level security;
 drop policy if exists "gps_locations_public_read" on public.gps_locations;
 drop policy if exists "gps_locations_public_insert" on public.gps_locations;
 
--- El APK envia posiciones como 'anon' (no tiene login). La lectura queda
--- restringida a usuarios autenticados del panel.
-create policy "gps_locations_authenticated_read"
-  on public.gps_locations for select
-  to authenticated
-  using (true);
-
-create policy "gps_locations_public_insert"
-  on public.gps_locations for insert
-  to anon, authenticated
-  with check (true);
+-- Sin acceso anon directo: la lectura y la escritura se definen en la seccion
+-- multitenant. El APK escribe con su cuenta Auth de dispositivo, no con la
+-- clave publica.
 
 -- Required by Supabase Realtime for INSERT events.
 alter table public.gps_locations replica identity full;
@@ -105,6 +175,12 @@ create table if not exists public.vehicle_commands (
   created_at timestamptz not null default now()
 );
 
+alter table public.vehicle_commands add column if not exists device_id text;
+alter table public.vehicle_commands add column if not exists acknowledged_at timestamptz;
+
+create index if not exists vehicle_commands_device_status_idx
+  on public.vehicle_commands (device_id, status);
+
 alter table public.vehicle_commands enable row level security;
 
 -- Las acciones de control requieren sesion autenticada en el panel.
@@ -119,6 +195,24 @@ create policy "vehicle_commands_authenticated_read"
   on public.vehicle_commands for select
   to authenticated
   using (true);
+
+-- El dispositivo consume los comandos de su vehiculo autenticandose con su
+-- cuenta Auth (no con la clave publica). Las politicas de dispositivo estan
+-- en la seccion multitenant.
+
+alter table public.vehicle_commands replica identity full;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'vehicle_commands'
+  ) then
+    alter publication supabase_realtime add table public.vehicle_commands;
+  end if;
+end $$;
 
 create table if not exists public.devices (
   id text primary key,
@@ -138,22 +232,9 @@ drop policy if exists "devices_public_read" on public.devices;
 drop policy if exists "devices_public_insert" on public.devices;
 drop policy if exists "devices_public_update" on public.devices;
 
--- El lector del panel necesita sesion; el APK (sin login) escribe con 'anon'.
-create policy "devices_authenticated_read"
-  on public.devices for select
-  to authenticated
-  using (true);
-
-create policy "devices_public_insert"
-  on public.devices for insert
-  to anon, authenticated
-  with check (true);
-
-create policy "devices_public_update"
-  on public.devices for update
-  to anon, authenticated
-  using (true)
-  with check (true);
+-- El APK ya no escribe como 'anon': se autentica con su cuenta de dispositivo.
+-- Las politicas por dispositivo (insert/update/select) estan en la seccion
+-- multitenant.
 
 alter table public.devices replica identity full;
 
@@ -192,13 +273,49 @@ create table if not exists public.vehicles (
 
 alter table public.vehicles enable row level security;
 
--- Todo el manejo de la flota es del panel autenticado.
+-- Lectura para cualquier usuario con perfil (viewer incluido).
 drop policy if exists "vehicles_authenticated_all" on public.vehicles;
-create policy "vehicles_authenticated_all"
-  on public.vehicles for all
+drop policy if exists "vehicles_select" on public.vehicles;
+create policy "vehicles_select"
+  on public.vehicles for select
   to authenticated
-  using (true)
-  with check (true);
+  using (public.has_profile());
+
+-- Alta de unidades: solo admin/owner.
+drop policy if exists "vehicles_admin_insert" on public.vehicles;
+create policy "vehicles_admin_insert"
+  on public.vehicles for insert
+  to authenticated
+  with check (public.is_admin());
+
+-- Baja de unidades: solo admin/owner.
+drop policy if exists "vehicles_admin_delete" on public.vehicles;
+create policy "vehicles_admin_delete"
+  on public.vehicles for delete
+  to authenticated
+  using (public.is_admin());
+
+-- operator/admin/owner pueden operar (activar, detener, inmovilizar).
+drop policy if exists "vehicles_operator_update" on public.vehicles;
+create policy "vehicles_operator_update"
+  on public.vehicles for update
+  to authenticated
+  using (public.is_operator())
+  with check (public.is_operator());
+
+alter table public.vehicles replica identity full;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'vehicles'
+  ) then
+    alter publication supabase_realtime add table public.vehicles;
+  end if;
+end $$;
 
 -- =====================================================================
 -- Alertas
@@ -223,12 +340,35 @@ create table if not exists public.alerts (
 
 alter table public.alerts enable row level security;
 
+-- Lectura para cualquier usuario con perfil.
 drop policy if exists "alerts_authenticated_all" on public.alerts;
-create policy "alerts_authenticated_all"
-  on public.alerts for all
+drop policy if exists "alerts_select" on public.alerts;
+create policy "alerts_select"
+  on public.alerts for select
   to authenticated
-  using (true)
-  with check (true);
+  using (public.has_profile());
+
+-- Alta de alertas: solo admin/owner.
+drop policy if exists "alerts_admin_insert" on public.alerts;
+create policy "alerts_admin_insert"
+  on public.alerts for insert
+  to authenticated
+  with check (public.is_admin());
+
+-- Baja de alertas: solo admin/owner.
+drop policy if exists "alerts_admin_delete" on public.alerts;
+create policy "alerts_admin_delete"
+  on public.alerts for delete
+  to authenticated
+  using (public.is_admin());
+
+-- Marcar alertas como leídas: operator/admin/owner.
+drop policy if exists "alerts_operator_update" on public.alerts;
+create policy "alerts_operator_update"
+  on public.alerts for update
+  to authenticated
+  using (public.is_operator())
+  with check (public.is_operator());
 
 create index if not exists alerts_timestamp_idx on public.alerts (timestamp desc);
 
@@ -244,19 +384,31 @@ create table if not exists public.geofences (
   positions jsonb,
   radius double precision not null default 600,
   color text not null default '#00E676',
-  rule text,
+  rule text not null default 'outside' check (rule in ('outside', 'inside')),
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
+-- rule='outside' (zona permitida): violación cuando el vehículo está FUERA.
+-- rule='inside'  (zona prohibida): violación cuando el vehículo está DENTRO.
+
 alter table public.geofences enable row level security;
 
+-- Lectura para cualquier usuario con perfil.
 drop policy if exists "geofences_authenticated_all" on public.geofences;
-create policy "geofences_authenticated_all"
+drop policy if exists "geofences_select" on public.geofences;
+create policy "geofences_select"
+  on public.geofences for select
+  to authenticated
+  using (public.has_profile());
+
+-- Crear/editar/borrar geocercas: solo admin/owner.
+drop policy if exists "geofences_admin_all" on public.geofences;
+create policy "geofences_admin_all"
   on public.geofences for all
   to authenticated
-  using (true)
-  with check (true);
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- =====================================================================
 -- Login por dispositivo (multitenant)
@@ -271,63 +423,80 @@ create unique index if not exists devices_auth_user_id_idx
   on public.devices (auth_user_id)
   where auth_user_id is not null;
 
--- True si el usuario actual es un operador del panel (tiene fila en profiles).
--- security definer: evita recursion con las politicas de la misma tabla.
-create or replace function public.is_operator()
-returns boolean
+-- Identidad del dispositivo tomada del token Auth. app_metadata solo la fija
+-- el service_role al aprovisionar (el usuario no puede editarla), a
+-- diferencia de user_metadata que si es editable por el propio usuario.
+create or replace function public.current_device_id()
+returns text
 language sql
 stable
-security definer
-set search_path = public
 as $$
-  select exists (
-    select 1 from public.profiles p where p.user_id = auth.uid()
-  );
+  select auth.jwt() -> 'app_metadata' ->> 'device_id';
 $$;
 
--- Dispositivos: el operador ve toda la flota; el dispositivo solo su fila.
+-- Dispositivos: cualquier usuario con perfil ve la flota; el dispositivo
+-- solo su propia fila.
 drop policy if exists "devices_authenticated_read" on public.devices;
 create policy "devices_authenticated_read"
   on public.devices for select
   to authenticated
-  using (public.is_operator() or auth_user_id = auth.uid());
+  using (public.has_profile() or auth_user_id = auth.uid());
 
--- Ubicaciones: el operador ve todo; el dispositivo solo las suyas.
+-- El dispositivo solo puede crear/actualizar su propia fila.
+drop policy if exists "devices_device_insert" on public.devices;
+create policy "devices_device_insert"
+  on public.devices for insert
+  to authenticated
+  with check (id = public.current_device_id() and auth_user_id = auth.uid());
+
+drop policy if exists "devices_device_update" on public.devices;
+create policy "devices_device_update"
+  on public.devices for update
+  to authenticated
+  using (id = public.current_device_id() and auth_user_id = auth.uid())
+  with check (id = public.current_device_id() and auth_user_id = auth.uid());
+
+-- Gestión de dispositivos (alta/baja/edición): solo admin/owner.
+drop policy if exists "devices_admin_insert" on public.devices;
+create policy "devices_admin_insert"
+  on public.devices for insert
+  to authenticated
+  with check (public.is_admin());
+
+drop policy if exists "devices_admin_update" on public.devices;
+create policy "devices_admin_update"
+  on public.devices for update
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+drop policy if exists "devices_admin_delete" on public.devices;
+create policy "devices_admin_delete"
+  on public.devices for delete
+  to authenticated
+  using (public.is_admin());
+
+-- El dispositivo solo puede insertar posiciones de su propio device_id.
+drop policy if exists "gps_locations_public_insert" on public.gps_locations;
+drop policy if exists "gps_locations_device_insert" on public.gps_locations;
+create policy "gps_locations_device_insert"
+  on public.gps_locations for insert
+  to authenticated
+  with check (device_id = public.current_device_id());
+
+-- Ubicaciones: cualquier usuario con perfil ve todo; el dispositivo solo sus propias posiciones.
 drop policy if exists "gps_locations_authenticated_read" on public.gps_locations;
 create policy "gps_locations_authenticated_read"
   on public.gps_locations for select
   to authenticated
-  using (
-    public.is_operator()
+  using (public.has_profile()
     or exists (
       select 1 from public.devices d
       where d.id = public.gps_locations.device_id
         and d.auth_user_id = auth.uid()
-    )
-  );
+    ));
 
--- Flota, alertas, geocercas y comandos: solo operador (el dispositivo no
--- debe leer ni controlar datos que no son de su dispositivo).
-drop policy if exists "vehicles_authenticated_all" on public.vehicles;
-create policy "vehicles_authenticated_all"
-  on public.vehicles for all
-  to authenticated
-  using (public.is_operator())
-  with check (public.is_operator());
-
-drop policy if exists "alerts_authenticated_all" on public.alerts;
-create policy "alerts_authenticated_all"
-  on public.alerts for all
-  to authenticated
-  using (public.is_operator())
-  with check (public.is_operator());
-
-drop policy if exists "geofences_authenticated_all" on public.geofences;
-create policy "geofences_authenticated_all"
-  on public.geofences for all
-  to authenticated
-  using (public.is_operator())
-  with check (public.is_operator());
+-- Políticas de flota/alertas/geocercas ya están definidas arriba con control de roles granular.
 
 drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
 create policy "vehicle_commands_authenticated_insert"
@@ -335,8 +504,33 @@ create policy "vehicle_commands_authenticated_insert"
   to authenticated
   with check (public.is_operator());
 
+-- Lectura de comandos: cualquier usuario con perfil, y el dispositivo los de su device_id.
 drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
 create policy "vehicle_commands_authenticated_read"
   on public.vehicle_commands for select
   to authenticated
-  using (public.is_operator());
+  using (public.has_profile() or device_id = public.current_device_id());
+
+-- El dispositivo solo puede acusar (pending -> received/done) sus comandos.
+drop policy if exists "vehicle_commands_device_ack" on public.vehicle_commands;
+create policy "vehicle_commands_device_ack"
+  on public.vehicle_commands for update
+  to authenticated
+  using (device_id = public.current_device_id() and status = 'pending')
+  with check (device_id = public.current_device_id() and status in ('pending', 'received', 'done'));
+
+-- ============================================================================
+-- BOOTSTRAP DEL PRIMER OPERADOR DEL PANEL
+-- ----------------------------------------------------------------------------
+-- No hay trigger que cree profiles al registrar un usuario, y is_operator()
+-- exige un profile con organization_id. Tras crear el usuario del panel en
+-- Authentication > Users, ejecuta UNA vez estos INSERT (el SQL Editor corre
+-- como postgres y omite RLS). Reemplaza el correo por el del operador real.
+--
+-- insert into public.organizations (name) values ('Mi empresa');
+-- insert into public.profiles (user_id, organization_id, full_name, role)
+-- select u.id, o.id, 'Operador', 'owner'
+-- from auth.users u
+-- cross join (select id from public.organizations order by created_at limit 1) o
+-- where u.email = 'operador@ejemplo.com';
+-- ============================================================================
