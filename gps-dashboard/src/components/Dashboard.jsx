@@ -47,6 +47,7 @@ const Dashboard = () => {
     () => new URLSearchParams(window.location.search).get('follow') === '1'
   );
   const [isVehicleDetailOpen, setIsVehicleDetailOpen] = useState(false);
+  const [operationMessage, setOperationMessage] = useState('');
 
   const handleSelectVehicle = (vehicle) => {
     setSelectedVehicle(vehicle);
@@ -78,10 +79,10 @@ const Dashboard = () => {
         await navigator.share(shareData);
       } else {
         await navigator.clipboard.writeText(shareData.url);
-        alert('Enlace de ruta copiado');
+        setOperationMessage('Enlace de ruta copiado');
       }
     } catch (error) {
-      if (error?.name !== 'AbortError') alert('No se pudo compartir la ruta');
+      if (error?.name !== 'AbortError') setOperationMessage('No se pudo compartir la ruta');
     }
   };
 
@@ -129,13 +130,21 @@ const Dashboard = () => {
   };
 
   const handleActivate = () => {
-    alert('Vehículo activado: ' + selectedVehicle?.plate);
+    if (!selectedVehicle) return;
+    setVehicles((currentVehicles) => currentVehicles.map((vehicle) => (
+      vehicle.id === selectedVehicle.id ? { ...vehicle, status: 'active', lastUpdate: 'Ahora' } : vehicle
+    )));
+    setSelectedVehicle((vehicle) => vehicle ? { ...vehicle, status: 'active', lastUpdate: 'Ahora' } : vehicle);
+    setOperationMessage(`${selectedVehicle.plate} activado`);
   };
 
   const handleReportTheft = () => {
-    if (confirm(`¿Estás seguro de reportar robo del vehículo ${selectedVehicle?.plate}?`)) {
-      alert('Robo reportado para: ' + selectedVehicle?.plate);
-    }
+    if (!selectedVehicle) return;
+    setVehicles((currentVehicles) => currentVehicles.map((vehicle) => (
+      vehicle.id === selectedVehicle.id ? { ...vehicle, status: 'offline', lastUpdate: 'Incidente reportado' } : vehicle
+    )));
+    setSelectedVehicle((vehicle) => vehicle ? { ...vehicle, status: 'offline', lastUpdate: 'Incidente reportado' } : vehicle);
+    setOperationMessage(`Incidente reportado para ${selectedVehicle.plate}`);
   };
 
   const handleNavigate = (section) => {
@@ -171,7 +180,11 @@ const Dashboard = () => {
           />
 
           <div className="dashboard-center min-h-0 min-w-0 flex-1">
-            <VideoFeed selectedVehicle={selectedVehicle} />
+            <VideoFeed
+              selectedVehicle={selectedVehicle}
+              onOpenDetail={() => setIsVehicleDetailOpen(true)}
+              onOperationMessage={setOperationMessage}
+            />
             <div className="map-surface relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#cfe2e9] bg-[#eaf4f7] shadow-[0_8px_24px_rgba(43,93,112,0.12)]">
               <MapArea
                 vehicles={vehicles}
@@ -266,6 +279,12 @@ const Dashboard = () => {
           />
         )}
       </div>
+
+      {operationMessage && (
+        <button type="button" className="dashboard-toast" onClick={() => setOperationMessage('')} aria-label="Cerrar mensaje">
+          {operationMessage}
+        </button>
+      )}
 
       {isMobileSidebarOpen && (
         <div className="mobile-drawer-layer" role="dialog" aria-modal="true" aria-label="Menú de navegación">

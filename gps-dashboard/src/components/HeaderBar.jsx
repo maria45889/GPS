@@ -62,9 +62,20 @@ export const HeaderBar = ({ onMenuClick, onNavigate }) => {
           {isDropdownOpen && (
             <div className="absolute top-full left-0 z-50 mt-2 w-48 overflow-hidden rounded-[8px] border border-[#304149] bg-[#1a252a] shadow-[0_16px_30px_rgba(0,0,0,0.45)]">
               <div className="p-2">
-                <div className="px-3 py-2 text-cyan-200 text-xs hover:bg-[#0e1d2d] rounded cursor-pointer">Operación principal</div>
-                <div className="px-3 py-2 text-cyan-200 text-xs hover:bg-[#0e1d2d] rounded cursor-pointer">Rutas</div>
-                <div className="px-3 py-2 text-cyan-200 text-xs hover:bg-[#0e1d2d] rounded cursor-pointer">Monitoreo</div>
+                {[
+                  ['Operación principal', 'Inicio'],
+                  ['Rutas', 'Historial'],
+                  ['Monitoreo', 'Mapa'],
+                ].map(([label, section]) => (
+                  <button
+                    key={section}
+                    type="button"
+                    onClick={() => { onNavigate?.(section); setIsDropdownOpen(false); }}
+                    className="block w-full rounded px-3 py-2 text-left text-xs text-cyan-200 hover:bg-[#0e1d2d]"
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -91,10 +102,12 @@ export const HeaderBar = ({ onMenuClick, onNavigate }) => {
         <div className="h-6 w-px bg-[#304149]"></div>
 
         <div className="flex items-center gap-2">
-          <div onClick={handleUserClick} className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#43545a] bg-[#27343a] hover:border-[#b8f36b]/60">
+          <button type="button" onClick={handleUserClick} aria-label="Abrir perfil" className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#43545a] bg-[#27343a] hover:border-[#b8f36b]/60">
             <User size={15} className="text-[#d3ddd8]" />
-          </div>
-          <Settings onClick={handleSettingsClick} size={15} className="cursor-pointer text-[#8b9ba1] transition-colors hover:text-[#b8f36b]" />
+          </button>
+          <button type="button" onClick={handleSettingsClick} aria-label="Abrir configuración" className="text-[#8b9ba1] transition-colors hover:text-[#b8f36b]">
+            <Settings size={15} />
+          </button>
         </div>
       </div>
     </div>

@@ -797,6 +797,47 @@
 .vehicle-detail-actions button.is-active { color: #9fe9ff; background: #123a43; border-color: #35b9c9; }
 .vehicle-detail-actions .vehicle-detail-danger { color: #f3cc91; border-color: #665039; }
 
+.dashboard-toast {
+  position: absolute;
+  z-index: 80;
+  right: 20px;
+  bottom: 20px;
+  max-width: min(360px, calc(100% - 40px));
+  padding: 11px 14px;
+  color: #dffcff;
+  text-align: left;
+  background: #123a43;
+  border: 1px solid #35b9c9;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .35);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.video-feed-menu {
+  position: absolute;
+  z-index: 20;
+  top: 48px;
+  right: 12px;
+  display: grid;
+  width: 172px;
+  padding: 6px;
+  background: rgba(8, 24, 37, .98);
+  border: 1px solid #2a6577;
+  border-radius: 8px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .35);
+}
+
+.video-feed-menu button {
+  padding: 9px 10px;
+  color: #c9e1e8;
+  text-align: left;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.video-feed-menu button:hover { color: #9fe9ff; background: #123a43; }
+
 .map-selection-bar {
   position: absolute;
   z-index: 30;
@@ -897,6 +938,13 @@
 
   .vehicle-detail-header h2 { font-size: 17px; }
   .vehicle-detail-actions button { min-height: 42px; }
+
+  .dashboard-toast {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    max-width: none;
+  }
 
   .map-selection-bar {
     right: 10px;

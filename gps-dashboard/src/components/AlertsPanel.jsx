@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MoreHorizontal, X } from 'lucide-react';
 
 const AlertsPanel = ({ alerts: propAlerts, onSelectAlert, onClose }) => {
+  const [showAll, setShowAll] = useState(false);
   const displayAlerts = (propAlerts && propAlerts.length > 0) ? propAlerts : [
     {
       id: 'ALT-101',
@@ -40,7 +41,8 @@ const AlertsPanel = ({ alerts: propAlerts, onSelectAlert, onClose }) => {
 
           <div className="flex items-center gap-1">
             <button 
-              className="w-6 h-6 rounded flex items-center justify-center text-[#64748B] hover:text-white transition-colors"
+              onClick={() => setShowAll((visible) => !visible)}
+              className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${showAll ? 'text-cyan-300 bg-cyan-500/10' : 'text-[#64748B] hover:text-white'}`}
               title="Options"
             >
               <MoreHorizontal size={16} />
@@ -59,7 +61,7 @@ const AlertsPanel = ({ alerts: propAlerts, onSelectAlert, onClose }) => {
 
         {/* Alerts List */}
         <div className="flex flex-col gap-2.5">
-          {displayAlerts.map((alert) => {
+          {displayAlerts.slice(0, showAll ? displayAlerts.length : 3).map((alert) => {
             const badgeColor = alert.severity === 'critical' ? 'bg-[#FF3366]' : alert.severity === 'warning' ? 'bg-[#FF5722]' : 'bg-[#00A3FF]';
             return (
               <div 

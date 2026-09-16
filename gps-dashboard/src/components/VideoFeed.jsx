@@ -1,10 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MoreVertical } from 'lucide-react';
 
-export const VideoFeed = ({ selectedVehicle }) => {
-  const handleMenuClick = () => {
-    alert('Opciones de video para: ' + selectedVehicle?.plate);
-  };
+export const VideoFeed = ({ selectedVehicle, onOpenDetail, onOperationMessage }) => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <div className="dashboard-video relative w-full h-[220px] shrink-0 bg-black overflow-hidden rounded-[12px] border border-[#cfe2e9] shadow-[0_8px_20px_rgba(43,93,112,0.12)]">
@@ -23,11 +21,18 @@ export const VideoFeed = ({ selectedVehicle }) => {
       </div>
 
       <button
-        onClick={handleMenuClick}
+        onClick={() => setIsMenuOpen((open) => !open)}
         className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-black/55 backdrop-blur-md border border-cyan-500/30 flex items-center justify-center text-cyan-300 hover:bg-cyan-500/20 transition-colors"
       >
         <MoreVertical size={16} />
       </button>
+
+      {isMenuOpen && (
+        <div className="video-feed-menu">
+          <button type="button" onClick={() => { onOpenDetail?.(); setIsMenuOpen(false); }}>Ver detalle</button>
+          <button type="button" onClick={() => { onOperationMessage?.('Cámara en vivo disponible cuando se conecte el dispositivo'); setIsMenuOpen(false); }}>Estado de cámara</button>
+        </div>
+      )}
 
       <div className="absolute bottom-3 left-3 flex items-center gap-2">
         <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></div>
