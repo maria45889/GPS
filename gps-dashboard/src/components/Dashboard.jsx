@@ -52,26 +52,25 @@ const Dashboard = () => {
   }
 
   // --- Datos con fallback ---
-  const [vehicles, setVehicles] = useState(supabaseVehicles.length > 0 ? supabaseVehicles : initialFleet)
-  const [devices, setDevices] = useState(supabaseDevices)
-  const [alerts, setAlertsState] = useState(supabaseAlerts.length > 0 ? supabaseAlerts : initialAlerts)
-  const [geofences, setGeofencesState] = useState(supabaseGeofences.length > 0 ? supabaseGeofences : initialGeofences)
+  const [localVehicles, setLocalVehicles] = useState(initialFleet)
+  const [localGeofences, setLocalGeofences] = useState(initialGeofences)
 
-  useEffect(() => {
-    if (supabaseVehicles.length > 0) setVehicles(supabaseVehicles)
-  }, [supabaseVehicles])
-
-  useEffect(() => {
-    setDevices(supabaseDevices)
-  }, [supabaseDevices])
-
-  useEffect(() => {
-    if (supabaseAlerts.length > 0) setAlertsState(supabaseAlerts)
-  }, [supabaseAlerts])
-
-  useEffect(() => {
-    if (supabaseGeofences.length > 0) setGeofencesState(supabaseGeofences)
-  }, [supabaseGeofences])
+  const vehicles = useMemo(
+    () => (supabaseVehicles.length > 0 ? supabaseVehicles : localVehicles),
+    [localVehicles, supabaseVehicles],
+  )
+  const devices = useMemo(
+    () => (supabaseDevices.length > 0 ? supabaseDevices : []),
+    [supabaseDevices],
+  )
+  const alerts = useMemo(
+    () => (supabaseAlerts.length > 0 ? supabaseAlerts : initialAlerts),
+    [supabaseAlerts],
+  )
+  const geofences = useMemo(
+    () => (supabaseGeofences.length > 0 ? supabaseGeofences : localGeofences),
+    [localGeofences, supabaseGeofences],
+  )
 
   // --- Selección ---
   const [selectedEntity, setSelectedEntity] = useState(null)
@@ -151,7 +150,7 @@ const Dashboard = () => {
   const handleMapClickForGeofence = (latlng) => {
     setPendingCenter(latlng)
     setIsPlacingOnMap(false)
-    setGeofencesState((prev) => [
+    setLocalGeofences((prev) => [
       {
         id: `GEOF-${Date.now()}`,
         name: 'Nueva geocerca',
@@ -184,7 +183,7 @@ const Dashboard = () => {
       controlState: command === 'immobilize' ? 'immobilized' : undefined,
       lastUpdate: 'Ahora',
     }
-    setVehicles((current) => current.map((v) => (v.id === selectedEntity.id ? nextVehicle : v)))
+    setLocalVehicles((current) => current.map((v) => (v.id === selectedEntity.id ? nextVehicle : v)))
     setSelectedEntity(nextVehicle)
     setOperationMessage(
       result.remote
@@ -198,7 +197,7 @@ const Dashboard = () => {
     if (category !== 'vehicles' || isVehicleControlBusy) return
     setIsVehicleControlBusy(true)
     const result = await deleteVehicle(vehicleId)
-    setVehicles((prev) => {
+    setLocalVehicles((prev) => {
       const remaining = prev.filter((v) => v.id !== vehicleId)
       setSelectedEntity(remaining[0] || null)
       setIsVehicleDetailOpen(false)
