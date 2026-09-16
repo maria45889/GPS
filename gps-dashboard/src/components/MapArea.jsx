@@ -2,7 +2,7 @@
 import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Plus, Minus, Crosshair, Navigation, Share2, ExternalLink, Compass, Maximize, Layers } from 'lucide-react';
+import { Plus, Minus, Crosshair, Navigation, Share2, Maximize, Layers } from 'lucide-react';
 import { isVehicleInsideCircle, routeColorForSpeed } from '../lib/mapLogic';
 
 // Component to handle map resize
@@ -375,10 +375,10 @@ const createAlertIncidentIcon = (severity) => {
 };
 
 const MapArea = ({ 
+  category = 'devices', 
   vehicles = [], 
   selectedVehicle, 
   onSelectVehicle, 
-  onOpenDetail,
   alerts = [],
   onSelectAlert,
   focusTrigger,
@@ -421,10 +421,6 @@ const MapArea = ({
   const handleFitFleet = () => {
     const positions = vehicles.filter((vehicle) => vehicle.position).map((vehicle) => vehicle.position);
     if (mapRef.current && positions.length > 0) mapRef.current.fitBounds(L.latLngBounds(positions), { padding: [36, 36], maxZoom: 15 });
-  };
-
-  const handleResetNorth = () => {
-    if (mapRef.current) mapRef.current.setView(mapRef.current.getCenter(), mapRef.current.getZoom(), { animate: true });
   };
 
   const routeColor = routeColorForSpeed(selectedVehicle?.speed);
@@ -617,9 +613,9 @@ const MapArea = ({
                   </div>
                   <div className="space-y-1 text-[11px] text-[#94A3B8]">
                     <p>Velocidad: <strong className="text-white font-mono">{v.speed} km/h</strong></p>
-                    <p>Bateria GPS: <strong className="text-white font-mono">{v.battery}%</strong></p>
-                    <p>Conductor: <span className="text-white">{v.driver}</span></p>
-                    <p>Placa: <span className="text-[#00E676] font-mono">{v.plate}</span></p>
+                    <p>Batería: <strong className="text-white font-mono">{v.battery ? `${v.battery}%` : '--'}</strong></p>
+                    {v.driver && <p>Conductor: <span className="text-white">{v.driver}</span></p>}
+                    <p>{category === 'vehicles' ? 'Placa:' : 'ID:'} <span className="text-[#00E676] font-mono">{v.plate}</span></p>
                   </div>
                   {isSelected && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
@@ -674,7 +670,7 @@ const MapArea = ({
                   onClick={() => onSelectAlert && onSelectAlert(alert)}
                   className="w-full py-1.5 px-2 rounded-lg bg-[#00E676]/15 hover:bg-[#00E676]/25 border border-[#00E676]/40 text-[#00E676] text-[11px] font-bold transition-all shadow-[0_0_10px_rgba(0,240,255,0.2)]"
                 >
-                  Ver Analisis Forense
+                  Ver alerta
                 </button>
               </div>
             </Popup>
@@ -692,10 +688,6 @@ const MapArea = ({
             </div>
           </div>
           <div className="map-selection-actions">
-            <button type="button" onClick={onOpenDetail} title="Abrir detalle del vehículo">
-              <ExternalLink size={15} />
-              <span>Detalle</span>
-            </button>
             <button type="button" onClick={onToggleRouteFollow} className={isFollowingRoute ? 'is-active' : ''} title="Seguir vehículo en el mapa">
               <Navigation size={15} />
               <span>{isFollowingRoute ? 'Siguiendo' : 'Seguir'}</span>
@@ -713,9 +705,6 @@ const MapArea = ({
         {/* Zoom Controls */}
         <div className="flex justify-end pointer-events-auto">
           <div className="map-control-stack bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl flex flex-col">
-            <button onClick={handleResetNorth} title="Restablecer orientación norte" className="map-control-button">
-              <Compass size={18} />
-            </button>
             <button
               onClick={handleZoomIn}
               className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors border-b border-cyan-500/20"

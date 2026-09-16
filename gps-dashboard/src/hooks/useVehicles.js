@@ -18,42 +18,31 @@ export const useVehicles = () => {
         const data = await fetchVehicles()
         const liveLocations = await fetchLatestLocations()
         const liveByDevice = new Map(liveLocations.map((item) => [item.device_id, item]))
+
         const merged = data.map((vehicle) => {
-          const live = liveByDevice.get(vehicle.id)
+          const deviceKey = vehicle.deviceId || vehicle.id
+          const live = liveByDevice.get(deviceKey)
           if (!live) return vehicle
-          return { ...vehicle, position: [live.latitude, live.longitude], speed: live.speed || 0, bearing: live.bearing || 0, status: deviceStatusFromLastSeen(live.timestamp), lastUpdate: live.timestamp }
-        })
-        const knownIds = new Set(merged.map((vehicle) => vehicle.id))
-        for (const live of liveLocations) {
-          if (!knownIds.has(live.device_id)) {
-            merged.push({
-              id: live.device_id,
-              name: live.device_id,
-              plate: live.device_id,
-              driver: 'Dispositivo GPS',
-              status: deviceStatusFromLastSeen(live.timestamp),
-              speed: live.speed || 0,
-              battery: 0,
-              fuel: 0,
-              temp: 0,
-              odometer: '0 km',
-              position: [live.latitude, live.longitude],
-              bearing: live.bearing || 0,
-              location: 'Ubicación GPS',
-              lastUpdate: live.timestamp,
-              route: [],
-            })
+          return {
+            ...vehicle,
+            position: [live.latitude, live.longitude],
+            speed: live.speed || 0,
+            bearing: live.bearing || 0,
+            accuracy: live.accuracy || null,
+            status: deviceStatusFromLastSeen(live.timestamp),
+            lastUpdate: deviceStatusFromLastSeen(live.timestamp) === 'active'
+              ? 'En línea'
+              : live.timestamp,
           }
-        }
+        })
+
         if (!cancelled) {
           setVehicles(merged)
           setError(null)
         }
       } catch (err) {
         setError(err.message)
-        if (!cancelled) {
-          setVehicles(initialFleet)
-        }
+        if (!cancelled) setVehicles(initialFleet)
       } finally {
         if (!cancelled) setIsLoading(false)
       }

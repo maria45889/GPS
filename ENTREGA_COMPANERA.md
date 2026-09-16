@@ -1,5 +1,34 @@
 # Entrega GPS: Supabase, Vercel y APK
 
+## Como trabajar sin romper el proyecto
+
+Reglas obligatorias antes de tocar cualquier archivo:
+
+1. Nunca trabajes directo en `main`. Crea siempre una rama:
+
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b fix/mi-cambio
+   ```
+
+2. Antes de enviar tu rama, valida que todo siga funcionando (si falla, corrije y repite):
+
+   ```bash
+   npm test
+   npm run lint
+   npm run build
+   ```
+
+3. Publica la rama y crea un Pull Request contra `main` desde GitHub. No hagas push directo a `main`.
+
+4. No edites ni borres sin razonar:
+   - `vite.config.js` y los archivos de test: eliminarlos/alterarlos rompe el proyecto (jsdom no esta instalado).
+   - Componentes con otra IA: solo edita lo que te pidieron, no borres archivos "que no se usen" sin confirmar con Git (`.map-live-card`, `VideoFeed`, etc. ya se limpiaron).
+   - Y nunca subas `.env`, keystores ni claves. Git tiene `.gitignore`; repasa `git status` antes de commitear.
+
+5. Antes de un deploy a Vercel, deja que `main` sea la rama estable y haz el Redeploy desde `main`.
+
 ## Estado del codigo
 
 Commit publicado en GitHub:

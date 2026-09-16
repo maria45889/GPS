@@ -97,3 +97,10 @@ El panel puede desplegarse como aplicación Vite estática. El dominio publicado
 ## Estado del proyecto
 
 Este repositorio contiene el panel, la integración Supabase y el proyecto Android. El APK debug puede generarse localmente; la publicación en Play Store requiere una clave de firma privada que debe mantenerse fuera de Git.
+
+## Colaboración
+
+- Trabaja siempre en una rama y entrega cambios a través de un Pull Request contra `main`; nunca hagas push directo a `main`.
+- Antes de enviar la rama ejecuta `npm test`, `npm run lint` y `npm run build`.
+- No grafiques ni elimines `vite.config.js` ni los archivos de test: alterarlos rompe la validación.
+- Consulta [ENTREGA_COMPANERA.md](ENTREGA_COMPANERA.md) para el flujo completo (Supabase, Vercel, APK y reglas de ramas/PR).

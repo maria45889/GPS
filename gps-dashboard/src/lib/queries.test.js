@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   latestLocationsByDevice,
   transformAlert,
+  transformDevice,
   transformGeofence,
   transformVehicle,
 } from './queries'
@@ -65,5 +66,28 @@ describe('latestLocationsByDevice', () => {
       { device_id: 'moto-1', timestamp: '2026-01-02' },
       { device_id: 'moto-2', timestamp: '2026-01-03' },
     ])
+  })
+})
+
+describe('transformDevice', () => {
+  it('normaliza un dispositivo GPS línea/offline', () => {
+    expect(transformDevice({ id: 'dev-1', status: 'online' })).toMatchObject({
+      id: 'dev-1',
+      status: 'active',
+      battery: 0,
+      position: null,
+    })
+    expect(transformDevice({ id: 'dev-2', status: 'offline' }).status).toBe('offline')
+  })
+
+  it('fusiona la última ubicación viva del dispositivo', () => {
+    const device = transformDevice(
+      { id: 'dev-1', battery: 85 },
+      { latitude: 4.6, longitude: -74.08, speed: 42, accuracy: 8, bearing: 90 },
+    )
+    expect(device.position).toEqual([4.6, -74.08])
+    expect(device.speed).toBe(42)
+    expect(device.accuracy).toBe(8)
+    expect(device.battery).toBe(85)
   })
 })
