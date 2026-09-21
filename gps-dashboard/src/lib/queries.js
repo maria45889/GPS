@@ -1,7 +1,7 @@
 // Query functions for Supabase integration
 // These fetch data from Supabase and transform it to the UI expected format
 
-import { supabase } from '../lib/supabase'
+import { supabase, withAuthRetry } from '../lib/supabase'
 import { deviceStatusFromLastSeen } from './mapLogic'
 
 export const isCoordinateValid = (lat, lng) => {
@@ -187,123 +187,135 @@ export const transformGeofence = (dbGeofence) => {
 export const createGeofence = async (geofence) => {
   if (!supabase) return null
 
-  let organizationId = geofence.organization_id || null
-  if (!organizationId) {
-    try {
-      const { data: userResp } = await supabase.auth.getUser()
-      if (userResp?.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('organization_id')
-          .eq('user_id', userResp.user.id)
-          .maybeSingle()
-        if (profile?.organization_id) {
-          organizationId = profile.organization_id
+  return withAuthRetry(async () => {
+    let organizationId = geofence.organization_id || null
+    if (!organizationId) {
+      try {
+        const { data: userResp } = await supabase.auth.getUser()
+        if (userResp?.user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('organization_id')
+            .eq('user_id', userResp.user.id)
+            .maybeSingle()
+          if (profile?.organization_id) {
+            organizationId = profile.organization_id
+          }
         }
+      } catch {
+        // Ignorar error si no hay usuario autenticado
       }
-    } catch {
-      // Ignorar error si no hay usuario autenticado
     }
-  }
 
-  const rule = geofence.rule === 'inside' ? 'inside' : 'outside'
-  const payload = {
-    name: geofence.name || 'Geocerca',
-    type: geofence.type || 'circle',
-    center: geofence.center,
-    positions: geofence.positions || [],
-    radius: Number(geofence.radius || 600),
-    color: geofence.color || '#00E676',
-    rule,
-    active: geofence.active !== undefined ? geofence.active : true,
-    ...(organizationId ? { organization_id: organizationId } : {}),
-  }
+    const rule = geofence.rule === 'inside' ? 'inside' : 'outside'
+    const payload = {
+      name: geofence.name || 'Geocerca',
+      type: geofence.type || 'circle',
+      center: geofence.center,
+      positions: geofence.positions || [],
+      radius: Number(geofence.radius || 600),
+      color: geofence.color || '#00E676',
+      rule,
+      active: geofence.active !== undefined ? geofence.active : true,
+      ...(organizationId ? { organization_id: organizationId } : {}),
+    }
 
-  const { data, error } = await supabase
-    .from('geofences')
-    .insert(payload)
-    .select()
-    .single()
+    const { data, error } = await supabase
+      .from('geofences')
+      .insert(payload)
+      .select()
+      .single()
 
-  if (error) throw error
-  return transformGeofence(data)
+    if (error) throw error
+    return transformGeofence(data)
+  })
 }
 
 // Fetch vehicles from Supabase - returns raw data
 export const fetchVehicles = async () => {
   if (!supabase) return []
 
-  const { data, error } = await supabase
-    .from('vehicles')
-    .select('id, device_id, name, plate, driver, status, speed, battery, fuel, temp, odometer, location, route, last_update, last_seen')
-    .order('last_update', { ascending: false, nullsFirst: false })
+  return withAuthRetry(async () => {
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('id, device_id, name, plate, driver, status, speed, battery, fuel, temp, odometer, location, route, last_update, last_seen')
+      .order('last_update', { ascending: false, nullsFirst: false })
 
-  if (error) throw error
-  return data ? data.map(transformVehicle) : []
+    if (error) throw error
+    return data ? data.map(transformVehicle) : []
+  })
 }
 
 // Fetch registered GPS devices from Supabase
 export const fetchDevices = async () => {
   if (!supabase) return []
 
-  const { data, error } = await supabase
-    .from('devices')
-    .select('id, status, last_seen, platform, model, app_version, battery, label')
-    .order('last_seen', { ascending: false })
+  return withAuthRetry(async () => {
+    const { data, error } = await supabase
+      .from('devices')
+      .select('id, status, last_seen, platform, model, app_version, battery, label')
+      .order('last_seen', { ascending: false })
 
-  if (error) throw error
-  return data || []
+    if (error) throw error
+    return data || []
+  })
 }
 
 // Fetch alerts from Supabase - returns raw data
 export const fetchAlerts = async () => {
   if (!supabase) return []
 
-  const { data, error } = await supabase
-    .from('alerts')
-    .select('*')
-    .order('timestamp', { ascending: false })
+  return withAuthRetry(async () => {
+    const { data, error } = await supabase
+      .from('alerts')
+      .select('*')
+      .order('timestamp', { ascending: false })
 
-  if (error) throw error
-  return data ? data.map(transformAlert) : []
+    if (error) throw error
+    return data ? data.map(transformAlert) : []
+  })
 }
 
 // Fetch geofences from Supabase - returns raw data
 export const fetchGeofences = async () => {
   if (!supabase) return []
 
-  const { data, error } = await supabase
-    .from('geofences')
-    .select('*')
+  return withAuthRetry(async () => {
+    const { data, error } = await supabase
+      .from('geofences')
+      .select('*')
 
-  if (error) throw error
-  return data ? data.map(transformGeofence).filter(Boolean) : []
+    if (error) throw error
+    return data ? data.map(transformGeofence).filter(Boolean) : []
+  })
 }
 
 export const fetchLatestLocations = async () => {
   if (!supabase) return []
 
-  try {
-    const { data, error } = await supabase
-      .from('latest_gps_locations')
-      .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
+  return withAuthRetry(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('latest_gps_locations')
+        .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
 
-    if (!error && data) {
-      return data
+      if (!error && data) {
+        return data
+      }
+    } catch {
+      // Si la vista aún no existe en la base de datos, procede con el fallback limitado
     }
-  } catch {
-    // Si la vista aún no existe en la base de datos, procede con el fallback limitado
-  }
 
-  const { data: fallbackData, error: fallbackError } = await supabase
-    .from('gps_locations')
-    .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
-    .order('timestamp', { ascending: false })
-    .limit(5000)
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('gps_locations')
+      .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
+      .order('timestamp', { ascending: false })
+      .limit(5000)
 
-  if (fallbackError) throw fallbackError
+    if (fallbackError) throw fallbackError
 
-  return latestLocationsByDevice(fallbackData)
+    return latestLocationsByDevice(fallbackData)
+  })
 }
 
 export const latestLocationsByDevice = (locations = []) => {

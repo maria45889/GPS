@@ -294,6 +294,56 @@ $$;
 revoke execute on function public.provision_device_atomic(text, text, uuid) from public, anon, authenticated;
 grant execute on function public.provision_device_atomic(text, text, uuid) to service_role;
 
+-- =====================================================================
+-- Tabla y función atómica para Rate Limiter persistente en Edge Function
+-- =====================================================================
+create table if not exists public.provision_rate_limits (
+  key text primary key,
+  attempts integer not null default 1,
+  expires_at timestamptz not null
+);
+
+alter table public.provision_rate_limits enable row level security;
+revoke all on public.provision_rate_limits from public, anon, authenticated;
+grant all on public.provision_rate_limits to service_role;
+
+create or replace function public.check_and_record_rate_limit(
+  p_key text,
+  p_max_attempts int default 5,
+  p_window_seconds int default 900
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec record;
+  now_ts timestamptz := now();
+begin
+  delete from public.provision_rate_limits where expires_at < now_ts;
+
+  select * into rec from public.provision_rate_limits where key = p_key for update;
+
+  if not found then
+    insert into public.provision_rate_limits (key, attempts, expires_at)
+    values (p_key, 1, now_ts + (p_window_seconds || ' seconds')::interval);
+    return true;
+  elsif rec.attempts >= p_max_attempts then
+    return false;
+  else
+    update public.provision_rate_limits
+    set attempts = attempts + 1
+    where key = p_key;
+    return true;
+  end if;
+end;
+$$;
+
+revoke execute on function public.check_and_record_rate_limit(text, int, int) from public, anon, authenticated;
+grant execute on function public.check_and_record_rate_limit(text, int, int) to service_role;
+
+
 create or replace function public.set_gps_location_org_id()
 returns trigger
 language plpgsql

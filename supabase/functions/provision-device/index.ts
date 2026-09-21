@@ -36,7 +36,7 @@ function randomPassword(len = 18): string {
   return out
 }
 
-// Rate Limiter en memoria por IP / deviceId / activationCode (ventana de 15 min)
+// Rate Limiter persistente en DB (con fallback en memoria para solicitudes por ventana de 15 min)
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000
 const MAX_FAILED_ATTEMPTS = 5
 const attemptStore = new Map<string, { count: number; expiresAt: number }>()
@@ -60,6 +60,22 @@ function recordFailedAttempt(key: string) {
   } else {
     record.count += 1
   }
+}
+
+async function checkDbRateLimit(key: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('check_and_record_rate_limit', {
+      p_key: key,
+      p_max_attempts: MAX_FAILED_ATTEMPTS,
+      p_window_seconds: 900,
+    })
+    if (!error && typeof data === 'boolean') {
+      return data
+    }
+  } catch {
+    // Fallback si RPC no está desplegado aún
+  }
+  return checkRateLimit(key)
 }
 
 serve(async (req) => {
@@ -98,10 +114,15 @@ serve(async (req) => {
     return json({ error: 'deviceId invalido' }, 400)
   }
 
-  // Verificación de Rate Limit por IP, deviceId y código de activación
-  if (!checkRateLimit(`ip:${clientIp}`) || !checkRateLimit(`device:${deviceId}`) || !checkRateLimit(`code:${activationCode}`)) {
+  // Verificación de Rate Limit por IP, deviceId y código de activación (Persistente en DB + In-memory fallback)
+  const ipAllowed = await checkDbRateLimit(`ip:${clientIp}`)
+  const deviceAllowed = await checkDbRateLimit(`device:${deviceId}`)
+  const codeAllowed = await checkDbRateLimit(`code:${activationCode}`)
+
+  if (!ipAllowed || !deviceAllowed || !codeAllowed) {
     return json({ error: 'demasiados intentos de aprovisionamiento. intente mas tarde' }, 429)
   }
+
 
   // Verificación de registro previo en el sistema
   const existingReg = await supabase
