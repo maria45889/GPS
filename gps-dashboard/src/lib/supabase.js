@@ -75,6 +75,12 @@ export const refreshNativeSession = async () => {
         access_token: freshNative.access_token,
         refresh_token: '',
       });
+      if (supabase.realtime) {
+        try { supabase.realtime.setAuth(freshNative.access_token); } catch {}
+      }
+      if (supabase.rest?.headers) {
+        supabase.rest.headers['Authorization'] = `Bearer ${freshNative.access_token}`;
+      }
     } catch (err) {
       console.warn('Error al actualizar la sesión de Supabase con el token nativo:', err);
     }
@@ -82,6 +88,7 @@ export const refreshNativeSession = async () => {
   }
   return null;
 };
+
 
 export const withAuthRetry = async (queryFn) => {
   try {

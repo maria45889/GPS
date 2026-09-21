@@ -35,7 +35,8 @@ describe('Edge Function provision-device contract', () => {
   it('aplica limitación de tasa (rate limit) devolviendo error 429 ante solicitudes excesivas', () => {
     expect(edgeFunctionContent).toContain('demasiados intentos de aprovisionamiento. intente mas tarde');
     expect(edgeFunctionContent).toContain('status = 200');
-    expect(edgeFunctionContent).toContain('checkRateLimit');
+    expect(edgeFunctionContent).toContain('checkDbRateLimit');
   });
+
 });
 

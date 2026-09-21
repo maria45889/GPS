@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { createGeofence, transformGeofence } from '../lib/queries';
 
 vi.mock('../lib/supabase', () => ({
+  withAuthRetry: (fn) => fn(),
   supabase: {
     from: vi.fn().mockReturnValue({
       insert: vi.fn().mockReturnValue({
@@ -25,6 +26,7 @@ vi.mock('../lib/supabase', () => ({
     }),
   },
 }));
+
 
 describe('Geofence creation and persistence', () => {
   beforeEach(() => {

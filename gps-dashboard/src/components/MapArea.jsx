@@ -780,7 +780,15 @@ const MapArea = ({
                     {v.driver && <p>Conductor: <span className="text-white">{v.driver}</span></p>}
                     <p>{category === 'vehicles' ? 'Placa:' : 'ID:'} <span className="text-[#00E676] font-mono">{v.plate}</span></p>
                   </div>
-                  {isSelected && (
+                  {!isSelected ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectVehicle?.(v)}
+                      className="mt-3 w-full py-1.5 px-2 rounded-md bg-[#00E676]/20 hover:bg-[#00E676]/30 border border-[#00E676]/40 text-[#00E676] text-[10px] font-bold transition-colors"
+                    >
+                      Seleccionar {category === 'vehicles' ? 'moto' : 'dispositivo'}
+                    </button>
+                  ) : (
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -798,6 +806,7 @@ const MapArea = ({
                       </button>
                     </div>
                   )}
+
                 </div>
               </Popup>
               </Marker>
