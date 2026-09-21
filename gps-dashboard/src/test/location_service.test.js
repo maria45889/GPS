@@ -1029,7 +1029,8 @@ describe('Android LocationService java contracts', () => {
     expect(supabaseJsContent).toContain('Authorization');
     expect(supabaseJsContent).toContain('setSession');
 
-    expect(provisionEdgeContent).toContain('expectedSecret && providedSecret !== expectedSecret');
+    expect(provisionEdgeContent).toContain('expectedSecret && providedSecret && providedSecret !== expectedSecret');
+
 
     expect(useAlertsContent).toContain('prev && prev.length > 0 ? prev');
     expect(useGeofencesContent).toContain('prev && prev.length > 0 ? prev');

@@ -86,13 +86,14 @@ serve(async (req) => {
 
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown-ip'
 
-  // Validación de autorización: secreto de aprovisionamiento u obligatoriedad de código de activación
+  // Validación de secreto administrativo (si se incluye header x-provision-secret debe coincidir)
   const expectedSecret = Deno.env.get('PROVISION_SECRET')
   const providedSecret = req.headers.get('x-provision-secret')
-  if (expectedSecret && providedSecret !== expectedSecret) {
+  if (expectedSecret && providedSecret && providedSecret !== expectedSecret) {
     recordFailedAttempt(`ip:${clientIp}`)
-    return json({ error: 'no autorizado: secreto invalido o ausente' }, 403)
+    return json({ error: 'no autorizado: secreto de aprovisionamiento invalido' }, 403)
   }
+
 
   let body: Record<string, unknown>
   try {
