@@ -1,11 +1,13 @@
 import React from 'react';
 import { Battery, Gauge, MapPin, Navigation, Share2, Thermometer, X, Crosshair } from 'lucide-react';
 import { VehicleControlCard } from './VehicleControlCard';
+import { normalizeBattery, sanitizeAccuracy } from '../lib/queries';
 
 const statusLabels = {
   active: 'En ruta / En línea',
   stopped: 'Detenido',
   offline: 'Sin conexión',
+  immobilized: 'Inmovilizado',
 };
 
 export const VehicleDetailPanel = ({
@@ -27,9 +29,13 @@ export const VehicleDetailPanel = ({
     ? 'vehicle-detail-status-active'
     : statusKey === 'stopped'
       ? 'vehicle-detail-status-stopped'
-      : 'vehicle-detail-status-offline';
+      : statusKey === 'immobilized'
+        ? 'vehicle-detail-status-stopped'
+        : 'vehicle-detail-status-offline';
 
   const isDevices = category === 'devices'
+  const batteryVal = normalizeBattery(entity.battery);
+  const accVal = sanitizeAccuracy(entity.accuracy);
 
   return (
     <aside className="vehicle-detail-panel" aria-label={`Detalle de ${entity.name}`}>
@@ -54,9 +60,9 @@ export const VehicleDetailPanel = ({
 
       <div className="vehicle-detail-grid">
         <div><Gauge size={16} /><span>Velocidad<strong>{entity.speed || 0} km/h</strong></span></div>
-        <div><Battery size={16} /><span>Batería<strong>{entity.battery ? `${entity.battery}%` : '--'}</strong></span></div>
+        <div><Battery size={16} /><span>Batería<strong>{batteryVal}%</strong></span></div>
         {isDevices ? (
-          <div><Crosshair size={16} /><span>Precisión<strong>{entity.accuracy ? `${Math.round(entity.accuracy)} m` : '--'}</strong></span></div>
+          <div><Crosshair size={16} /><span>Precisión<strong>{accVal !== null ? `${accVal} m` : '--'}</strong></span></div>
         ) : (
           <div><Thermometer size={16} /><span>Motor<strong>{entity.temp || 0}°C</strong></span></div>
         )}
@@ -64,9 +70,15 @@ export const VehicleDetailPanel = ({
       </div>
 
       <div className="vehicle-detail-actions">
-        <button type="button" onClick={onToggleRouteFollow} className={isFollowingRoute ? 'is-active' : ''}>
+        <button
+          type="button"
+          onClick={onToggleRouteFollow}
+          disabled={!entity?.position}
+          title={!entity?.position ? 'Sin posición GPS para seguir' : ''}
+          className={`${isFollowingRoute && entity?.position ? 'is-active' : ''} ${!entity?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
           <Navigation size={16} />
-          {isFollowingRoute ? 'Siguiendo' : 'Seguir'}
+          {isFollowingRoute && entity?.position ? 'Siguiendo' : 'Seguir'}
         </button>
         <button type="button" onClick={onShareRoute}>
           <Share2 size={16} />

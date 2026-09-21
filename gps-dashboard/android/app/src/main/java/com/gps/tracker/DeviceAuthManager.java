@@ -39,16 +39,50 @@ public class DeviceAuthManager {
     private static final String KEY_USER_ID = "user_id";
 
     private final Context context;
-    private final SharedPreferences prefs;
+    private final SecurePreferences prefs;
 
     public DeviceAuthManager(Context context) {
         this.context = context.getApplicationContext();
-        this.prefs = this.context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        this.prefs = new SecurePreferences(this.context, PREFS, "GpsTrackerAuthKey");
+    }
+
+    private static final String KEY_DEVICE_REVOKED = "device_revoked";
+
+    public boolean isProvisioned() {
+        if (!hasCredentials()) return false;
+        if ("true".equals(prefs.getString(KEY_DEVICE_REVOKED, "false"))) return false;
+        long nextRetry = prefs.getLong(KEY_NEXT_AUTH_RETRY, 0);
+        long now = System.currentTimeMillis() / 1000;
+        return now >= nextRetry;
+    }
+
+    public boolean isRevoked() {
+        return "true".equals(prefs.getString(KEY_DEVICE_REVOKED, "false"));
+    }
+
+    public long getNextAuthRetrySeconds() {
+        return prefs.getLong(KEY_NEXT_AUTH_RETRY, 0);
+    }
+
+    public void markDeviceRevoked() {
+        prefs.putString(KEY_DEVICE_REVOKED, "true");
+        clearAccessToken();
+    }
+
+    public void clearDeviceRevoked() {
+        prefs.remove(KEY_DEVICE_REVOKED);
     }
 
     public String getDeviceId() {
         String id = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
-        return id == null || id.isEmpty() ? "android-device" : id;
+        if (id == null || id.isEmpty() || "android-device".equals(id) || "9774d56d682e549c".equals(id)) {
+            id = prefs.getString("fallback_device_uuid", null);
+            if (id == null) {
+                id = "android-uuid-" + java.util.UUID.randomUUID().toString();
+                prefs.putString("fallback_device_uuid", id);
+            }
+        }
+        return id;
     }
 
     public String getUserId() {
@@ -63,49 +97,113 @@ public class DeviceAuthManager {
         }
     }
 
+    private static final String KEY_NEXT_AUTH_RETRY = "next_auth_retry";
+    private static final String KEY_AUTH_FAIL_COUNT = "auth_fail_count";
+
+    private static final Object GLOBAL_AUTH_LOCK = new Object();
+
     /** Devuelve un access_token valido, aprovisionando o renovando si hace falta. */
-    public synchronized String getAccessToken() {
-        long expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0);
-        String token = prefs.getString(KEY_ACCESS_TOKEN, null);
-        long now = System.currentTimeMillis() / 1000;
-        if (token != null && now < expiresAt - 60) return token;
+    public String getAccessToken() {
+        synchronized (GLOBAL_AUTH_LOCK) {
+            long expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0);
+            String token = prefs.getString(KEY_ACCESS_TOKEN, null);
+            long now = System.currentTimeMillis() / 1000;
+            if (token != null && now < expiresAt - 60) return token;
 
-        String refresh = prefs.getString(KEY_REFRESH_TOKEN, null);
-        if (refresh != null && refreshToken(refresh)) {
-            return prefs.getString(KEY_ACCESS_TOKEN, null);
+            long nextRetry = prefs.getLong(KEY_NEXT_AUTH_RETRY, 0);
+            if (now < nextRetry) {
+                return null;
+            }
+
+            String refresh = prefs.getString(KEY_REFRESH_TOKEN, null);
+            if (refresh != null && refreshToken(refresh)) {
+                return prefs.getString(KEY_ACCESS_TOKEN, null);
+            }
+
+            if (hasCredentials()) {
+                if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
+                recordAuthFailure(now);
+                return null;
+            }
+
+            if (provision()) {
+                if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
+            }
+            recordAuthFailure(now);
+            return null;
         }
-
-        if (!hasCredentials() && !provision()) return null;
-        if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
-        return null;
     }
 
-    private boolean hasCredentials() {
+
+    private void recordAuthFailure(long now) {
+        long failCount = prefs.getLong(KEY_AUTH_FAIL_COUNT, 0) + 1;
+        long delaySec = Math.min(3600, (long) Math.pow(2, Math.min(failCount, 8)) * 15);
+        prefs.putLong(KEY_AUTH_FAIL_COUNT, failCount);
+        prefs.putLong(KEY_NEXT_AUTH_RETRY, now + delaySec);
+    }
+
+    public boolean hasCredentials() {
         return prefs.getString(KEY_EMAIL, null) != null && prefs.getString(KEY_PASSWORD, null) != null;
+    }
+
+    public void clearAccessToken() {
+        prefs.remove(KEY_ACCESS_TOKEN);
+        prefs.remove(KEY_EXPIRES_AT);
+    }
+
+    public void clearAuthRetryBackoff() {
+        prefs.remove(KEY_NEXT_AUTH_RETRY);
+        prefs.remove(KEY_AUTH_FAIL_COUNT);
+    }
+
+    private static final String KEY_ACTIVATION_CODE = "activation_code";
+
+    public void setActivationCode(String code) {
+        if (code != null && !code.trim().isEmpty()) {
+            prefs.putString(KEY_ACTIVATION_CODE, code.trim());
+            clearAuthRetryBackoff();
+        }
+    }
+
+    public String getActivationCode() {
+        return prefs.getString(KEY_ACTIVATION_CODE, null);
+    }
+
+    public void clearActivationCode() {
+        prefs.remove(KEY_ACTIVATION_CODE);
     }
 
     private boolean provision() {
         try {
+            String activationCode = getActivationCode();
+            if (activationCode == null || activationCode.trim().isEmpty()) {
+                android.util.Log.w("DeviceAuthManager", "Código de activación no disponible. Se pospone el aprovisionamiento.");
+                return false;
+            }
+
             JSONObject body = new JSONObject();
             body.put("deviceId", getDeviceId());
+            body.put("activationCode", activationCode);
             body.put("platform", "android");
             body.put("model", Build.MODEL);
             body.put("app_version", getAppVersion());
             body.put("battery", JSONObject.NULL);
 
-            String secret = context.getString(R.string.provision_secret);
-            JSONObject res = post(baseUrl() + "/functions/v1/provision-device", body,
-                "x-provision-secret", secret);
+            JSONObject res = post(baseUrl() + "/functions/v1/provision-device", body);
             if (res == null) return false;
 
             String email = res.optString("email", null);
             String password = res.optString("password", null);
             if (email != null && password != null && !email.isEmpty() && !password.isEmpty()) {
-                prefs.edit().putString(KEY_EMAIL, email).putString(KEY_PASSWORD, password).apply();
+                prefs.putString(KEY_EMAIL, email);
+                prefs.putString(KEY_PASSWORD, password);
+                clearDeviceRevoked();
+                clearActivationCode();
                 return true;
             }
             return false;
         } catch (Exception e) {
+
             return false;
         }
     }
@@ -139,22 +237,26 @@ public class DeviceAuthManager {
         long expiresIn = res.optLong("expires_in", 3600);
         long expiresAt = System.currentTimeMillis() / 1000 + expiresIn;
 
-        SharedPreferences.Editor editor = prefs.edit()
-                .putString(KEY_ACCESS_TOKEN, res.optString("access_token", null))
-                .putLong(KEY_EXPIRES_AT, expiresAt);
+        prefs.remove(KEY_AUTH_FAIL_COUNT);
+        prefs.remove(KEY_NEXT_AUTH_RETRY);
+
+        prefs.putString(KEY_ACCESS_TOKEN, res.optString("access_token", null));
+        prefs.putLong(KEY_EXPIRES_AT, expiresAt);
 
         String refresh = res.optString("refresh_token", null);
-        if (refresh != null && !refresh.isEmpty()) editor.putString(KEY_REFRESH_TOKEN, refresh);
+        if (refresh != null && !refresh.isEmpty()) prefs.putString(KEY_REFRESH_TOKEN, refresh);
 
         JSONObject user = res.optJSONObject("user");
         if (user != null && user.optString("id", null) != null) {
-            editor.putString(KEY_USER_ID, user.optString("id", null));
+            prefs.putString(KEY_USER_ID, user.optString("id", null));
         }
-        editor.apply();
         return true;
     }
 
     private JSONObject post(String urlStr, JSONObject body, String... extraHeaders) {
+        if (Thread.currentThread().isInterrupted()) {
+            return null;
+        }
         HttpURLConnection connection = null;
         try {
             URL url = new URL(urlStr);
@@ -163,12 +265,17 @@ public class DeviceAuthManager {
             connection.setRequestProperty("apikey", apiKey());
             connection.setRequestProperty("Authorization", "Bearer " + apiKey());
             connection.setRequestProperty("Content-Type", "application/json");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
+            connection.setConnectTimeout(8000);
+            connection.setReadTimeout(8000);
             connection.setDoOutput(true);
 
             for (int i = 0; i + 1 < extraHeaders.length; i += 2) {
                 connection.setRequestProperty(extraHeaders[i], extraHeaders[i + 1]);
+            }
+
+            if (Thread.currentThread().isInterrupted()) {
+                connection.disconnect();
+                return null;
             }
 
             byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
@@ -176,9 +283,14 @@ public class DeviceAuthManager {
                 output.write(payload);
             }
 
+            if (Thread.currentThread().isInterrupted()) {
+                connection.disconnect();
+                return null;
+            }
+
             int code = connection.getResponseCode();
             InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
-            if (stream == null) return null;
+            if (stream == null || Thread.currentThread().isInterrupted()) return null;
             return new JSONObject(readStream(stream));
         } catch (Exception e) {
             return null;

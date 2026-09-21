@@ -4,45 +4,117 @@
 import { supabase } from '../lib/supabase'
 import { deviceStatusFromLastSeen } from './mapLogic'
 
+export const isCoordinateValid = (lat, lng) => {
+  if (lat === null || lat === undefined || lng === null || lng === undefined) return false
+  const numLat = Number(lat)
+  const numLng = Number(lng)
+  return Number.isFinite(numLat) && Number.isFinite(numLng) && numLat >= -90 && numLat <= 90 && numLng >= -180 && numLng <= 180
+}
+
+export const normalizeBattery = (val) => {
+  if (val === null || val === undefined) return 0
+  const num = Number(val)
+  if (!Number.isFinite(num)) return 0
+  return Math.max(0, Math.min(100, Math.round(num)))
+}
+
+export const sanitizeAccuracy = (val) => {
+  if (val === null || val === undefined) return null
+  const num = Number(val)
+  if (!Number.isFinite(num) || num < 0 || num > 50000) return null
+  return Math.round(num)
+}
+
+export const sanitizeRoute = (rawRoute) => {
+  if (!Array.isArray(rawRoute)) return []
+  return rawRoute
+    .filter((pt) => Array.isArray(pt) && pt.length >= 2 && isCoordinateValid(pt[0], pt[1]))
+    .map((pt) => [Number(pt[0]), Number(pt[1])])
+}
+
 // Transform raw Supabase vehicle data to UI format
 export const transformVehicle = (dbVehicle) => {
-  const route = Array.isArray(dbVehicle.route) ? dbVehicle.route : [];
+  const route = sanitizeRoute(dbVehicle.route);
+  const lastSeen = dbVehicle.last_seen || dbVehicle.last_update || null;
+  let calculatedStatus = dbVehicle.status || 'offline';
+  if (dbVehicle.status === 'immobilized') {
+    calculatedStatus = 'immobilized';
+  } else if (lastSeen) {
+    calculatedStatus = deviceStatusFromLastSeen(lastSeen);
+  }
+  const cleanPosition = (Array.isArray(dbVehicle.position) && dbVehicle.position.length >= 2 && isCoordinateValid(dbVehicle.position[0], dbVehicle.position[1]))
+    ? [Number(dbVehicle.position[0]), Number(dbVehicle.position[1])]
+    : null;
+
   return {
     id: dbVehicle.id,
     deviceId: dbVehicle.device_id || null,
     name: dbVehicle.label || dbVehicle.name || dbVehicle.plate || dbVehicle.id,
     plate: dbVehicle.vehicle_id || dbVehicle.plate || dbVehicle.id,
     driver: dbVehicle.driver || (dbVehicle.platform ? 'Dispositivo GPS' : 'Desconocido'),
-    status: dbVehicle.last_seen ? deviceStatusFromLastSeen(dbVehicle.last_seen) : (dbVehicle.status || 'offline'),
+    status: calculatedStatus,
     speed: dbVehicle.speed || 0,
-    battery: dbVehicle.battery || 0,
+    battery: normalizeBattery(dbVehicle.battery),
     fuel: dbVehicle.fuel !== undefined ? dbVehicle.fuel : 75,
     temp: dbVehicle.temp || 24,
     odometer: dbVehicle.odometer || '0 km',
-    position: dbVehicle.position || [4.6097, -74.0817], // Bogotá default
+    position: cleanPosition,
     location: dbVehicle.location || 'Ubicación actual',
-    lastUpdate: dbVehicle.lastUpdate || dbVehicle.last_seen || 'Now',
+    lastUpdate: dbVehicle.lastUpdate || dbVehicle.last_seen || dbVehicle.last_update || 'Now',
     route,
   };
 }
 
+export const REALTIME_LOCATION_TIMEOUT_MS = 90 * 1000 // 90 segundos para mapa en tiempo real
+export const MAX_LOCATION_AGE_MS = REALTIME_LOCATION_TIMEOUT_MS
+
+export const isLocationValidForMap = (timestamp, maxAgeMs = REALTIME_LOCATION_TIMEOUT_MS, lat = null, lng = null) => {
+  if (!timestamp) return false
+  const time = timestamp instanceof Date ? timestamp.getTime() : Date.parse(timestamp)
+  if (isNaN(time) || time <= 0) return false
+  const age = Date.now() - time
+  if (age < -5 * 60 * 1000 || age > maxAgeMs) return false
+  if (lat !== null || lng !== null) return isCoordinateValid(lat, lng)
+  return true
+}
+
 // Transform a GPS device (devices table + latest gps_location)
-export const transformDevice = (dbDevice, live = null) => {
-  const isOnline = dbDevice.status === 'online' || dbDevice.status === 'active'
+export const transformDevice = (dbDevice, live = null, maxAgeMs = REALTIME_LOCATION_TIMEOUT_MS) => {
+  let effectiveLastSeen = dbDevice.last_seen || null
+  if (live?.timestamp) {
+    const liveTime = Date.parse(live.timestamp)
+    const dbTime = dbDevice.last_seen ? Date.parse(dbDevice.last_seen) : 0
+    if (!isNaN(liveTime) && liveTime > dbTime) {
+      effectiveLastSeen = live.timestamp
+    }
+  }
+
+  const lastSeenMs = effectiveLastSeen ? Date.parse(effectiveLastSeen) : NaN
+  const now = Date.now()
+  const lastSeenAgeMs = !isNaN(lastSeenMs) ? (now - lastSeenMs) : Infinity
+  // Dispositivo stale si no tiene fecha, si excede maxAgeMs o si es un timestamp futuro > 5 min (-5 * 60 * 1000 ms)
+  const isStale = isNaN(lastSeenAgeMs) || lastSeenAgeMs > maxAgeMs || lastSeenAgeMs < -5 * 60 * 1000
+  const isOnline = !isStale && (dbDevice.status === 'online' || dbDevice.status === 'active' || Boolean(live))
+  
+  const isCoordsValid = live && isCoordinateValid(live.latitude, live.longitude)
+  const isLiveValid = isCoordsValid && isLocationValidForMap(live.timestamp, maxAgeMs, live.latitude, live.longitude)
+  const cleanCoords = isCoordsValid ? [Number(live.latitude), Number(live.longitude)] : null
+
   return {
     id: dbDevice.id,
     name: dbDevice.label || dbDevice.id,
     deviceId: dbDevice.id,
-    status: isOnline ? 'active' : dbDevice.status || 'offline',
+    status: isOnline ? 'active' : 'offline',
     platform: dbDevice.platform || null,
     model: dbDevice.model || null,
     appVersion: dbDevice.app_version || null,
-    battery: dbDevice.battery || 0,
-    lastSeen: dbDevice.last_seen || null,
-    lastUpdate: dbDevice.last_seen || '--',
-    position: live ? [live.latitude, live.longitude] : null,
-    speed: live?.speed || 0,
-    accuracy: live?.accuracy || null,
+    battery: normalizeBattery(dbDevice.battery),
+    lastSeen: effectiveLastSeen,
+    lastUpdate: effectiveLastSeen || '--',
+    position: isLiveValid ? cleanCoords : null,
+    historicalPosition: cleanCoords,
+    speed: isLiveValid ? (live?.speed || 0) : 0,
+    accuracy: live ? sanitizeAccuracy(live.accuracy) : null,
     bearing: live?.bearing || 0,
     route: [],
   }
@@ -69,21 +141,92 @@ export const transformAlert = (dbAlert) => ({
 
 // Transform raw Supabase geofence data to UI format
 export const transformGeofence = (dbGeofence) => {
-  const positions = dbGeofence.positions || dbGeofence.coordinates || []
-  const center = dbGeofence.center || (positions.length > 0 ? positions[0] : [4.6097, -74.0817])
-  const radius = dbGeofence.radius || 600
+  const rawPositions = dbGeofence.positions || dbGeofence.coordinates || []
+  const validPositions = Array.isArray(rawPositions)
+    ? rawPositions
+        .map(pos => Array.isArray(pos) && pos.length >= 2 ? [Number(pos[0]), Number(pos[1])] : null)
+        .filter(pos => pos && !isNaN(pos[0]) && !isNaN(pos[1]) && pos[0] >= -90 && pos[0] <= 90 && pos[1] >= -180 && pos[1] <= 180)
+    : []
+
+  const rawCenter = dbGeofence.center || (validPositions.length > 0 ? validPositions[0] : [4.6097, -74.0817])
+  const parsedCenter = Array.isArray(rawCenter) && rawCenter.length >= 2
+    ? [Number(rawCenter[0]), Number(rawCenter[1])]
+    : [4.6097, -74.0817]
+
+  const cleanCenter = (!isNaN(parsedCenter[0]) && !isNaN(parsedCenter[1]) && parsedCenter[0] >= -90 && parsedCenter[0] <= 90 && parsedCenter[1] >= -180 && parsedCenter[1] <= 180)
+    ? parsedCenter
+    : [4.6097, -74.0817]
+
+  const parsedRadius = Number(dbGeofence.radius)
+  const cleanRadius = (!isNaN(parsedRadius) && parsedRadius > 0) ? parsedRadius : 600
+
+  let rule = dbGeofence.rule
+  if (rule !== 'outside' && rule !== 'inside') {
+    rule = 'outside'
+  }
+
+  const type = dbGeofence.type || 'circle'
+  if (type === 'polygon' && validPositions.length < 3) {
+    return null
+  }
 
   return {
     id: dbGeofence.id,
     name: dbGeofence.name || 'Geocerca',
-    type: dbGeofence.type || 'circle',
-    positions: positions.map(pos => [Number(pos[0]), Number(pos[1])]),
-    center: [Number(center[0]), Number(center[1])],
-    radius: Number(radius),
+    type,
+    positions: validPositions,
+    center: cleanCenter,
+    radius: cleanRadius,
     color: dbGeofence.color || '#00E676',
-    rule: dbGeofence.rule || 'Supervisión de ubicación',
+    rule,
     active: dbGeofence.active !== undefined ? dbGeofence.active : true,
   }
+}
+
+// Persist new geofence to Supabase
+export const createGeofence = async (geofence) => {
+  if (!supabase) return null
+
+  let organizationId = geofence.organization_id || null
+  if (!organizationId) {
+    try {
+      const { data: userResp } = await supabase.auth.getUser()
+      if (userResp?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('organization_id')
+          .eq('user_id', userResp.user.id)
+          .maybeSingle()
+        if (profile?.organization_id) {
+          organizationId = profile.organization_id
+        }
+      }
+    } catch {
+      // Ignorar error si no hay usuario autenticado
+    }
+  }
+
+  const rule = geofence.rule === 'inside' ? 'inside' : 'outside'
+  const payload = {
+    name: geofence.name || 'Geocerca',
+    type: geofence.type || 'circle',
+    center: geofence.center,
+    positions: geofence.positions || [],
+    radius: Number(geofence.radius || 600),
+    color: geofence.color || '#00E676',
+    rule,
+    active: geofence.active !== undefined ? geofence.active : true,
+    ...(organizationId ? { organization_id: organizationId } : {}),
+  }
+
+  const { data, error } = await supabase
+    .from('geofences')
+    .insert(payload)
+    .select()
+    .single()
+
+  if (error) throw error
+  return transformGeofence(data)
 }
 
 // Fetch vehicles from Supabase - returns raw data
@@ -92,7 +235,7 @@ export const fetchVehicles = async () => {
 
   const { data, error } = await supabase
     .from('vehicles')
-    .select('id, device_id, name, plate, driver, status, speed, battery, fuel, temp, odometer, location, route, last_update')
+    .select('id, device_id, name, plate, driver, status, speed, battery, fuel, temp, odometer, location, route, last_update, last_seen')
     .order('last_update', { ascending: false, nullsFirst: false })
 
   if (error) throw error
@@ -134,20 +277,33 @@ export const fetchGeofences = async () => {
     .select('*')
 
   if (error) throw error
-  return data ? data.map(transformGeofence) : []
+  return data ? data.map(transformGeofence).filter(Boolean) : []
 }
 
 export const fetchLatestLocations = async () => {
   if (!supabase) return []
 
-  const { data, error } = await supabase
+  try {
+    const { data, error } = await supabase
+      .from('latest_gps_locations')
+      .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
+
+    if (!error && data) {
+      return data
+    }
+  } catch {
+    // Si la vista aún no existe en la base de datos, procede con el fallback limitado
+  }
+
+  const { data: fallbackData, error: fallbackError } = await supabase
     .from('gps_locations')
     .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
     .order('timestamp', { ascending: false })
+    .limit(5000)
 
-  if (error) throw error
+  if (fallbackError) throw fallbackError
 
-  return latestLocationsByDevice(data)
+  return latestLocationsByDevice(fallbackData)
 }
 
 export const latestLocationsByDevice = (locations = []) => {

@@ -1,9 +1,10 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Plus, Minus, Crosshair, Navigation, Share2, Maximize, Layers } from 'lucide-react';
 import { isVehicleInsideCircle, isVehicleInsidePolygon, routeColorForSpeed } from '../lib/mapLogic';
+import { normalizeBattery, sanitizeAccuracy, sanitizeRoute } from '../lib/queries';
 
 // Component to handle map resize
 const MapController = () => {
@@ -81,12 +82,23 @@ const AlertFocusHandler = ({ focusTrigger, markerRefs }) => {
   return null;
 };
 
-// Component to handle map clicks for placing geofences
-const MapClickHandler = ({ isPlacingOnMap, onMapClick }) => {
+// Component to handle map clicks and movement for placing geofences
+const MapClickHandler = ({ isPlacingOnMap, onMapClick, onMapHover }) => {
+  const lastHoverRef = useRef(0);
+
   useMapEvents({
     click(e) {
       if (isPlacingOnMap && onMapClick) {
         onMapClick([e.latlng.lat, e.latlng.lng]);
+      }
+    },
+    mousemove(e) {
+      if (isPlacingOnMap && onMapHover) {
+        const now = Date.now();
+        if (now - lastHoverRef.current > 40) {
+          lastHoverRef.current = now;
+          onMapHover([e.latlng.lat, e.latlng.lng]);
+        }
       }
     },
   });
@@ -100,27 +112,72 @@ const createUserLocationIcon = () => new L.DivIcon({
   iconAnchor: [12, 12],
 });
 
-const UserLocationTracker = ({ onLocationChange }) => {
-  useEffect(() => {
-    if (!navigator.geolocation) return undefined;
+const UserLocationTracker = ({ locateUserTrigger, onLocationChange }) => {
+  const watchIdRef = useRef(null);
 
-    const watchId = navigator.geolocation.watchPosition(
+  useEffect(() => {
+    // Si la ubicación del operador no ha sido solicitada explícitamente, mantener el GPS apagado
+    if (!locateUserTrigger) return undefined;
+
+    if (!navigator.geolocation) {
+      onLocationChange?.({ error: 'Geolocalización no soportada en este navegador', code: 0 });
+      return undefined;
+    }
+
+    navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        const location = [coords.latitude, coords.longitude];
         onLocationChange?.({
-          position: location,
+          position: [coords.latitude, coords.longitude],
           accuracy: coords.accuracy,
           speed: coords.speed,
         });
       },
-      () => onLocationChange?.(null),
+      (error) => {
+        let errorMsg = 'No se pudo obtener la ubicación GPS';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMsg = 'Permiso de ubicación denegado. Por favor concédelo en los ajustes.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMsg = 'Señal GPS no disponible. Verifica que la ubicación esté activada.';
+        } else if (error.code === error.TIMEOUT) {
+          errorMsg = 'Tiempo de espera agotado buscando señal GPS.';
+        }
+        onLocationChange?.({ error: errorMsg, code: error.code });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 },
+    );
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        onLocationChange?.({
+          position: [coords.latitude, coords.longitude],
+          accuracy: coords.accuracy,
+          speed: coords.speed,
+        });
+      },
+      (error) => {
+        let errorMsg = 'No se pudo obtener la ubicación GPS';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMsg = 'Permiso de ubicación denegado. Por favor concédelo en los ajustes.';
+        }
+        onLocationChange?.({ error: errorMsg, code: error.code });
+      },
       { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 },
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [onLocationChange]);
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [locateUserTrigger, onLocationChange]);
 
   return null;
+};
+
+const escapeHtml = (str) => {
+  if (typeof str !== 'string') return String(str || '');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
 // Selected Vehicle Hero Pin matching the mockup
@@ -140,8 +197,8 @@ const createHeroPinIcon = (name, id) => new L.DivIcon({
         white-space: nowrap;
         backdrop-filter: blur(10px);
       ">
-        <div style="font-size: 12px; font-weight: 800; color: #ffffff; line-height: 1.2; text-shadow: 0 0 10px rgba(0,240,255,0.5);">${name}</div>
-        <div style="font-size: 9px; color: #475569; font-family: monospace; letter-spacing: 0.5px;">ID: ${id}</div>
+        <div style="font-size: 12px; font-weight: 800; color: #ffffff; line-height: 1.2; text-shadow: 0 0 10px rgba(0,240,255,0.5);">${escapeHtml(name)}</div>
+        <div style="font-size: 9px; color: #475569; font-family: monospace; letter-spacing: 0.5px;">ID: ${escapeHtml(id)}</div>
       </div>
 
       <!-- Glowing Cyan Pin with bike -->
@@ -308,46 +365,96 @@ const createHeadingIcon = (bearing = 0) => new L.DivIcon({
 });
 
 const isInsideGeofence = (vehicle, geofence) => {
-  if (!vehicle?.position) return false;
+  if (!vehicle?.position || !geofence) return false;
   if (geofence.type === 'polygon') {
-    return isVehicleInsidePolygon(vehicle.position, geofence.positions);
+    const positions = geofence.positions || geofence.coordinates || [];
+    return isVehicleInsidePolygon(vehicle.position, positions);
   }
   if (!geofence?.center) return false;
   return isVehicleInsideCircle(vehicle.position, geofence.center, Number(geofence.radius || 600));
 };
 
-// Devuelve true si hay violación de la geocerca según su regla.
-// rule='outside' (por defecto): zona permitida → violación si está FUERA.
-// rule='inside': zona prohibida → violación si está DENTRO.
+const getGeofenceType = (geofence) => {
+  if (geofence.mode) return geofence.mode;
+  if (geofence.zoneType) return geofence.zoneType;
+  const ruleStr = String(geofence.rule || '').toLowerCase();
+  if (ruleStr.includes('prohibid') || ruleStr.includes('inside') || ruleStr.includes('ingreso no autoriz')) return 'forbidden';
+  if (ruleStr.includes('entrada') || ruleStr.includes('ingreso')) return 'entry';
+  if (ruleStr.includes('salida') || ruleStr.includes('egreso')) return 'exit';
+  return 'allowed'; // Zona permitida por defecto
+};
+
+// Devuelve true si hay violación/alerta de la geocerca según su regla.
+// Devuelve false si no hay un vehículo o posición válida para evaluar.
 const isGeofenceBreach = (vehicle, geofence) => {
+  if (!vehicle?.position || !geofence) return false;
   const inside = isInsideGeofence(vehicle, geofence);
-  const rule = geofence.rule || 'outside';
-  return rule === 'inside' ? inside : !inside;
+  const type = getGeofenceType(geofence);
+
+  switch (type) {
+    case 'forbidden':
+      return inside; // Intrusión: vehículo dentro de zona prohibida
+    case 'entry':
+      return inside; // Evento/Alerta de entrada esperada
+    case 'exit':
+      return !inside; // Evento/Alerta de salida esperada
+    case 'allowed':
+    default:
+      return !inside; // Intrusión: vehículo fuera de zona permitida
+  }
+};
+
+const getGeofenceStatusText = (geo, isBreach) => {
+  if (!isBreach) return '';
+  const type = getGeofenceType(geo);
+  switch (type) {
+    case 'forbidden':
+      return ' · Intrusión: vehículo en zona prohibida';
+    case 'entry':
+      return ' · Entrada registrada';
+    case 'exit':
+      return ' · Salida registrada';
+    case 'allowed':
+    default:
+      return ' · Intrusión: vehículo fuera de zona permitida';
+  }
+};
+
+const sanitizeColor = (color) => {
+  if (typeof color !== 'string') return '#00E676';
+  const trimmed = color.trim();
+  if (/^#([0-9a-fA-F]{3}){1,2}$/.test(trimmed) || /^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+\s*)?\)$/.test(trimmed)) {
+    return trimmed;
+  }
+  return '#00E676';
 };
 
 // Zone label badge
-const createZoneLabel = (name, color = '#00E676') => new L.DivIcon({
-  className: 'zone-label-icon',
-  html: `
-    <div style="
-      background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(10, 15, 26, 0.9) 100%);
-      border: 1px dashed ${color};
-      color: ${color};
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-size: 10px;
-      font-weight: 700;
-      white-space: nowrap;
-      box-shadow: 0 0 15px ${color}40, 0 0 30px ${color}20;
-      backdrop-filter: blur(8px);
-      letter-spacing: 0.5px;
-    ">
-      ${name}
-    </div>
-  `,
-  iconSize: [90, 28],
-  iconAnchor: [45, 14],
-});
+const createZoneLabel = (name, rawColor = '#00E676') => {
+  const color = sanitizeColor(rawColor);
+  return new L.DivIcon({
+    className: 'zone-label-icon',
+    html: `
+      <div style="
+        background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(10, 15, 26, 0.9) 100%);
+        border: 1px dashed ${color};
+        color: ${color};
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+        box-shadow: 0 0 15px ${color}40, 0 0 30px ${color}20;
+        backdrop-filter: blur(8px);
+        letter-spacing: 0.5px;
+      ">
+        ${escapeHtml(name)}
+      </div>
+    `,
+    iconSize: [90, 28],
+    iconAnchor: [45, 14],
+  });
+};
 
 // Active Incident Alarm Pin on Map with Neon Glow
 const createAlertIncidentIcon = (severity) => {
@@ -399,6 +506,7 @@ const MapArea = ({
   isPlacingOnMap = false,
   pendingCenter = null,
   onMapClick,
+  onMapHover,
   flyToTrigger,
   isFollowingRoute = false,
   onToggleRouteFollow,
@@ -438,10 +546,8 @@ const MapArea = ({
 
   const routeColor = routeColorForSpeed(selectedVehicle?.speed);
 
-  // Active route to render
-  const activeRoute = selectedVehicle?.route && selectedVehicle.route.length > 0
-    ? selectedVehicle.route
-    : [];
+  // Active route to render (sanitized for safe Leaflet rendering)
+  const activeRoute = selectedVehicle?.route ? sanitizeRoute(selectedVehicle.route) : [];
 
   const guidanceLine = isFollowingRoute && selectedVehicle?.position && userLocation?.position
     ? [selectedVehicle.position, userLocation.position]
@@ -465,7 +571,7 @@ const MapArea = ({
           flyToTrigger={flyToTrigger} 
         />
         <AlertFocusHandler focusTrigger={focusTrigger} markerRefs={alertMarkerRefs} />
-        <UserLocationTracker onLocationChange={onLocationChange} />
+        <UserLocationTracker locateUserTrigger={locateUserTrigger} onLocationChange={onLocationChange} />
         {locateUserTrigger && userLocation?.position && (
           <MapFlyToHandler targetPosition={userLocation.position} flyToTrigger={locateUserTrigger} />
         )}
@@ -480,7 +586,7 @@ const MapArea = ({
         />
 
         {/* Click listener for placing new geofence */}
-        <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} />
+        <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} onMapHover={onMapHover} />
 
         {userLocation?.position && (
           <>
@@ -499,7 +605,7 @@ const MapArea = ({
         {geofences.filter(geo => geo.active).map((geo) => {
           const isPolygon = geo.type === 'polygon' && geo.positions && geo.positions.length > 0;
           const isBreach = isGeofenceBreach(selectedVehicle, geo);
-          const geoColor = isBreach ? '#ef5c72' : geo.color || '#00E676';
+          const geoColor = sanitizeColor(isBreach ? '#ef5c72' : geo.color || '#00E676');
 
           if (isPolygon) {
             return (
@@ -522,7 +628,7 @@ const MapArea = ({
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal{isBreach ? (geo.rule === 'inside' ? ' · Dentro de zona prohibida' : ' · Fuera de zona permitida') : ''}</p>
+                      <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal{getGeofenceStatusText(geo, isBreach)}</p>
                       <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
@@ -553,7 +659,7 @@ const MapArea = ({
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
                         <span className="font-bold text-white">{geo.name}</span>
                       </div>
-                      <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m{isBreach ? (geo.rule === 'inside' ? ' · Dentro de zona prohibida' : ' · Fuera de zona permitida') : ''}</p>
+                      <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m{getGeofenceStatusText(geo, isBreach)}</p>
                       <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
                     </div>
                   </Popup>
@@ -565,19 +671,76 @@ const MapArea = ({
           return null;
         })}
 
-        {/* Temporary Ghost Circle when placing geofence */}
-        {isPlacingOnMap && pendingCenter && (
+        {/* Temporary Ghost Circle when placing or confirming geofence */}
+        {pendingCenter && (
           <Circle 
             center={pendingCenter}
-            radius={600}
+            radius={300}
             pathOptions={{
-              color: '#F59E0B',
-              fillColor: '#F59E0B',
-              fillOpacity: 0.12,
-              weight: 2,
+              color: '#38bdf8',
+              fillColor: '#0284c7',
+              fillOpacity: 0.15,
+              weight: 1.5,
               dashArray: '4, 4',
             }}
           />
+        )}
+
+        {/* 2. Unselected secondary vehicle pins */}
+        {vehicles.filter(v => v.id !== selectedVehicle?.id && v.position).map((vehicle) => (
+          <Marker
+            key={vehicle.id}
+            position={vehicle.position}
+            icon={createFleetPinIcon(vehicle.status)}
+            eventHandlers={{
+              click: () => onSelectVehicle(vehicle),
+            }}
+          >
+            <Popup className="dark-popup">
+              <div className="text-xs">
+                <div className="font-bold text-white mb-0.5">{vehicle.name}</div>
+                <div className="text-[10px] text-slate-400 font-mono mb-1">ID: {vehicle.id}</div>
+                <div className="text-[11px] text-[#00E676] font-mono">Velocidad: {vehicle.speed} km/h</div>
+                <button 
+                  onClick={() => onSelectVehicle(vehicle)}
+                  className="mt-2 w-full py-1 px-2 rounded bg-[#00E676]/20 hover:bg-[#00E676]/30 text-[#00E676] text-[10px] font-bold transition-colors"
+                >
+                  Seleccionar
+                </button>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+
+        {/* 3. Selected Primary Vehicle Pin with glowing label badge */}
+        {selectedVehicle?.position && (
+          <>
+            {/* Pulsing Target Halo */}
+            <Circle 
+              center={selectedVehicle.position}
+              radius={80}
+              pathOptions={{
+                color: routeColor,
+                fillColor: routeColor,
+                fillOpacity: 0.12,
+                weight: 1.5,
+                dashArray: '4, 4',
+              }}
+            />
+            <Marker 
+              position={selectedVehicle.position}
+              icon={createHeroPinIcon(selectedVehicle.name, selectedVehicle.id)}
+              zIndexOffset={1000}
+            >
+              <Popup className="dark-popup">
+                <div className="text-xs">
+                  <div className="font-bold text-white">{selectedVehicle.name}</div>
+                  <div className="text-[#00E676] font-semibold">{selectedVehicle.speed} km/h</div>
+                  <div className="text-[10px] text-slate-400 font-mono mt-1">Estado: {selectedVehicle.status}</div>
+                </div>
+              </Popup>
+            </Marker>
+          </>
         )}
 
         {/* 2. Active Vehicle Glowing Route */}
@@ -606,7 +769,7 @@ const MapArea = ({
         )}
 
         {/* 3. Fleet Vehicle Pins */}
-        {vehicles.map((v) => {
+        {vehicles.filter((v) => v.position).map((v) => {
           const isSelected = selectedVehicle?.id === v.id;
 
           return (
@@ -622,7 +785,7 @@ const MapArea = ({
                 }}
               >
               <Tooltip direction="top" offset={[0, -18]} opacity={0.95}>
-                <span>{v.speed || 0} km/h · precisión {v.accuracy || '--'} m · {v.lastUpdate || 'sin reporte'}</span>
+                <span>{v.speed || 0} km/h · precisión {sanitizeAccuracy(v.accuracy) !== null ? `${sanitizeAccuracy(v.accuracy)} m` : '--'} · {v.lastUpdate || 'sin reporte'}</span>
               </Tooltip>
               <Popup className="dark-popup">
                 <div className="text-xs min-w-[170px]">
@@ -637,7 +800,7 @@ const MapArea = ({
                   </div>
                   <div className="space-y-1 text-[11px] text-[#94A3B8]">
                     <p>Velocidad: <strong className="text-white font-mono">{v.speed} km/h</strong></p>
-                    <p>Batería: <strong className="text-white font-mono">{v.battery ? `${v.battery}%` : '--'}</strong></p>
+                    <p>Batería: <strong className="text-white font-mono">{normalizeBattery(v.battery)}%</strong></p>
                     {v.driver && <p>Conductor: <span className="text-white">{v.driver}</span></p>}
                     <p>{category === 'vehicles' ? 'Placa:' : 'ID:'} <span className="text-[#00E676] font-mono">{v.plate}</span></p>
                   </div>
@@ -688,7 +851,7 @@ const MapArea = ({
                 </div>
                 <p className="text-[11px] text-[#94A3B8] my-1 leading-snug">{alert.description}</p>
                 <div className="text-[10px] text-[#00E676] font-mono mt-1 mb-2">
-                  Moto: {alert.vehicleName} - {alert.speed} km/h
+                  {category === 'devices' ? 'Dispositivo' : 'Moto'}: {alert.vehicleName} - {alert.speed} km/h
                 </div>
                 <button
                   onClick={() => onSelectAlert && onSelectAlert(alert)}
@@ -712,9 +875,15 @@ const MapArea = ({
             </div>
           </div>
           <div className="map-selection-actions">
-            <button type="button" onClick={onToggleRouteFollow} className={isFollowingRoute ? 'is-active' : ''} title="Seguir vehículo en el mapa">
+            <button
+              type="button"
+              onClick={onToggleRouteFollow}
+              disabled={!selectedVehicle?.position}
+              title={!selectedVehicle?.position ? 'Sin posición GPS para seguir' : 'Seguir vehículo en el mapa'}
+              className={`${isFollowingRoute && selectedVehicle?.position ? 'is-active' : ''} ${!selectedVehicle?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
               <Navigation size={15} />
-              <span>{isFollowingRoute ? 'Siguiendo' : 'Seguir'}</span>
+              <span>{isFollowingRoute && selectedVehicle?.position ? 'Siguiendo' : 'Seguir'}</span>
             </button>
             <button type="button" onClick={onShareRoute} title="Compartir ubicación y ruta">
               <Share2 size={15} />

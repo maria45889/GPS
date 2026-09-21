@@ -1,12 +1,15 @@
 import React from 'react';
 import { Navigation, Share2, Radio, MapPin } from 'lucide-react';
 import { VehicleControlCard } from './VehicleControlCard';
+import { normalizeBattery, sanitizeAccuracy } from '../lib/queries';
 
 const DeviceInfo = ({ entity, onToggleRouteFollow, isFollowingRoute, onShareRoute }) => {
   if (!entity) {
     return <div className="dashboard-telemetry border-b border-[#26343b] p-4 text-[12px] text-[#6a8994]">Esperando dispositivo GPS…</div>
   }
-  const status = entity.status === 'active' ? 'En línea' : entity.status === 'stopped' ? 'Detenido' : 'Offline'
+  const status = entity.status === 'active' || entity.status === 'online' ? 'En línea' : entity.status === 'stopped' ? 'Detenido' : entity.status === 'immobilized' ? 'Inmovilizado' : 'Offline'
+  const batteryVal = normalizeBattery(entity.battery);
+  const accVal = sanitizeAccuracy(entity.accuracy);
 
   return (
     <div className="device-info-card">
@@ -21,14 +24,20 @@ const DeviceInfo = ({ entity, onToggleRouteFollow, isFollowingRoute, onShareRout
 
       <div className="stat-metric-grid">
         <div><span>Velocidad</span><strong>{entity.speed || 0} km/h</strong></div>
-        <div><span>Batería</span><strong>{entity.battery ? `${entity.battery}%` : '--'}</strong></div>
-        <div><span>Precisión</span><strong>{entity.accuracy ? `${Math.round(entity.accuracy)} m` : '--'}</strong></div>
+        <div><span>Batería</span><strong>{batteryVal}%</strong></div>
+        <div><span>Precisión</span><strong>{accVal !== null ? `${accVal} m` : '--'}</strong></div>
         <div><span>Reporte</span><strong>{entity.lastUpdate || '--'}</strong></div>
       </div>
 
       <div className="action-button-row">
-        <button type="button" onClick={onToggleRouteFollow} className={`panel-primary-button ${isFollowingRoute ? 'is-active' : ''}`}>
-          <Navigation size={13} /> {isFollowingRoute ? 'Siguiendo' : 'Seguir ubicación'}
+        <button
+          type="button"
+          onClick={onToggleRouteFollow}
+          disabled={!entity?.position}
+          title={!entity?.position ? 'Sin posición GPS para seguir' : ''}
+          className={`panel-primary-button ${isFollowingRoute && entity?.position ? 'is-active' : ''} ${!entity?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          <Navigation size={13} /> {isFollowingRoute && entity?.position ? 'Siguiendo' : 'Seguir ubicación'}
         </button>
         <button type="button" onClick={onShareRoute} className="panel-secondary-button">
           <Share2 size={13} /> Compartir
@@ -57,7 +66,11 @@ export const LeftSidebarPanel = ({
 }) => {
   const currentEntity = entity ?? selectedVehicle ?? null
   const effectiveCategory = category === 'devices' || category === 'vehicles' ? category : currentEntity?.plate ? 'vehicles' : 'devices'
-  const batteryHours = Math.max(1, Math.round(((effectiveCategory === 'vehicles' ? currentEntity?.battery : 0) || 0) / 18))
+  const rawBattery = currentEntity?.battery
+  const hasBattery = rawBattery !== null && rawBattery !== undefined && Number.isFinite(Number(rawBattery))
+  const batteryVal = hasBattery ? Math.max(0, Math.min(100, Number(rawBattery))) : null
+  const batteryDisplay = batteryVal !== null ? `${batteryVal}%` : '--'
+  const batteryHours = batteryVal !== null ? (batteryVal * 0.48).toFixed(1) : '--'
   const apkUrl = import.meta.env.VITE_ANDROID_APK_URL
   const fleetCount = vehicles.length
   const onRoute = vehicles.filter((vehicle) => vehicle.status === 'active' || vehicle.status === 'online').length
@@ -86,13 +99,13 @@ export const LeftSidebarPanel = ({
 
           <div className="stat-metric-grid">
             <div><span>Velocidad</span><strong>{currentEntity?.speed || 0} km/h</strong></div>
-            <div><span>Batería</span><strong>{currentEntity?.battery || 0}%</strong></div>
-            <div><span>Autonomía</span><strong>{batteryHours} h aprox.</strong></div>
+            <div><span>Batería</span><strong>{batteryDisplay}</strong></div>
+            <div><span>Autonomía</span><strong>{batteryHours !== '--' ? `${batteryHours} h aprox.` : '--'}</strong></div>
             <div><span>Actualizado</span><strong>{currentEntity?.lastUpdate || '--'}</strong></div>
           </div>
 
           <div className="bar-track mt-3">
-            <div className="bar-fill" style={{ width: `${currentEntity?.battery || 0}%` }} />
+            <div className="bar-fill" style={{ width: `${batteryVal !== null ? batteryVal : 0}%` }} />
           </div>
         </div>
       )}
@@ -127,7 +140,7 @@ export const LeftSidebarPanel = ({
         </div>
       )}
 
-      {effectiveCategory === 'devices' && userLocation && (
+      {effectiveCategory === 'devices' && userLocation?.position && (
         <div className="flex items-start gap-2 border-b border-[#26343b] px-4 py-3 text-[11px] text-[#6a8994]">
           <MapPin size={13} className="mt-[1px] shrink-0 text-[#b8f36b]" />
           <span>Operador: {userLocation.position.map((value) => value.toFixed(5)).join(', ')}</span>

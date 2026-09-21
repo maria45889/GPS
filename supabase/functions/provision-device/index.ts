@@ -2,35 +2,28 @@
 // Crea la cuenta Auth de un dispositivo, la asocia en devices.auth_user_id
 // y devuelve al APK las credenciales para que el dispositivo pueda entrar
 // a su panel ("login por dispositivo").
-//
-// Requiere el rol service_role (la funcion corre dentro de Supabase y usa
-// SUPABASE_SERVICE_ROLE_KEY, nunca la anon key).
-//
-// Seguridad:
-//   - Valida encabezado x-provision-secret (configurar en Supabase con
-//     supabase secrets set PROVISION_SECRET=<valor>).
-//   - Rate limiting: si el deviceId ya existe en device_registry, devuelve
-//     alreadyRegistered sin crear usuario.
-//   - Validacion estricta del deviceId (alfanumerico, guiones, max 64 chars).
-//   - Si upsert a devices falla despues de crear el usuario Auth, elimina
-//     el usuario para evitar cuentas huerfanas.
-//
-// Despliegue:
-//   cd supabase && supabase functions deploy provision-device
-//
-// Llamada desde el APK (una sola vez en la instalacion):
-//   POST https://<ref>.supabase.co/functions/v1/provision-device
-//   headers: { authorization: 'Bearer <VITE_SUPABASE_ANON_KEY>',
-//              'apikey': '<VITE_SUPABASE_ANON_KEY>',
-//              'x-provision-secret': '<PROVISION_SECRET>',
-//              'Content-Type': 'application/json' }
-//   body: { "deviceId": "c8f2-ab31...", "platform": "android",
-//           "model": "MotoG 24", "app_version": "1.2.0", "battery": 87 }
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+)
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-provision-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+    },
   })
 
 // Password aleatorio legible (sin 0/O/1/l/I para evitar confusiones).
@@ -45,15 +38,15 @@ function randomPassword(len = 18): string {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS' } })
+    return new Response('ok', { headers: corsHeaders })
   }
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
-  // Validación de autorización: encabezado x-provision-secret
+  // Validación de autorización: secreto de aprovisionamiento u obligatoriedad de código de activación
   const expectedSecret = Deno.env.get('PROVISION_SECRET')
   const providedSecret = req.headers.get('x-provision-secret')
-  if (expectedSecret && providedSecret !== expectedSecret) {
-    return json({ error: 'no autorizado' }, 403)
+  if (expectedSecret && providedSecret && providedSecret !== expectedSecret) {
+    return json({ error: 'no autorizado: secreto invalido' }, 403)
   }
 
   let body: Record<string, unknown>
@@ -63,6 +56,12 @@ serve(async (req) => {
     return json({ error: 'json invalido' }, 400)
   }
 
+  // Punto 5 & 14: Código de activación obligatorio para asociar organización y vehículo
+  const activationCode = String(body.activationCode || body.activation_code || '').trim()
+  if (!activationCode) {
+    return json({ error: 'codigo de activacion es obligatorio' }, 400)
+  }
+
   // Validación estricta del deviceId: solo caracteres alfanuméricos, guiones y guiones bajos, máx 64 chars
   const rawDeviceId = String(body.deviceId ?? '').trim()
   const deviceId = rawDeviceId.slice(0, 64)
@@ -70,7 +69,7 @@ serve(async (req) => {
     return json({ error: 'deviceId invalido' }, 400)
   }
 
-  // Rate limiting simple: verificar que el dispositivo no esté ya registrado en device_registry
+  // Rate limiting y verificación de registro previo
   const existing = await supabase
     .from('device_registry')
     .select('device_id')
@@ -102,28 +101,18 @@ serve(async (req) => {
   })
   if (created.error) return json({ error: created.error.message }, 500)
 
-  const upsert = await supabase
-    .from('devices')
-    .upsert(
-      {
-        id: deviceId,
-        auth_user_id: created.data.user.id,
-        status: 'active',
-        platform: String(body.platform ?? 'android').slice(0, 40) || null,
-        model: String(body.model ?? '').slice(0, 80) || null,
-        app_version: String(body.app_version ?? '').slice(0, 20) || null,
-        battery: typeof body.battery === 'number' ? body.battery : null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id' },
-    )
+  // Invocación atómica RPC obligatoria para aprovisionar dispositivo y asociar organización y vehículo
+  const { data: rpcRes, error: rpcErr } = await supabase.rpc('provision_device_atomic', {
+    p_device_id: deviceId,
+    p_activation_code: activationCode,
+    p_auth_user_id: created.data.user.id,
+  })
 
-  if (upsert.error) {
-    // Limpieza: elimina la cuenta Auth si el registro en devices falla
+  if (rpcErr || !rpcRes?.success) {
     if (created.data?.user?.id) {
       await supabase.auth.admin.deleteUser(created.data.user.id)
     }
-    return json({ error: upsert.error.message }, 500)
+    return json({ error: rpcErr?.message || rpcRes?.error || 'error al aprovisionar dispositivo' }, 403)
   }
 
   return json({ ok: true, deviceId, email, password })

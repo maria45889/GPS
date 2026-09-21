@@ -12,7 +12,7 @@ export const initialGeofences = [
     center: [37.7725, -122.4245],
     radius: 650,
     color: '#00F0FF',
-    rule: 'Notificar salida no autorizada',
+    rule: 'outside',
     active: true,
   },
   {
@@ -28,7 +28,7 @@ export const initialGeofences = [
     center: [37.7675, -122.3945],
     radius: 850,
     color: '#00E676',
-    rule: 'Registro de entrada y control horario',
+    rule: 'outside',
     active: true,
   },
   {
@@ -38,7 +38,7 @@ export const initialGeofences = [
     center: [37.7880, -122.4000],
     radius: 700,
     color: '#FF9100',
-    rule: 'Límite velocidad 50 km/h',
+    rule: 'inside',
     active: false,
   }
 ];

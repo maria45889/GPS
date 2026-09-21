@@ -4,5 +4,7 @@
     <string name="title_activity_main">GPS Tracker</string>
     <string name="package_name">com.gps.tracker</string>
     <string name="custom_url_scheme">com.gps.tracker</string>
+    <!-- Nota de seguridad: El secreto de aprovisionamiento en strings.xml es para pruebas iniciales.
+         Para producción se recomienda utilizar un código de activación de un solo uso o registro manual en el panel. -->
     <string name="provision_secret">cambiar-provision-secret-aqui</string>
 </resources>
