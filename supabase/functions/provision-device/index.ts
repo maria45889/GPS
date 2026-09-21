@@ -151,12 +151,14 @@ serve(async (req) => {
     // Si el dispositivo ya está registrado, SOLO se permite re-aprovisionar con un código de activación NUEVO y VÁLIDO.
     const { data: validCode, error: codeErr } = await supabase
       .from('device_activation_codes')
-      .select('id, organization_id, vehicle_id')
+      .select('id, organization_id, vehicle_id, expires_at')
       .eq('code', activationCode)
       .eq('used', false)
       .maybeSingle()
 
-    if (codeErr || !validCode) {
+    const isExpired = validCode?.expires_at ? new Date(validCode.expires_at).getTime() <= Date.now() : false
+
+    if (codeErr || !validCode || isExpired) {
       recordFailedAttempt(`ip:${clientIp}`)
       recordFailedAttempt(`device:${deviceId}`)
       recordFailedAttempt(`code:${activationCode}`)

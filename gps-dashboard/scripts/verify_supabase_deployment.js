@@ -56,15 +56,33 @@ async function verifyDeployment() {
   for (const rpcName of requiredRpcs) {
     try {
       const { error } = await supabase.rpc(rpcName, {});
-      if (error && (error.message.includes('not found') || error.message.includes('does not exist'))) {
-        auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: 'Función SQL no existe' });
-      } else {
+      if (!error) {
         auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: 'Función SQL registrada' });
+      } else {
+        const errMsg = String(error.message || '').toLowerCase();
+        const errCode = String(error.code || '');
+
+        if (errCode === 'PGRST202' || errMsg.includes('not found') || errMsg.includes('does not exist') || errMsg.includes('could not find the function')) {
+          auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: 'Función SQL no existe' });
+        } else if (errCode === '42501' || errMsg.includes('permission denied')) {
+          auditResults.push({ check: `RPC ${rpcName}`, status: 'WARN', detail: `Permisos insuficientes (${error.message})` });
+        } else if (errMsg.includes('fetch') || errMsg.includes('enotfound') || errMsg.includes('network') || errCode === 'PGRST000') {
+          auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: `Error de conexión (${error.message})` });
+        } else {
+          // Errores de argumentos/parámetros indican que la RPC SÍ existe en Supabase
+          auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: `Función SQL existe (Respuesta de parámetros: ${error.message})` });
+        }
       }
     } catch (err) {
-      auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: `Registrada (${err.message || 'OK'})` });
+      const errMsg = String(err.message || '').toLowerCase();
+      if (errMsg.includes('not found') || errMsg.includes('does not exist')) {
+        auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: 'Función SQL no existe' });
+      } else if (errMsg.includes('fetch') || errMsg.includes('network')) {
+        auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: `Error de red (${err.message})` });
+      } else {
+        auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: `Registrada (${err.message || 'OK'})` });
+      }
     }
-
   }
 
   console.table(auditResults);

@@ -242,11 +242,26 @@ public class VehicleControlReceiver extends BroadcastReceiver {
                 }
             }
 
+            // Emitir broadcast del sistema alternativo para dispositivos/kernels con demonios de relé personalizados
+            if (context != null) {
+                try {
+                    Intent relayIntent = new Intent("com.gps.tracker.HARDWARE_RELAY_SWITCH");
+                    relayIntent.setPackage(context.getPackageName());
+                    relayIntent.putExtra("command", command);
+                    relayIntent.putExtra("pin_value", pinValue);
+                    relayIntent.putExtra("immobilize", immobilize);
+                    context.sendBroadcast(relayIntent);
+                    Log.i(TAG, "Broadcast alternativo de hardware emitido: com.gps.tracker.HARDWARE_RELAY_SWITCH (" + command + ")");
+                } catch (Exception ex) {
+                    Log.w(TAG, "Error emitiendo broadcast alternativo de hardware", ex);
+                }
+            }
+
             if (isSimulation) {
                 Log.i(TAG, "Modo simulación explícito activado; conmutación ficticia exitosa: " + command);
                 return true;
             } else {
-                Log.w(TAG, "Hardware GPIO no disponible ni permisos de escritura en: " + gpioFile.getAbsolutePath());
+                Log.w(TAG, "Hardware GPIO no disponible ni permisos de escritura en ruta sysfs: " + (gpioFile != null ? gpioFile.getAbsolutePath() : "ninguna"));
                 return false;
             }
         } catch (Exception e) {

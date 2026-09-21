@@ -535,12 +535,6 @@ public class LocationService extends Service implements LocationListener {
             HttpURLConnection connection = null;
             JSONObject body = null;
             try {
-                String token = authManager.getAccessToken();
-                if (token == null) {
-                    updateNotification("Dispositivo sin autenticar");
-                    return;
-                }
-
                 String baseUrl = getString(R.string.supabase_url);
                 String deviceId = authManager.getDeviceId();
                 SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
@@ -562,6 +556,14 @@ public class LocationService extends Service implements LocationListener {
                 body.put("altitude", location.hasAltitude() ? location.getAltitude() : JSONObject.NULL);
                 body.put("bearing", location.hasBearing() ? location.getBearing() : JSONObject.NULL);
                 body.put("timestamp", timestamp);
+
+                String token = authManager.getAccessToken();
+                if (token == null) {
+                    Log.w(TAG, "Sin access token al capturar ubicación. Guardando punto GPS en cola offline.");
+                    enqueueOfflineLocation(body);
+                    updateNotification("Sin token - Ubicación guardada en cola offline (" + offlineQueue.size() + ")");
+                    return;
+                }
 
                 boolean deviceRegistered = upsertDeviceDirectly(token, deviceId, timestamp, "OK");
                 if (!deviceRegistered) {
