@@ -70,19 +70,25 @@ export const refreshNativeSession = async () => {
   const freshNative = getNativeDeviceAuth();
   if (freshNative?.access_token) {
     currentNativeToken = freshNative.access_token;
-    try {
-      await supabase.auth.setSession({
-        access_token: freshNative.access_token,
-        refresh_token: '',
-      });
-      if (supabase.realtime) {
-        try { supabase.realtime.setAuth(freshNative.access_token); } catch {}
+    
+    // Configurar inmediatamente los headers globales de REST y Realtime
+    if (supabase.rest?.headers) {
+      supabase.rest.headers['Authorization'] = `Bearer ${freshNative.access_token}`;
+    }
+    if (supabase.realtime) {
+      try { supabase.realtime.setAuth(freshNative.access_token); } catch {}
+    }
+
+    // Solo invocar setSession si se dispone de un refresh_token válido para evitar excepciones del cliente Supabase JS
+    if (freshNative.refresh_token && typeof freshNative.refresh_token === 'string' && freshNative.refresh_token.trim() !== '') {
+      try {
+        await supabase.auth.setSession({
+          access_token: freshNative.access_token,
+          refresh_token: freshNative.refresh_token,
+        });
+      } catch (err) {
+        console.warn('Error al actualizar la sesión de Supabase con refresh_token:', err);
       }
-      if (supabase.rest?.headers) {
-        supabase.rest.headers['Authorization'] = `Bearer ${freshNative.access_token}`;
-      }
-    } catch (err) {
-      console.warn('Error al actualizar la sesión de Supabase con el token nativo:', err);
     }
     return freshNative.access_token;
   }

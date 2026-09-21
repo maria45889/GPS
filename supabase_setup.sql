@@ -199,6 +199,7 @@ create table if not exists public.device_activation_codes (
   label text,
   used boolean not null default false,
   used_at timestamptz,
+  expires_at timestamptz default (now() + interval '24 hours'),
   created_at timestamptz not null default now()
 );
 
@@ -247,11 +248,13 @@ begin
 
   select * into code_rec
   from public.device_activation_codes
-  where code = p_activation_code and used = false
+  where code = p_activation_code 
+    and used = false 
+    and (expires_at is null or expires_at > now())
   for update;
 
   if not found then
-    return jsonb_build_object('success', false, 'error', 'Código de activación inválido o ya utilizado');
+    return jsonb_build_object('success', false, 'error', 'Código de activación inválido, expirado o ya utilizado');
   end if;
 
   update public.device_activation_codes

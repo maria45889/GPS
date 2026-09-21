@@ -10,8 +10,6 @@ import {
   transformGeofence,
   transformVehicle,
 } from './queries'
-import { initialGeofences } from '../data/geofencesData'
-
 describe('helpers: normalizeBattery, sanitizeAccuracy, sanitizeRoute', () => {
   it('normaliza bateria entre 0% y 100%', () => {
     expect(normalizeBattery(85)).toBe(85)
@@ -110,8 +108,18 @@ describe('transformAlert and transformGeofence', () => {
     expect(geo.radius).toBe(300)
   })
 
-  it('mantiene el contrato de las geocercas iniciales', () => {
-    const geo = transformGeofence(initialGeofences[0])
+  it('mantiene el contrato de transformación de geocercas en polígono', () => {
+    const geo = transformGeofence({
+      id: 'geo-1',
+      name: 'Zona Prueba',
+      type: 'polygon',
+      positions: [
+        [37.7710, -122.4280],
+        [37.7745, -122.4270],
+        [37.7740, -122.4200]
+      ],
+      active: true,
+    })
     expect(geo.positions.length).toBeGreaterThan(2)
     expect(geo.active).toBe(true)
   })
