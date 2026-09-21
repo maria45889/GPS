@@ -26,4 +26,16 @@ describe('Edge Function provision-device contract', () => {
   it('realiza limpieza eliminando el usuario Auth si el upsert en devices falla', () => {
     expect(edgeFunctionContent).toContain("supabase.auth.admin.deleteUser");
   });
+
+  it('exige un código de activación nuevo y válido para re-aprovisionar un dispositivo ya registrado', () => {
+    expect(edgeFunctionContent).toContain('dispositivo ya registrado. requiere un codigo de activacion nuevo y valido');
+    expect(edgeFunctionContent).toContain("from('device_activation_codes')");
+  });
+
+  it('aplica limitación de tasa (rate limit) devolviendo error 429 ante solicitudes excesivas', () => {
+    expect(edgeFunctionContent).toContain('demasiados intentos de aprovisionamiento. intente mas tarde');
+    expect(edgeFunctionContent).toContain('status = 200');
+    expect(edgeFunctionContent).toContain('checkRateLimit');
+  });
 });
+
