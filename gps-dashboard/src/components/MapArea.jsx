@@ -595,9 +595,12 @@ const MapArea = ({
           url={baseLayer === 'satellite'
             ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
             : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'}
-          attribution={baseLayer === 'satellite' ? '&copy; Esri' : '&copy; Esri'}
+          attribution={baseLayer === 'satellite'
+            ? '&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
+            : '&copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'}
           maxZoom={18}
         />
+
 
         {/* Click listener for placing new geofence */}
         <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} onMapHover={onMapHover} />
@@ -897,10 +900,11 @@ const MapArea = ({
           <div />
           {/* Map attribution */}
           <div className="text-gray-500 text-xs">
-            <span>© </span>
+            <span>© Esri / </span>
             <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">OpenStreetMap</a>
             <span> contributors</span>
           </div>
+
         </div>
       </div>
     </div>
