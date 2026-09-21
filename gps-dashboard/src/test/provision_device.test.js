@@ -9,10 +9,12 @@ describe('Edge Function provision-device contract', () => {
     'utf-8'
   );
 
-  it('valida el secreto de aprovisionamiento mediante x-provision-secret header', () => {
+  it('valida el secreto de aprovisionamiento si se proporciona x-provision-secret sin bloquear solicitudes de APK con código de activación', () => {
     expect(edgeFunctionContent).toContain("Deno.env.get('PROVISION_SECRET')");
     expect(edgeFunctionContent).toContain("req.headers.get('x-provision-secret')");
+    expect(edgeFunctionContent).toContain("providedSecret !== expectedSecret");
   });
+
 
   it('ejecuta el procedimiento atómico provision_device_atomic para evitar condiciones de carrera', () => {
     expect(edgeFunctionContent).toContain("supabase.rpc('provision_device_atomic'");
