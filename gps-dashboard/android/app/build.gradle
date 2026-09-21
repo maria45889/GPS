@@ -90,3 +90,21 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+task ensureSupabaseConfig {
+    doLast {
+        def configFile = file('src/main/res/values/supabase_config.xml')
+        if (!configFile.exists()) {
+            configFile.parentFile.mkdirs()
+            def supabaseUrl = System.getenv('SUPABASE_URL') ?: 'https://wsmqgjcfheraxorljhjc.supabase.co'
+            def supabaseKey = System.getenv('SUPABASE_ANON_KEY') ?: System.getenv('SUPABASE_PUBLISHABLE_KEY') ?: 'sb_publishable_hbG191sqB0OuXaUHZrHEFQ_uP594pS2'
+            configFile.text = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="supabase_url" translatable="false">${supabaseUrl}</string>
+    <string name="supabase_publishable_key" translatable="false">${supabaseKey}</string>
+</resources>"""
+            println("Generado supabase_config.xml de forma automática para la compilación del APK.")
+        }
+    }
+}
+preBuild.dependsOn ensureSupabaseConfig

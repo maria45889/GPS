@@ -166,10 +166,7 @@ serve(async (req) => {
     }
 
     let authUserId = deviceExisting.data?.auth_user_id
-    if (authUserId) {
-      const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
-      if (updated.error) return json({ error: updated.error.message }, 500)
-    } else {
+    if (!authUserId) {
       const created = await supabase.auth.admin.createUser({
         email,
         password,
@@ -180,6 +177,7 @@ serve(async (req) => {
       authUserId = created.data.user.id
     }
 
+    // Ejecutar primero la RPC atómica para bloquear y consumir el código de activación en DB
     const { data: rpcRes, error: rpcErr } = await supabase.rpc('provision_device_atomic', {
       p_device_id: deviceId,
       p_activation_code: activationCode,
@@ -190,6 +188,12 @@ serve(async (req) => {
       recordFailedAttempt(`ip:${clientIp}`)
       return json({ error: rpcErr?.message || rpcRes?.error || 'error al re-aprovisionar dispositivo' }, 403)
     }
+
+    // Una vez confirmado y consumido el código en DB, actualizar la contraseña y revocar sesiones previas
+    const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
+    if (updated.error) return json({ error: updated.error.message }, 500)
+
+    try { await supabase.auth.admin.signOut(authUserId) } catch {}
 
     return json({ ok: true, deviceId, email, password, reissued: true })
   }

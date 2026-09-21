@@ -15,8 +15,8 @@ describe('Android LocationService java contracts', () => {
     expect(javaContent).toContain('/rest/v1/rpc/ack_vehicle_command');
   });
 
-  it('implementa límite máximo de cola offline (MAX_OFFLINE_QUEUE_SIZE = 500)', () => {
-    expect(javaContent).toContain('MAX_OFFLINE_QUEUE_SIZE = 500;');
+  it('implementa límite máximo de cola offline (MAX_OFFLINE_QUEUE_SIZE = 3000)', () => {
+    expect(javaContent).toContain('MAX_OFFLINE_QUEUE_SIZE = 3000;');
     expect(javaContent).toContain('offlineQueue.poll();');
   });
 
@@ -236,8 +236,8 @@ describe('Android LocationService java contracts', () => {
     expect(mainContent).toContain('isIgnoringBatteryOptimizations');
   });
 
-  it('consulta únicamente status=eq.pending, transmite created_at, usa GpsTrackerCommandKey y valida tolerancia de reloj en LocationService.java', () => {
-    expect(javaContent).toContain('status=eq.pending');
+  it('consulta comandos pendientes y recibidos con status=in.(pending,received), transmite created_at, usa GpsTrackerCommandKey y valida tolerancia de reloj en LocationService.java', () => {
+    expect(javaContent).toContain('status=in.(pending,received)');
     expect(javaContent).toContain('created_at');
     expect(javaContent).toContain('GpsTrackerCommandKey');
     expect(javaContent).toContain('getValidLocationTime');

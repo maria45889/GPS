@@ -294,23 +294,28 @@ export const fetchLatestLocations = async () => {
   if (!supabase) return []
 
   return withAuthRetry(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('latest_gps_locations')
-        .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
+    const { data, error } = await supabase
+      .from('latest_gps_locations')
+      .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
 
-      if (!error && data) {
-        return data
-      }
-    } catch {
-      // Si la vista aún no existe en la base de datos, procede con el fallback limitado
+    if (!error && Array.isArray(data)) {
+      return data
     }
+
+    const errCode = String(error?.code || '')
+    const errMsg = String(error?.message || '')
+    if (errCode === '42501' || errMsg.includes('permission denied')) {
+      console.warn('⚠️ Error de permisos RLS al consultar vista latest_gps_locations:', error)
+      throw error
+    }
+
+    console.warn('⚠️ Vista latest_gps_locations no disponible. Activando fallback sobre tabla gps_locations:', error?.message || error)
 
     const { data: fallbackData, error: fallbackError } = await supabase
       .from('gps_locations')
       .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
       .order('timestamp', { ascending: false })
-      .limit(5000)
+      .limit(10000)
 
     if (fallbackError) throw fallbackError
 

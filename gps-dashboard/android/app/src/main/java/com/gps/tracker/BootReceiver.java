@@ -72,7 +72,8 @@ public class BootReceiver extends BroadcastReceiver {
             }
         } catch (Exception e) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e instanceof android.app.ForegroundServiceStartNotAllowedException) {
-                Log.w(TAG, "Inicio de Foreground Service denegado tras reinicio por política Android 12+: ForegroundServiceStartNotAllowedException", e);
+                Log.w(TAG, "Inicio de Foreground Service denegado tras reinicio por política Android 12+: ForegroundServiceStartNotAllowedException. Programando alarma de recuperación en 10s.", e);
+                scheduleServiceStartAlarm(context, 10_000L);
             } else {
                 Log.e(TAG, "Excepción de arranque foreground en BootReceiver: " + e.getMessage(), e);
             }

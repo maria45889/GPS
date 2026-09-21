@@ -68,8 +68,8 @@ public class LocationService extends Service implements LocationListener {
     private static final int NOTIFICATION_ID = 1001;
     private static final long UPDATE_INTERVAL_MS = 30_000L;
     private static final float UPDATE_DISTANCE_METERS = 0f;
-    private static final int MAX_OFFLINE_QUEUE_SIZE = 500;
-    private static final long MAX_OFFLINE_QUEUE_AGE_MS = 24 * 60 * 60 * 1000L; // 24 horas
+    private static final int MAX_OFFLINE_QUEUE_SIZE = 3000;
+    private static final long MAX_OFFLINE_QUEUE_AGE_MS = 24 * 60 * 60 * 1000L; // 24 horas (política de retención para telemetría offline continua de 30s)
     private static final int MAX_PROCESSED_COMMAND_IDS_SIZE = 1000;
     private static final String QUEUE_PREFS_KEY = "offline_gps_queue_json";
     private static final String COMMANDS_PREFS_KEY = "processed_command_ids_json";
@@ -831,7 +831,7 @@ public class LocationService extends Service implements LocationListener {
                 String timestamp = formatter.format(new Date());
 
                 String query = getString(R.string.supabase_url)
-                        + "/rest/v1/vehicle_commands?select=id,command,status,created_at&status=eq.pending&device_id=eq."
+                        + "/rest/v1/vehicle_commands?select=id,command,status,created_at&status=in.(pending,received)&device_id=eq."
                         + URLEncoder.encode(deviceId, StandardCharsets.UTF_8.name())
                         + "&order=created_at.asc&limit=5";
 
@@ -868,6 +868,7 @@ public class LocationService extends Service implements LocationListener {
                     JSONObject obj = rows.getJSONObject(i);
                     String cmdId = obj.getString("id");
                     String cmdName = obj.optString("command", "");
+                    String cmdStatus = obj.optString("status", "pending");
                     String createdAtStr = obj.optString("created_at", null);
 
                     if (processedCommandIds.contains(cmdId) || activeExecutingCommandIds.contains(cmdId)) continue;
@@ -897,17 +898,20 @@ public class LocationService extends Service implements LocationListener {
                         continue;
                     }
 
-
                     activeExecutingCommandIds.add(cmdId);
 
-                    boolean receivedAcked = ackCommandStatus(token, timestamp, cmdId, "received");
-                    if (!receivedAcked) {
-                        Log.w(TAG, "No se pudo confirmar ACK received en servidor para comando " + cmdId + ". Abortando ejecución física en este ciclo.");
-                        activeExecutingCommandIds.remove(cmdId);
-                        continue;
+                    if ("pending".equalsIgnoreCase(cmdStatus)) {
+                        boolean receivedAcked = ackCommandStatus(token, timestamp, cmdId, "received");
+                        if (!receivedAcked) {
+                            Log.w(TAG, "No se pudo confirmar ACK received en servidor para comando " + cmdId + ". Abortando ejecución física en este ciclo.");
+                            activeExecutingCommandIds.remove(cmdId);
+                            continue;
+                        }
+                    } else {
+                        Log.i(TAG, "Recuperando comando en estado '" + cmdStatus + "' para reintento de ejecución física: " + cmdId);
                     }
 
-                    // Paso 2: Ejecutar acción física en hardware/relé solo si el ACK "received" fue confirmado por servidor
+                    // Paso 2: Ejecutar acción física en hardware/relé
                     executeCommandAction(cmdId, cmdName, createdAtMillis, token, timestamp);
                 }
 
