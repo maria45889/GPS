@@ -185,12 +185,13 @@ public class VehicleControlReceiver extends BroadcastReceiver {
             return false;
         }
 
-        boolean immobilize = "stop".equalsIgnoreCase(command) || "immobilize".equalsIgnoreCase(command);
-        String pinValue = immobilize ? "0" : "1";
-
         SharedPreferences prefs = context != null ? context.getSharedPreferences("vehicle_control_prefs", Context.MODE_PRIVATE) : null;
-        String prefPath = prefs != null ? prefs.getString("gpio_path", null) : null;
+        boolean activeLow = prefs != null && prefs.getBoolean("gpio_active_low", "true".equalsIgnoreCase(System.getProperty("gps.relay.active_low", "false")));
+        boolean immobilize = "stop".equalsIgnoreCase(command) || "immobilize".equalsIgnoreCase(command);
+        // Lógica configurable para relés Normalmente Abiertos (Active HIGH) o Normalmente Cerrados (Active LOW)
+        String pinValue = immobilize ? (activeLow ? "1" : "0") : (activeLow ? "0" : "1");
 
+        String prefPath = prefs != null ? prefs.getString("gpio_path", null) : null;
         String sysPropPath = System.getProperty("gps.relay.gpio_path", null);
         String customPath = (sysPropPath != null && !sysPropPath.trim().isEmpty()) ? sysPropPath : prefPath;
         boolean isDebug = false;

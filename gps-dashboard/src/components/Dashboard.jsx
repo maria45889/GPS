@@ -316,13 +316,57 @@ const Dashboard = () => {
 
     setOperationMessage(
       commandResult.remote
-        ? `Comando ${command} en cola. Esperando confirmación física de relé.`
+        ? `Comando ${command} en cola. Esperando confirmación física de relé...`
         : `Comando ${command} registrado localmente.`,
     )
-    setTimeout(() => {
-      setIsVehicleControlBusy(false)
-      setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-    }, 15000)
+
+    if (commandResult.commandId && supabase) {
+      const commandId = commandResult.commandId
+      let attempts = 0
+      const maxAttempts = 30 // 30 intentos * 2s = 60s max
+      const intervalId = setInterval(async () => {
+        attempts++
+        try {
+          const { data, error } = await supabase
+            .from('vehicle_commands')
+            .select('status')
+            .eq('id', commandId)
+            .maybeSingle()
+
+          if (!error && data) {
+            if (data.status === 'received') {
+              setOperationMessage(`Comando ${command} recibido por el APK. Ejecutando relé...`)
+            } else if (data.status === 'done') {
+              clearInterval(intervalId)
+              setOperationMessage(`✅ Comando ${command} ejecutado exitosamente en el relé físico.`)
+              setIsVehicleControlBusy(false)
+              setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
+              return
+            } else if (data.status === 'failed') {
+              clearInterval(intervalId)
+              setOperationMessage(`❌ Falló la ejecución del comando ${command} en el dispositivo.`)
+              setIsVehicleControlBusy(false)
+              setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
+              return
+            }
+          }
+        } catch {
+          // Ignorar errores temporales de polling
+        }
+
+        if (attempts >= maxAttempts) {
+          clearInterval(intervalId)
+          setOperationMessage(`⚠️ Tiempo de espera agotado esperando confirmación del comando ${command}.`)
+          setIsVehicleControlBusy(false)
+          setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
+        }
+      }, 2000)
+    } else {
+      setTimeout(() => {
+        setIsVehicleControlBusy(false)
+        setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
+      }, 5000)
+    }
   }
 
   const handleDeleteVehicle = async (vehicleId) => {

@@ -1033,7 +1033,7 @@ create policy "vehicle_commands_device_ack"
   with check (device_id = public.current_device_id() and status in ('pending', 'received', 'done', 'failed'));
 
 -- =====================================================================
--- Trigger de creación de perfil para nuevos registros de Auth
+-- Trigger de creación de perfil para nuevos registros de Auth (Excluye dispositivos GPS)
 -- =====================================================================
 create or replace function public.handle_new_user()
 returns trigger
@@ -1044,6 +1044,11 @@ as $$
 declare
   target_org_id uuid;
 begin
+  -- Dispositivos GPS (rol 'device' o email 'device-*@local.rideguard') NO deben recibir perfil de operador viewer
+  if coalesce(new.raw_app_meta_data->>'role', '') = 'device' or new.email like 'device-%@local.rideguard' then
+    return new;
+  end if;
+
   select id into target_org_id from public.organizations order by created_at limit 1;
 
   if target_org_id is null then
@@ -1064,6 +1069,55 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- =====================================================================
+-- Eliminación de vehículo en cascada (Desvincula dispositivo y revoque de acceso)
+-- =====================================================================
+create or replace function public.delete_vehicle_cascade(
+  p_vehicle_id text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_device_id text;
+  v_org_id uuid;
+begin
+  v_org_id := public.current_user_org_id();
+
+  select device_id into v_device_id
+  from public.vehicles
+  where id = p_vehicle_id and (organization_id = v_org_id or v_org_id is null);
+
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'Vehículo no encontrado o sin permisos');
+  end if;
+
+  if v_device_id is not null then
+    update public.devices
+    set status = 'inactive', updated_at = now()
+    where id = v_device_id;
+
+    update public.device_registry
+    set vehicle_id = null, status = 'inactive', last_seen = now()
+    where device_id = v_device_id;
+
+    update public.vehicle_commands
+    set status = 'failed', updated_at = now()
+    where device_id = v_device_id and status in ('pending', 'received');
+  end if;
+
+  delete from public.vehicles
+  where id = p_vehicle_id;
+
+  return jsonb_build_object('success', true, 'device_id', v_device_id);
+end;
+$$;
+
+revoke execute on function public.delete_vehicle_cascade(text) from public, anon;
+grant execute on function public.delete_vehicle_cascade(text) to authenticated;
 
 -- =====================================================================
 -- Migración de Backfill AL FINAL (después de crear todas las tablas, columnas e índices) (Punto 1)

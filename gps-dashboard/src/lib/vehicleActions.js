@@ -54,7 +54,7 @@ export const sendVehicleCommand = async (vehicleId, command, deviceId = null) =>
 
     if (error) return { remote: false, error };
     if (!data || data.length === 0) return { remote: false, error: new Error('Comando no registrado') };
-    return { remote: true };
+    return { remote: true, commandId: data[0].id };
   });
 };
 
@@ -62,15 +62,26 @@ export const deleteVehicle = async (vehicleId) => {
   if (!supabase) return { remote: false };
 
   return withAuthRetry(async () => {
-    const { data, error } = await supabase
-      .from('vehicles')
-      .delete()
-      .eq('id', vehicleId)
-      .select('id');
+    const { data, error } = await supabase.rpc('delete_vehicle_cascade', {
+      p_vehicle_id: vehicleId,
+    });
 
-    if (error) return { remote: false, error };
-    if (!data || data.length === 0) return { remote: false, error: new Error('Ninguna fila afectada') };
-    return { remote: true };
+    if (error) {
+      // Fallback a eliminación directa si la RPC aún no está desplegada
+      const { error: delError } = await supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', vehicleId)
+        .select('id');
+      if (delError) return { remote: false, error: delError };
+      return { remote: true };
+    }
+
+    if (data && data.success === false) {
+      return { remote: false, error: new Error(data.error || 'No se pudo eliminar el vehículo') };
+    }
+
+    return { remote: true, deviceId: data?.device_id };
   });
 };
 
