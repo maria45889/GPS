@@ -105,12 +105,22 @@ const MapClickHandler = ({ isPlacingOnMap, onMapClick, onMapHover }) => {
   return null;
 };
 
-const createUserLocationIcon = () => new L.DivIcon({
+const iconCache = new Map();
+
+const getCachedIcon = (key, factory) => {
+  if (!iconCache.has(key)) {
+    iconCache.set(key, factory());
+  }
+  return iconCache.get(key);
+};
+
+const createUserLocationIcon = () => getCachedIcon('user-location', () => new L.DivIcon({
   className: 'user-location-pin',
   html: '<div class="user-location-dot"><span></span></div>',
   iconSize: [24, 24],
   iconAnchor: [12, 12],
-});
+}));
+
 
 const UserLocationTracker = ({ locateUserTrigger, onLocationChange }) => {
   const watchIdRef = useRef(null);
@@ -181,7 +191,7 @@ const escapeHtml = (str) => {
 };
 
 // Selected Vehicle Hero Pin matching the mockup
-const createHeroPinIcon = (name, id) => new L.DivIcon({
+const createHeroPinIcon = (name, id) => getCachedIcon(`hero-${id}-${name}`, () => new L.DivIcon({
   className: 'custom-vehicle-pin',
   html: `
     <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
@@ -260,13 +270,13 @@ const createHeroPinIcon = (name, id) => new L.DivIcon({
   `,
   iconSize: [120, 95],
   iconAnchor: [60, 85],
-});
+}));
 
 // Subtle Secondary Fleet Pins for unselected bikes
 const createFleetPinIcon = (status) => {
   const color = status === 'active' ? '#00E676' : status === 'stopped' ? '#F59E0B' : '#64748B';
   const glowColor = status === 'active' ? 'rgba(0,230,118,0.3)' : status === 'stopped' ? 'rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.2)';
-  return new L.DivIcon({
+  return getCachedIcon(`fleet-${status}`, () => new L.DivIcon({
     className: 'mini-vehicle-pin',
     html: `
       <div style="
@@ -321,11 +331,11 @@ const createFleetPinIcon = (status) => {
     `,
     iconSize: [32, 32],
     iconAnchor: [16, 16],
-  });
+  }));
 };
 
 // Route Start (A) and End (B) badges
-const createWaypointIcon = (label, color = '#00E676') => new L.DivIcon({
+const createWaypointIcon = (label, color = '#00E676') => getCachedIcon(`waypoint-${label}-${color}`, () => new L.DivIcon({
   className: 'route-waypoint-pin',
   html: `
     <div style="
@@ -355,14 +365,17 @@ const createWaypointIcon = (label, color = '#00E676') => new L.DivIcon({
   `,
   iconSize: [28, 28],
   iconAnchor: [14, 14],
-});
+}));
 
-const createHeadingIcon = (bearing = 0) => new L.DivIcon({
-  className: 'heading-arrow-pin',
-  html: `<div class="heading-arrow" style="transform: rotate(${Number(bearing) || 0}deg)">▲</div>`,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-});
+const createHeadingIcon = (bearing = 0) => {
+  const roundedBearing = Math.round(Number(bearing) || 0);
+  return getCachedIcon(`heading-${roundedBearing}`, () => new L.DivIcon({
+    className: 'heading-arrow-pin',
+    html: `<div class="heading-arrow" style="transform: rotate(${roundedBearing}deg)">▲</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  }));
+};
 
 const isInsideGeofence = (vehicle, geofence) => {
   if (!vehicle?.position || !geofence) return false;
@@ -432,7 +445,7 @@ const sanitizeColor = (color) => {
 // Zone label badge
 const createZoneLabel = (name, rawColor = '#00E676') => {
   const color = sanitizeColor(rawColor);
-  return new L.DivIcon({
+  return getCachedIcon(`zone-${name}-${color}`, () => new L.DivIcon({
     className: 'zone-label-icon',
     html: `
       <div style="
@@ -453,14 +466,14 @@ const createZoneLabel = (name, rawColor = '#00E676') => {
     `,
     iconSize: [90, 28],
     iconAnchor: [45, 14],
-  });
+  }));
 };
 
 // Active Incident Alarm Pin on Map with Neon Glow
 const createAlertIncidentIcon = (severity) => {
   const isCritical = severity === 'critical';
   const color = isCritical ? '#FF3366' : '#F59E0B';
-  return new L.DivIcon({
+  return getCachedIcon(`alert-${severity}`, () => new L.DivIcon({
     className: 'alert-incident-pin',
     html: `
       <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
@@ -491,8 +504,9 @@ const createAlertIncidentIcon = (severity) => {
     `,
     iconSize: [38, 38],
     iconAnchor: [19, 19],
-  });
+  }));
 };
+
 
 const MapArea = ({ 
   category = 'devices', 
@@ -686,62 +700,21 @@ const MapArea = ({
           />
         )}
 
-        {/* 2. Unselected secondary vehicle pins */}
-        {vehicles.filter(v => v.id !== selectedVehicle?.id && v.position).map((vehicle) => (
-          <Marker
-            key={vehicle.id}
-            position={vehicle.position}
-            icon={createFleetPinIcon(vehicle.status)}
-            eventHandlers={{
-              click: () => onSelectVehicle(vehicle),
-            }}
-          >
-            <Popup className="dark-popup">
-              <div className="text-xs">
-                <div className="font-bold text-white mb-0.5">{vehicle.name}</div>
-                <div className="text-[10px] text-slate-400 font-mono mb-1">ID: {vehicle.id}</div>
-                <div className="text-[11px] text-[#00E676] font-mono">Velocidad: {vehicle.speed} km/h</div>
-                <button 
-                  onClick={() => onSelectVehicle(vehicle)}
-                  className="mt-2 w-full py-1 px-2 rounded bg-[#00E676]/20 hover:bg-[#00E676]/30 text-[#00E676] text-[10px] font-bold transition-colors"
-                >
-                  Seleccionar
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {/* 3. Selected Primary Vehicle Pin with glowing label badge */}
+        {/* Selected Primary Vehicle Pulsing Target Halo */}
         {selectedVehicle?.position && (
-          <>
-            {/* Pulsing Target Halo */}
-            <Circle 
-              center={selectedVehicle.position}
-              radius={80}
-              pathOptions={{
-                color: routeColor,
-                fillColor: routeColor,
-                fillOpacity: 0.12,
-                weight: 1.5,
-                dashArray: '4, 4',
-              }}
-            />
-            <Marker 
-              position={selectedVehicle.position}
-              icon={createHeroPinIcon(selectedVehicle.name, selectedVehicle.id)}
-              zIndexOffset={1000}
-            >
-              <Popup className="dark-popup">
-                <div className="text-xs">
-                  <div className="font-bold text-white">{selectedVehicle.name}</div>
-                  <div className="text-[#00E676] font-semibold">{selectedVehicle.speed} km/h</div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-1">Estado: {selectedVehicle.status}</div>
-                </div>
-              </Popup>
-            </Marker>
-          </>
+          <Circle 
+            center={selectedVehicle.position}
+            radius={80}
+            pathOptions={{
+              color: routeColor,
+              fillColor: routeColor,
+              fillOpacity: 0.12,
+              weight: 1.5,
+              dashArray: '4, 4',
+            }}
+          />
         )}
+
 
         {/* 2. Active Vehicle Glowing Route */}
         {guidanceLine && (

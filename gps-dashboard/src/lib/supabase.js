@@ -49,6 +49,7 @@ export const getStoredDeviceId = () => {
 };
 
 const nativeAuth = getNativeDeviceAuth();
+let currentNativeToken = nativeAuth?.access_token || null;
 
 export const supabase = hasSupabaseConfig
   ? createClient(supabaseUrl, supabaseAnonKey, {
@@ -56,19 +57,68 @@ export const supabase = hasSupabaseConfig
         persistSession: true,
         autoRefreshToken: true,
       },
-      global: nativeAuth?.access_token ? {
+      global: currentNativeToken ? {
         headers: {
-          Authorization: `Bearer ${nativeAuth.access_token}`,
+          Authorization: `Bearer ${currentNativeToken}`,
         },
       } : undefined,
     })
   : null;
 
+export const refreshNativeSession = async () => {
+  if (!supabase) return null;
+  const freshNative = getNativeDeviceAuth();
+  if (freshNative?.access_token) {
+    currentNativeToken = freshNative.access_token;
+    try {
+      await supabase.auth.setSession({
+        access_token: freshNative.access_token,
+        refresh_token: '',
+      });
+    } catch (err) {
+      console.warn('Error al actualizar la sesión de Supabase con el token nativo:', err);
+    }
+    return freshNative.access_token;
+  }
+  return null;
+};
+
+export const withAuthRetry = async (queryFn) => {
+  try {
+    const res = await queryFn();
+    if (res?.error && (res.error.status === 401 || String(res.error.message || '').includes('JWT'))) {
+      const newToken = await refreshNativeSession();
+      if (newToken) {
+        return await queryFn();
+      }
+    }
+    return res;
+  } catch (err) {
+    if (err?.status === 401 || String(err?.message || '').includes('JWT')) {
+      const newToken = await refreshNativeSession();
+      if (newToken) {
+        return await queryFn();
+      }
+    }
+    throw err;
+  }
+};
+
 if (supabase && nativeAuth?.access_token) {
-  supabase.auth.setSession({
-    access_token: nativeAuth.access_token,
-    refresh_token: '',
-  }).catch((err) => console.warn('No se pudo establecer la sesión Supabase nativa:', err));
+  refreshNativeSession().catch((err) => console.warn('No se pudo establecer la sesión Supabase nativa inicial:', err));
+
+  if (typeof window !== 'undefined') {
+    // Sincronizar token nativo periódicamente (cada 5 min) o al recuperar el foco
+    window.setInterval(() => {
+      refreshNativeSession();
+    }, 5 * 60 * 1000);
+
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshNativeSession();
+      }
+    });
+  }
 }
 
 if (!hasSupabaseConfig) {

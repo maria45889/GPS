@@ -7,8 +7,8 @@ android {
         applicationId "com.gps.tracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -45,6 +45,22 @@ android {
         }
     }
 }
+
+gradle.taskGraph.whenReady { taskGraph ->
+    boolean isReleaseBuild = taskGraph.allTasks.any { task ->
+        task.name.toLowerCase().contains("releas") && !task.name.toLowerCase().contains("test")
+    }
+    if (isReleaseBuild) {
+        def storeFile = findProperty('GPS_RELEASE_STORE_FILE') ?: System.getenv('GPS_RELEASE_STORE_FILE')
+        def storePassword = findProperty('GPS_RELEASE_STORE_PASSWORD') ?: System.getenv('GPS_RELEASE_STORE_PASSWORD')
+        def keyAlias = findProperty('GPS_RELEASE_KEY_ALIAS') ?: System.getenv('GPS_RELEASE_KEY_ALIAS')
+        def keyPassword = findProperty('GPS_RELEASE_KEY_PASSWORD') ?: System.getenv('GPS_RELEASE_KEY_PASSWORD')
+        if (!storeFile || !storePassword || !keyAlias || !keyPassword) {
+            throw new GradleException("ERROR CRÍTICO DE FIRMA: Para generar la versión de producción (release) debes definir las variables GPS_RELEASE_STORE_FILE, GPS_RELEASE_STORE_PASSWORD, GPS_RELEASE_KEY_ALIAS y GPS_RELEASE_KEY_PASSWORD.")
+        }
+    }
+}
+
 
 repositories {
     flatDir{

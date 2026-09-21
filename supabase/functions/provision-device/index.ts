@@ -36,16 +36,45 @@ function randomPassword(len = 18): string {
   return out
 }
 
+// Rate Limiter en memoria por IP / deviceId / activationCode (ventana de 15 min)
+const ATTEMPT_WINDOW_MS = 15 * 60 * 1000
+const MAX_FAILED_ATTEMPTS = 5
+const attemptStore = new Map<string, { count: number; expiresAt: number }>()
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now()
+  const record = attemptStore.get(key)
+  if (!record) return true
+  if (now > record.expiresAt) {
+    attemptStore.delete(key)
+    return true
+  }
+  return record.count < MAX_FAILED_ATTEMPTS
+}
+
+function recordFailedAttempt(key: string) {
+  const now = Date.now()
+  const record = attemptStore.get(key)
+  if (!record || now > record.expiresAt) {
+    attemptStore.set(key, { count: 1, expiresAt: now + ATTEMPT_WINDOW_MS })
+  } else {
+    record.count += 1
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
+  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown-ip'
+
   // Validación de autorización: secreto de aprovisionamiento u obligatoriedad de código de activación
   const expectedSecret = Deno.env.get('PROVISION_SECRET')
   const providedSecret = req.headers.get('x-provision-secret')
   if (expectedSecret && providedSecret !== expectedSecret) {
+    recordFailedAttempt(`ip:${clientIp}`)
     return json({ error: 'no autorizado: secreto invalido o ausente' }, 403)
   }
 
@@ -56,28 +85,32 @@ serve(async (req) => {
     return json({ error: 'json invalido' }, 400)
   }
 
-  // Punto 5 & 14: Código de activación obligatorio para asociar organización y vehículo
   const activationCode = String(body.activationCode || body.activation_code || '').trim()
   if (!activationCode) {
+    recordFailedAttempt(`ip:${clientIp}`)
     return json({ error: 'codigo de activacion es obligatorio' }, 400)
   }
 
-  // Validación estricta del deviceId: solo caracteres alfanuméricos, guiones y guiones bajos, máx 64 chars
   const rawDeviceId = String(body.deviceId ?? '').trim()
   const deviceId = rawDeviceId.slice(0, 64)
   if (!deviceId || !/^[a-zA-Z0-9_-]+$/.test(deviceId)) {
+    recordFailedAttempt(`ip:${clientIp}`)
     return json({ error: 'deviceId invalido' }, 400)
   }
 
-  // Rate limiting y verificación de registro previo
-  const existing = await supabase
+  // Verificación de Rate Limit por IP, deviceId y código de activación
+  if (!checkRateLimit(`ip:${clientIp}`) || !checkRateLimit(`device:${deviceId}`) || !checkRateLimit(`code:${activationCode}`)) {
+    return json({ error: 'demasiados intentos de aprovisionamiento. intente mas tarde' }, 429)
+  }
+
+  // Verificación de registro previo en el sistema
+  const existingReg = await supabase
     .from('device_registry')
     .select('device_id')
     .eq('device_id', deviceId)
     .maybeSingle()
 
-  if (existing.error) return json({ error: existing.error.message }, 500)
-  if (existing.data) return json({ alreadyRegistered: true, deviceId })
+  if (existingReg.error) return json({ error: existingReg.error.message }, 500)
 
   const deviceExisting = await supabase
     .from('devices')
@@ -86,22 +119,69 @@ serve(async (req) => {
     .maybeSingle()
 
   if (deviceExisting.error) return json({ error: deviceExisting.error.message }, 500)
-  if (deviceExisting.data?.auth_user_id) {
-    return json({ alreadyRegistered: true, deviceId })
-  }
+
+  const isAlreadyRegistered = Boolean(existingReg.data || deviceExisting.data?.auth_user_id)
 
   const email = `device-${deviceId}@local.rideguard`
   const password = randomPassword()
 
+  if (isAlreadyRegistered) {
+    // Si el dispositivo ya está registrado, SOLO se permite re-aprovisionar con un código de activación NUEVO y VÁLIDO.
+    const { data: validCode, error: codeErr } = await supabase
+      .from('device_activation_codes')
+      .select('id, organization_id, vehicle_id')
+      .eq('code', activationCode)
+      .eq('used', false)
+      .maybeSingle()
+
+    if (codeErr || !validCode) {
+      recordFailedAttempt(`ip:${clientIp}`)
+      recordFailedAttempt(`device:${deviceId}`)
+      recordFailedAttempt(`code:${activationCode}`)
+      return json({ error: 'dispositivo ya registrado. requiere un codigo de activacion nuevo y valido para restablecer credenciales' }, 403)
+    }
+
+    let authUserId = deviceExisting.data?.auth_user_id
+    if (authUserId) {
+      const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
+      if (updated.error) return json({ error: updated.error.message }, 500)
+    } else {
+      const created = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        app_metadata: { role: 'device', device_id: deviceId },
+      })
+      if (created.error) return json({ error: created.error.message }, 500)
+      authUserId = created.data.user.id
+    }
+
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc('provision_device_atomic', {
+      p_device_id: deviceId,
+      p_activation_code: activationCode,
+      p_auth_user_id: authUserId,
+    })
+
+    if (rpcErr || !rpcRes?.success) {
+      recordFailedAttempt(`ip:${clientIp}`)
+      return json({ error: rpcErr?.message || rpcRes?.error || 'error al re-aprovisionar dispositivo' }, 403)
+    }
+
+    return json({ ok: true, deviceId, email, password, reissued: true })
+  }
+
+  // Primer aprovisionamiento del dispositivo
   const created = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     app_metadata: { role: 'device', device_id: deviceId },
   })
-  if (created.error) return json({ error: created.error.message }, 500)
+  if (created.error) {
+    recordFailedAttempt(`ip:${clientIp}`)
+    return json({ error: created.error.message }, 500)
+  }
 
-  // Invocación atómica RPC obligatoria para aprovisionar dispositivo y asociar organización y vehículo
   const { data: rpcRes, error: rpcErr } = await supabase.rpc('provision_device_atomic', {
     p_device_id: deviceId,
     p_activation_code: activationCode,
@@ -109,6 +189,9 @@ serve(async (req) => {
   })
 
   if (rpcErr || !rpcRes?.success) {
+    recordFailedAttempt(`ip:${clientIp}`)
+    recordFailedAttempt(`device:${deviceId}`)
+    recordFailedAttempt(`code:${activationCode}`)
     if (created.data?.user?.id) {
       await supabase.auth.admin.deleteUser(created.data.user.id)
     }
