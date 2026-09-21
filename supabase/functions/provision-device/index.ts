@@ -45,8 +45,8 @@ serve(async (req) => {
   // Validación de autorización: secreto de aprovisionamiento u obligatoriedad de código de activación
   const expectedSecret = Deno.env.get('PROVISION_SECRET')
   const providedSecret = req.headers.get('x-provision-secret')
-  if (expectedSecret && providedSecret && providedSecret !== expectedSecret) {
-    return json({ error: 'no autorizado: secreto invalido' }, 403)
+  if (expectedSecret && providedSecret !== expectedSecret) {
+    return json({ error: 'no autorizado: secreto invalido o ausente' }, 403)
   }
 
   let body: Record<string, unknown>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchLatestLocations, fetchVehicles, isCoordinateValid, isLocationValidForMap } from '../lib/queries'
+import { fetchLatestLocations, fetchVehicles, isCoordinateValid, isLocationValidForMap, sanitizeAccuracy } from '../lib/queries'
 import { hasSupabaseConfig, supabase } from '../lib/supabase'
 import { deviceStatusFromLastSeen } from '../lib/mapLogic'
 
@@ -41,9 +41,11 @@ export const useVehicles = () => {
             historicalPosition: cleanCoords || vehicle.position,
             speed: isLiveValid ? (live.speed || 0) : 0,
             bearing: live.bearing || 0,
-            accuracy: live.accuracy !== null && live.accuracy !== undefined && Number.isFinite(Number(live.accuracy)) ? Number(live.accuracy) : null,
+            accuracy: sanitizeAccuracy(live.accuracy),
             connectionStatus,
-            status: vehicle.status || (connectionStatus === 'active' ? 'active' : 'offline'),
+            status: connectionStatus === 'offline'
+              ? 'offline'
+              : (vehicle.status === 'immobilized' ? 'immobilized' : (vehicle.status || connectionStatus)),
             lastUpdate: connectionStatus === 'active'
               ? 'En línea'
               : live.timestamp,

@@ -34,8 +34,8 @@ const buildMapEntity = (source) => ({
 const Dashboard = () => {
   const { vehicles: supabaseVehicles, error: vehiclesError } = useVehicles()
   const { devices: supabaseDevices, error: devicesError } = useDevices()
-  const { alerts: supabaseAlerts } = useAlerts()
-  const { geofences: supabaseGeofences } = useGeofences()
+  const { alerts: supabaseAlerts, error: alertsError } = useAlerts()
+  const { geofences: supabaseGeofences, error: geofencesError } = useGeofences()
 
   const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle')
 
@@ -47,7 +47,7 @@ const Dashboard = () => {
     return stored === 'vehicles' ? 'vehicles' : 'devices'
   })
 
-  const activeNetworkError = category === 'devices' ? devicesError : vehiclesError
+  const activeNetworkError = (category === 'devices' ? devicesError : vehiclesError) || alertsError || geofencesError
 
   const handleCategoryChange = (next) => {
     setCategory(next)
@@ -269,23 +269,24 @@ const Dashboard = () => {
       rule: 'outside',
       active: true,
     }
-    setPendingGeofenceConfirm(null)
-    setPendingCenter(null)
-
     if (hasSupabaseConfig && supabase) {
       try {
         const saved = await createGeofence(newGeo)
         if (saved) {
           setLocalGeofences((prev) => [saved, ...prev])
           setOperationMessage('Geocerca guardada con éxito')
+          setPendingGeofenceConfirm(null)
+          setPendingCenter(null)
         }
       } catch (err) {
         console.error('Error al guardar geocerca en Supabase:', err)
-        setOperationMessage(`Error al guardar geocerca: ${err.message || 'Sin permisos'}`)
+        setOperationMessage(`Error al guardar geocerca: ${err.message || 'Sin permisos'}. Puedes reintentar.`)
       }
     } else {
       setLocalGeofences((prev) => [{ id: `GEOF-${Date.now()}`, ...newGeo }, ...prev])
       setOperationMessage('Geocerca guardada localmente')
+      setPendingGeofenceConfirm(null)
+      setPendingCenter(null)
     }
   }
 

@@ -28,9 +28,32 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setupWebviewBridge();
         boolean activationInProgress = processActivationIntent(getIntent());
         if (!activationInProgress) {
             startOnboardingSequence();
+        }
+    }
+
+    private void setupWebviewBridge() {
+        if (bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().addJavascriptInterface(new DeviceAuthJavascriptInterface(), "CapacitorDeviceAuth");
+        }
+    }
+
+    public class DeviceAuthJavascriptInterface {
+        @android.webkit.JavascriptInterface
+        public String getDeviceAuthJson() {
+            try {
+                DeviceAuthManager authManager = new DeviceAuthManager(MainActivity.this);
+                org.json.JSONObject obj = new org.json.JSONObject();
+                obj.put("access_token", authManager.getAccessToken());
+                obj.put("device_id", authManager.getDeviceId());
+                return obj.toString();
+            } catch (Exception e) {
+                Log.e(TAG, "Error generando DeviceAuthJson para Webview", e);
+                return "{}";
+            }
         }
     }
 
