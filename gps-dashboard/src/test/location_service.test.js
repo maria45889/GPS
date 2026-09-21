@@ -990,6 +990,57 @@ describe('Android LocationService java contracts', () => {
     expect(mapAreaContent).toContain('disabled={!selectedVehicle?.position}');
     expect(mapAreaContent).toContain('Sin posición GPS para seguir');
   });
+
+  it('valida la sincronización JWT native-to-webview, secreto de Edge Function, resiliencia en alertas/geocercas y priorización de estado offline de motos', () => {
+    const mainActivityContent = fs.readFileSync(
+      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/MainActivity.java'),
+      'utf-8'
+    );
+    const supabaseJsContent = fs.readFileSync(
+      path.resolve(__dirname, '../../src/lib/supabase.js'),
+      'utf-8'
+    );
+    const provisionEdgeContent = fs.readFileSync(
+      path.resolve(__dirname, '../../../supabase/functions/provision-device/index.ts'),
+      'utf-8'
+    );
+    const useAlertsContent = fs.readFileSync(
+      path.resolve(__dirname, '../../src/hooks/useAlerts.js'),
+      'utf-8'
+    );
+    const useGeofencesContent = fs.readFileSync(
+      path.resolve(__dirname, '../../src/hooks/useGeofences.js'),
+      'utf-8'
+    );
+    const useVehiclesContent = fs.readFileSync(
+      path.resolve(__dirname, '../../src/hooks/useVehicles.js'),
+      'utf-8'
+    );
+    const dashboardContent = fs.readFileSync(
+      path.resolve(__dirname, '../../src/components/Dashboard.jsx'),
+      'utf-8'
+    );
+
+    expect(mainActivityContent).toContain('addJavascriptInterface');
+    expect(mainActivityContent).toContain('CapacitorDeviceAuth');
+    expect(mainActivityContent).toContain('getDeviceAuthJson');
+
+    expect(supabaseJsContent).toContain('getNativeDeviceAuth');
+    expect(supabaseJsContent).toContain('Authorization');
+    expect(supabaseJsContent).toContain('setSession');
+
+    expect(provisionEdgeContent).toContain('expectedSecret && providedSecret !== expectedSecret');
+
+    expect(useAlertsContent).toContain('prev && prev.length > 0 ? prev');
+    expect(useGeofencesContent).toContain('prev && prev.length > 0 ? prev');
+
+    expect(useVehiclesContent).toContain("connectionStatus === 'offline'");
+
+    expect(dashboardContent).toContain('activeNetworkError');
+    expect(dashboardContent).toContain('alertsError');
+    expect(dashboardContent).toContain('geofencesError');
+    expect(dashboardContent).toContain('Puedes reintentar');
+  });
 });
 
 

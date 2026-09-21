@@ -22,7 +22,7 @@ export const useAlerts = () => {
       } catch (err) {
         if (!cancelled) {
           setError(err.message)
-          setAlerts(import.meta.env.VITE_SUPABASE_URL ? [] : initialAlerts)
+          setAlerts((prev) => (prev && prev.length > 0 ? prev : (import.meta.env.VITE_SUPABASE_URL ? [] : initialAlerts)))
         }
       } finally {
         if (!cancelled) setIsLoading(false)

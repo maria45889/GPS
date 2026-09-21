@@ -22,7 +22,7 @@ export const useGeofences = () => {
       } catch (err) {
         if (!cancelled) {
           setError(err.message)
-          setGeofences(import.meta.env.VITE_SUPABASE_URL ? [] : initialGeofences)
+          setGeofences((prev) => (prev && prev.length > 0 ? prev : (import.meta.env.VITE_SUPABASE_URL ? [] : initialGeofences)))
         }
       } finally {
         if (!cancelled) setIsLoading(false)
