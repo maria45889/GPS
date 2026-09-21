@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { LogIn, UserPlus } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { LogIn, UserPlus, LogOut, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export const AuthGate = ({ children }) => {
@@ -15,10 +15,71 @@ export const AuthGate = ({ children }) => {
   const [message, setMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
+  const [hasProfile, setHasProfile] = useState(true);
+  const [profileError, setProfileError] = useState('');
+  const [isCheckingProfile, setIsCheckingProfile] = useState(false);
+  const verifyingRef = useRef(false);
+
+  const [initError, setInitError] = useState('');
+
+  const verifyProfile = async (currentSession) => {
+    if (!currentSession || currentSession.isDevelopment || !supabase) {
+      setHasProfile(true);
+      setProfileError('');
+      return;
+    }
+
+    const targetUserId = currentSession.user?.id;
+    if (!targetUserId) return;
+
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
+    setIsCheckingProfile(true);
+
+    try {
+      const { data, error: profileErr } = await supabase
+        .from('profiles')
+        .select('user_id, organization_id, role')
+        .eq('user_id', targetUserId)
+        .maybeSingle();
+
+      const activeUser = (await supabase.auth.getSession()).data.session?.user?.id;
+      if (activeUser !== targetUserId) return;
+
+      if (profileErr) {
+        setHasProfile(false);
+        setProfileError(`Error de consulta (${profileErr.message || 'Sin conexión'})`);
+      } else if (!data) {
+        setHasProfile(false);
+        setProfileError('Tu usuario no tiene un perfil de operador asignado.');
+      } else {
+        setHasProfile(true);
+        setProfileError('');
+      }
+    } catch (err) {
+      setHasProfile(false);
+      setProfileError(err?.message || 'Error de conexión al verificar el perfil');
+    } finally {
+      setIsCheckingProfile(false);
+      verifyingRef.current = false;
+    }
+  };
+
   useEffect(() => {
     if (!supabase) return undefined;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        if (data.session) verifyProfile(data.session);
+      })
+      .catch((err) => {
+        setInitError(err?.message || 'Error de conexión al iniciar sesión');
+      });
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) verifyProfile(nextSession);
+    });
     return () => data.subscription.unsubscribe();
   }, []);
 
@@ -26,7 +87,60 @@ export const AuthGate = ({ children }) => {
     return <AuthMessage message="Configura Supabase para habilitar el acceso al panel." />;
   }
 
-  if (session) return children;
+  if (initError) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <div className="auth-mark" style={{ background: '#ef4444' }}><AlertCircle size={20} /></div>
+          <span className="auth-eyebrow">RideGuard · Error de Conexión</span>
+          <h1>Fallo al cargar sesión</h1>
+          <p>{initError}</p>
+          <button type="button" onClick={() => window.location.reload()} className="auth-switch" style={{ marginTop: '1rem' }}>
+            Reintentar
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  const handleSignOut = async () => {
+    localStorage.removeItem('gps_dev_admin');
+    if (supabase) await supabase.auth.signOut();
+    setSession(null);
+    setHasProfile(true);
+    setProfileError('');
+  };
+
+  if (session) {
+    if (isCheckingProfile) {
+      return (
+        <main className="auth-shell">
+          <section className="auth-card">
+            <h1>Verificando perfil de operador...</h1>
+            <p>Por favor espera mientras validamos tus permisos de acceso.</p>
+          </section>
+        </main>
+      );
+    }
+
+    if (!hasProfile) {
+      return (
+        <main className="auth-shell">
+          <section className="auth-card">
+            <div className="auth-mark" style={{ background: '#ef4444' }}><AlertCircle size={20} /></div>
+            <span className="auth-eyebrow">RideGuard · Error de perfil</span>
+            <h1>Sin perfil de operador</h1>
+            <p>{profileError || 'Tu cuenta de usuario se autenticó correctamente pero no tiene un perfil asignado ni pertenece a una organización activa.'}</p>
+            <button type="button" onClick={handleSignOut} className="auth-switch" style={{ marginTop: '1rem' }}>
+              <LogOut size={15} /> Cerrar sesión y reintentar
+            </button>
+          </section>
+        </main>
+      );
+    }
+
+    return children;
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -34,20 +148,30 @@ export const AuthGate = ({ children }) => {
     setMessage('');
     setIsBusy(true);
 
-    if (import.meta.env.DEV && email === 'admin' && password === 'admin') {
-      localStorage.setItem('gps_dev_admin', 'true');
-      setSession({ user: { email: 'admin' }, isDevelopment: true });
+    try {
+      if (import.meta.env.DEV && email === 'admin' && password === 'admin') {
+        localStorage.setItem('gps_dev_admin', 'true');
+        setSession({ user: { email: 'admin' }, isDevelopment: true });
+        return;
+      }
+
+      const result = mode === 'login'
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password });
+
+      if (result.error) {
+        setError(result.error.message);
+      } else if (mode === 'signup') {
+        if (result.data?.user) {
+          await verifyProfile({ user: result.data.user });
+        }
+        setMessage('Cuenta creada. Si requiere confirmación, revisa tu correo para ingresar.');
+      }
+    } catch (err) {
+      setError(err.message || 'Error de conexión a internet o de red');
+    } finally {
       setIsBusy(false);
-      return;
     }
-
-    const result = mode === 'login'
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
-
-    if (result.error) setError(result.error.message);
-    else if (mode === 'signup') setMessage('Cuenta creada. Revisa tu correo para confirmar el acceso.');
-    setIsBusy(false);
   };
 
   return (

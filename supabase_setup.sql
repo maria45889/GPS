@@ -40,14 +40,8 @@ create policy "profiles_self_update" on public.profiles for update to authentica
 
 -- =====================================================================
 -- Roles y permisos (RBAC)
--- ---------------------------------------------------------------------
--- role: owner/admin = administración completa; operator = lectura y
--- operaciones (comandos, marcar alertas, actualizar estado); viewer = solo
--- lectura. Un dispositivo Auth (role 'device') no tiene fila en profiles,
--- por lo que ninguna de estas funciones devuelve verdadero para él.
 -- =====================================================================
 
--- Rol del usuario autenticado (null si es un dispositivo o no tiene perfil).
 create or replace function public.current_profile_role()
 returns text
 language sql
@@ -58,7 +52,16 @@ as $$
   select p.role from public.profiles p where p.user_id = auth.uid();
 $$;
 
--- Cualquier operador del panel (viewer incluido) puede leer.
+create or replace function public.current_user_org_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.organization_id from public.profiles p where p.user_id = auth.uid();
+$$;
+
 create or replace function public.has_profile()
 returns boolean
 language sql
@@ -71,7 +74,6 @@ as $$
   );
 $$;
 
--- operator, admin u owner pueden ejecutar operaciones.
 create or replace function public.is_operator()
 returns boolean
 language sql
@@ -82,7 +84,6 @@ as $$
   select public.current_profile_role() in ('operator', 'admin', 'owner');
 $$;
 
--- Solo admin y owner administran (altas, bajas y configuración).
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -93,8 +94,6 @@ as $$
   select public.current_profile_role() in ('admin', 'owner');
 $$;
 
--- Evita que un usuario se auto-escale cambiando su rol u organización.
--- Solo un admin puede modificar esos campos; el resto solo full_name.
 create or replace function public.protect_profile_fields()
 returns trigger
 language plpgsql
@@ -122,10 +121,11 @@ create policy "device_registry_authenticated_read" on public.device_registry for
 );
 
 drop policy if exists "device_registry_authenticated_write" on public.device_registry;
-create policy "device_registry_authenticated_write" on public.device_registry for all to authenticated using (
-  organization_id in (select organization_id from public.profiles where user_id = auth.uid())
+drop policy if exists "device_registry_admin_write" on public.device_registry;
+create policy "device_registry_admin_write" on public.device_registry for all to authenticated using (
+  public.is_admin() and organization_id = public.current_user_org_id()
 ) with check (
-  organization_id in (select organization_id from public.profiles where user_id = auth.uid())
+  public.is_admin() and organization_id = public.current_user_org_id()
 );
 
 create table if not exists public.gps_locations (
@@ -140,19 +140,21 @@ create table if not exists public.gps_locations (
   timestamp timestamptz not null default now()
 );
 
+alter table public.gps_locations add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
+alter table public.gps_locations add column if not exists event_id text;
+
 create index if not exists gps_locations_device_timestamp_idx
   on public.gps_locations (device_id, timestamp desc);
 
+create index if not exists gps_locations_org_device_ts_idx
+  on public.gps_locations (organization_id, device_id, timestamp desc);
+
+create unique index if not exists gps_locations_device_event_idx
+  on public.gps_locations (device_id, event_id)
+  where event_id is not null;
+
 alter table public.gps_locations enable row level security;
 
-drop policy if exists "gps_locations_public_read" on public.gps_locations;
-drop policy if exists "gps_locations_public_insert" on public.gps_locations;
-
--- Sin acceso anon directo: la lectura y la escritura se definen en la seccion
--- multitenant. El APK escribe con su cuenta Auth de dispositivo, no con la
--- clave publica.
-
--- Required by Supabase Realtime for INSERT events.
 alter table public.gps_locations replica identity full;
 
 do $$
@@ -167,6 +169,159 @@ begin
   end if;
 end $$;
 
+-- Vista de última ubicación por dispositivo con RLS de seguridad del invocador
+create or replace view public.latest_gps_locations
+with (security_invoker = true) as
+select distinct on (device_id)
+  id,
+  device_id,
+  latitude,
+  longitude,
+  speed,
+  accuracy,
+  altitude,
+  bearing,
+  timestamp,
+  organization_id
+from public.gps_locations
+order by device_id, timestamp desc;
+
+grant select on public.latest_gps_locations to authenticated;
+
+-- =====================================================================
+-- Códigos de activación de dispositivos
+-- =====================================================================
+create table if not exists public.device_activation_codes (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  vehicle_id text,
+  label text,
+  used boolean not null default false,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table public.device_activation_codes enable row level security;
+
+drop policy if exists "device_activation_codes_admin_all" on public.device_activation_codes;
+create policy "device_activation_codes_admin_all"
+  on public.device_activation_codes for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+-- =====================================================================
+-- Procedimiento atómico de aprovisionamiento de dispositivos (Restringido a service_role)
+-- =====================================================================
+create or replace function public.provision_device_atomic(
+  p_device_id text,
+  p_activation_code text,
+  p_auth_user_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  code_rec record;
+  user_exists boolean;
+  device_bound text;
+begin
+  select exists (
+    select 1 from auth.users where id = p_auth_user_id
+  ) into user_exists;
+
+  if not user_exists then
+    return jsonb_build_object('success', false, 'error', 'Usuario Auth especificado no existe');
+  end if;
+
+  select id into device_bound
+  from public.devices
+  where auth_user_id = p_auth_user_id and id <> p_device_id;
+
+  if device_bound is not null then
+    return jsonb_build_object('success', false, 'error', 'El usuario Auth ya se encuentra vinculado a otro dispositivo');
+  end if;
+
+  select * into code_rec
+  from public.device_activation_codes
+  where code = p_activation_code and used = false
+  for update;
+
+  if not found then
+    return jsonb_build_object('success', false, 'error', 'Código de activación inválido o ya utilizado');
+  end if;
+
+  update public.device_activation_codes
+  set used = true, used_at = now()
+  where id = code_rec.id;
+
+  insert into public.devices (id, auth_user_id, organization_id, label, status, updated_at)
+  values (p_device_id, p_auth_user_id, code_rec.organization_id, coalesce(code_rec.label, p_device_id), 'active', now())
+  on conflict (id) do update set
+    auth_user_id = excluded.auth_user_id,
+    organization_id = excluded.organization_id,
+    label = coalesce(excluded.label, devices.label),
+    status = 'active',
+    updated_at = now();
+
+  insert into public.device_registry (device_id, organization_id, vehicle_id, label, status, last_seen)
+  values (p_device_id, code_rec.organization_id, code_rec.vehicle_id, coalesce(code_rec.label, p_device_id), 'active', now())
+  on conflict (device_id) do update set
+    organization_id = excluded.organization_id,
+    vehicle_id = coalesce(excluded.vehicle_id, device_registry.vehicle_id),
+    status = 'active',
+    last_seen = now();
+
+  if code_rec.vehicle_id is not null then
+    update public.vehicles
+    set device_id = p_device_id,
+        last_update = now()
+    where id = code_rec.vehicle_id
+      and (organization_id = code_rec.organization_id or organization_id is null);
+  end if;
+
+  return jsonb_build_object(
+    'success', true,
+    'organization_id', code_rec.organization_id,
+    'vehicle_id', code_rec.vehicle_id
+  );
+end;
+$$;
+
+revoke execute on function public.provision_device_atomic(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.provision_device_atomic(text, text, uuid) to service_role;
+
+create or replace function public.set_gps_location_org_id()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_org_id uuid;
+begin
+  select organization_id into target_org_id
+  from public.devices
+  where id = new.device_id;
+
+  if target_org_id is null then
+    raise exception 'El dispositivo % no esta registrado o asignado a una organizacion', new.device_id;
+  end if;
+
+  -- Sobrescribir incondicionalmente el valor recibido con la organización real asignada al dispositivo
+  new.organization_id := target_org_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists gps_locations_set_org on public.gps_locations;
+create trigger gps_locations_set_org
+  before insert on public.gps_locations
+  for each row execute function public.set_gps_location_org_id();
+
 create table if not exists public.vehicle_commands (
   id bigint generated by default as identity primary key,
   vehicle_id text not null,
@@ -177,28 +332,103 @@ create table if not exists public.vehicle_commands (
 
 alter table public.vehicle_commands add column if not exists device_id text;
 alter table public.vehicle_commands add column if not exists acknowledged_at timestamptz;
+alter table public.vehicle_commands add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
+
+create or replace function public.set_vehicle_command_org_id()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.organization_id is null then
+    select organization_id into new.organization_id
+    from public.devices
+    where id = new.device_id;
+
+    if new.organization_id is null then
+      select organization_id into new.organization_id
+      from public.profiles
+      where user_id = auth.uid();
+    end if;
+  end if;
+
+  if new.organization_id is null then
+    raise exception 'No se pudo inferir la organizacion para el comando';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists vehicle_commands_set_org on public.vehicle_commands;
+create trigger vehicle_commands_set_org
+  before insert on public.vehicle_commands
+  for each row execute function public.set_vehicle_command_org_id();
+
+-- Trigger para sincronizar automáticamente el estado del vehículo cuando un comando pase a 'done'
+create or replace function public.sync_vehicle_status_on_command_done()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_count int;
+begin
+  if NEW.status = 'done' and (OLD.status is null or OLD.status <> 'done') then
+    update public.vehicles
+    set status = case
+          when NEW.command = 'activate' then 'active'
+          when NEW.command = 'immobilize' then 'immobilized'
+          when NEW.command = 'stop' then 'stopped'
+          else status
+        end,
+        last_update = now()
+    where id = NEW.vehicle_id;
+
+    get diagnostics updated_count = row_count;
+    if updated_count = 0 then
+      raise exception 'No se pudo actualizar el estado del vehiculo % asociado al comando', NEW.vehicle_id;
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_sync_vehicle_status_on_command_done on public.vehicle_commands;
+create trigger trg_sync_vehicle_status_on_command_done
+  after update on public.vehicle_commands
+  for each row execute function public.sync_vehicle_status_on_command_done();
 
 create index if not exists vehicle_commands_device_status_idx
   on public.vehicle_commands (device_id, status);
 
 alter table public.vehicle_commands enable row level security;
 
--- Las acciones de control requieren sesion autenticada en el panel.
 drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
 create policy "vehicle_commands_authenticated_insert"
   on public.vehicle_commands for insert
   to authenticated
-  with check (true);
+  with check (
+    public.is_operator()
+    and (organization_id = public.current_user_org_id())
+    and exists (
+      select 1 from public.vehicles v
+      where v.id = vehicle_commands.vehicle_id
+        and v.device_id = vehicle_commands.device_id
+        and v.organization_id = public.current_user_org_id()
+    )
+  );
 
 drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
 create policy "vehicle_commands_authenticated_read"
   on public.vehicle_commands for select
   to authenticated
-  using (true);
-
--- El dispositivo consume los comandos de su vehiculo autenticandose con su
--- cuenta Auth (no con la clave publica). Las politicas de dispositivo estan
--- en la seccion multitenant.
+  using (
+    (public.has_profile() and organization_id = public.current_user_org_id())
+    or device_id = public.current_device_id()
+  );
 
 alter table public.vehicle_commands replica identity full;
 
@@ -214,6 +444,153 @@ begin
   end if;
 end $$;
 
+-- RPC para acuse de recibo de comandos exclusivo del dispositivo
+create or replace function public.ack_vehicle_command(
+  p_command_id bigint,
+  p_status text,
+  p_acknowledged_at timestamptz default now()
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_count int;
+begin
+  if p_status not in ('received', 'done', 'failed') then
+    raise exception 'Estado de acuse invalido: %', p_status;
+  end if;
+
+  update public.vehicle_commands
+  set status = p_status,
+      acknowledged_at = coalesce(p_acknowledged_at, now())
+  where id = p_command_id
+    and public.current_device_id() is not null
+    and device_id = public.current_device_id()
+    and (
+      (p_status = 'received' and status = 'pending')
+      or (p_status in ('done', 'failed') and status in ('pending', 'received'))
+    );
+
+  get diagnostics updated_count = row_count;
+  return updated_count > 0;
+end;
+$$;
+
+revoke execute on function public.ack_vehicle_command(bigint, text, timestamptz) from public, anon, authenticated;
+grant execute on function public.ack_vehicle_command(bigint, text, timestamptz) to authenticated, service_role;
+
+-- RPC para cancelación manual de comandos por operadores de la misma organización
+create or replace function public.admin_cancel_vehicle_command(
+  p_command_id bigint,
+  p_status text default 'failed'
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_count int;
+begin
+  if not public.is_operator() then
+    raise exception 'No autorizado';
+  end if;
+
+  if p_status not in ('failed', 'done') then
+    raise exception 'Estado de cancelacion invalido: %', p_status;
+  end if;
+
+  update public.vehicle_commands
+  set status = p_status,
+      acknowledged_at = now()
+  where id = p_command_id
+    and organization_id = public.current_user_org_id()
+    and status in ('pending', 'received');
+
+  get diagnostics updated_count = row_count;
+  return updated_count > 0;
+end;
+$$;
+
+revoke execute on function public.admin_cancel_vehicle_command(bigint, text) from public, anon;
+grant execute on function public.admin_cancel_vehicle_command(bigint, text) to authenticated, service_role;
+
+-- RPC para limpiar comandos estancados (mantenimiento administrativo exclusivo de jobs backend con service_role; no invocar desde clientes)
+create or replace function public.clean_stale_vehicle_commands(
+  p_timeout_minutes int default 15
+)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  affected_count int;
+begin
+  if p_timeout_minutes is null or p_timeout_minutes <= 0 then
+    raise exception 'El timeout p_timeout_minutes debe ser un entero positivo mayor a cero';
+  end if;
+
+  update public.vehicle_commands
+  set status = 'failed',
+      acknowledged_at = now()
+  where (
+    (status = 'pending' and created_at < (now() - (p_timeout_minutes || ' minutes')::interval))
+    or
+    (status = 'received' and coalesce(acknowledged_at, updated_at, created_at) < (now() - (p_timeout_minutes || ' minutes')::interval))
+  );
+
+  get diagnostics affected_count = row_count;
+  return affected_count;
+end;
+$$;
+
+revoke execute on function public.clean_stale_vehicle_commands(int) from public, anon, authenticated;
+grant execute on function public.clean_stale_vehicle_commands(int) to service_role;
+
+-- RPC para actualización de telemetría de dispositivos (batería, modelo, plataforma, versión, last_seen, location_status)
+create or replace function public.update_device_telemetry(
+  p_device_id text,
+  p_battery smallint default null,
+  p_model text default null,
+  p_platform text default null,
+  p_app_version text default null,
+  p_location_status text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_count int;
+begin
+  if p_device_id is null or p_device_id <> public.current_device_id() then
+    raise exception 'Dispositivo no autorizado';
+  end if;
+
+  update public.devices
+  set battery = coalesce(p_battery, battery),
+      model = coalesce(p_model, model),
+      platform = coalesce(p_platform, platform),
+      app_version = coalesce(p_app_version, app_version),
+      location_status = coalesce(p_location_status, location_status),
+      status = 'online',
+      last_seen = now(),
+      updated_at = now()
+  where id = p_device_id
+    and auth_user_id = auth.uid();
+
+  get diagnostics updated_count = row_count;
+  return updated_count > 0;
+end;
+$$;
+
+revoke execute on function public.update_device_telemetry(text, smallint, text, text, text, text) from public, anon;
+grant execute on function public.update_device_telemetry(text, smallint, text, text, text, text) to authenticated, service_role;
+
 create table if not exists public.devices (
   id text primary key,
   status text not null default 'offline',
@@ -225,16 +602,11 @@ alter table public.devices add column if not exists platform text;
 alter table public.devices add column if not exists model text;
 alter table public.devices add column if not exists app_version text;
 alter table public.devices add column if not exists battery smallint;
+alter table public.devices add column if not exists label text;
+alter table public.devices add column if not exists location_status text;
+alter table public.devices add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
 
 alter table public.devices enable row level security;
-
-drop policy if exists "devices_public_read" on public.devices;
-drop policy if exists "devices_public_insert" on public.devices;
-drop policy if exists "devices_public_update" on public.devices;
-
--- El APK ya no escribe como 'anon': se autentica con su cuenta de dispositivo.
--- Las politicas por dispositivo (insert/update/select) estan en la seccion
--- multitenant.
 
 alter table public.devices replica identity full;
 
@@ -251,7 +623,7 @@ begin
 end $$;
 
 -- =====================================================================
--- Flota de vehiculos (categoria "Motos" del panel)
+-- Flota de vehiculos
 -- =====================================================================
 
 create table if not exists public.vehicles (
@@ -271,37 +643,93 @@ create table if not exists public.vehicles (
   last_update timestamptz not null default now()
 );
 
+alter table public.vehicles add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
+
 alter table public.vehicles enable row level security;
 
--- Lectura para cualquier usuario con perfil (viewer incluido).
 drop policy if exists "vehicles_authenticated_all" on public.vehicles;
 drop policy if exists "vehicles_select" on public.vehicles;
 create policy "vehicles_select"
   on public.vehicles for select
   to authenticated
-  using (public.has_profile());
+  using (public.has_profile() and organization_id = public.current_user_org_id());
 
--- Alta de unidades: solo admin/owner.
 drop policy if exists "vehicles_admin_insert" on public.vehicles;
 create policy "vehicles_admin_insert"
   on public.vehicles for insert
   to authenticated
-  with check (public.is_admin());
+  with check (public.is_admin() and organization_id = public.current_user_org_id());
 
--- Baja de unidades: solo admin/owner.
 drop policy if exists "vehicles_admin_delete" on public.vehicles;
 create policy "vehicles_admin_delete"
   on public.vehicles for delete
   to authenticated
-  using (public.is_admin());
+  using (public.is_admin() and organization_id = public.current_user_org_id());
 
--- operator/admin/owner pueden operar (activar, detener, inmovilizar).
+-- Trigger para proteger inmutabilidad de device_id u organization_id en vehiculos (evita recursión RLS)
+create or replace function public.protect_vehicle_structural_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if NEW.device_id is distinct from OLD.device_id then
+    raise exception 'No esta permitido modificar el device_id de un vehiculo existente';
+  end if;
+  if NEW.organization_id is distinct from OLD.organization_id then
+    raise exception 'No esta permitido modificar la organizacion de un vehiculo existente';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_protect_vehicle_structural_fields on public.vehicles;
+create trigger trg_protect_vehicle_structural_fields
+  before update on public.vehicles
+  for each row
+  execute function public.protect_vehicle_structural_fields();
+
 drop policy if exists "vehicles_operator_update" on public.vehicles;
 create policy "vehicles_operator_update"
   on public.vehicles for update
   to authenticated
-  using (public.is_operator())
-  with check (public.is_operator());
+  using (public.is_operator() and organization_id = public.current_user_org_id())
+  with check (public.is_operator() and organization_id = public.current_user_org_id());
+
+-- RPC para actualizar el estado del vehículo con validación de estado y pertenencia
+create or replace function public.update_vehicle_status(
+  p_vehicle_id text,
+  p_status text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_count int;
+begin
+  if not public.is_operator() then
+    raise exception 'No autorizado';
+  end if;
+
+  if p_status not in ('active', 'online', 'offline', 'stopped', 'immobilized') then
+    raise exception 'Estado de vehiculo invalido: %', p_status;
+  end if;
+
+  update public.vehicles
+  set status = p_status,
+      last_update = now()
+  where id = p_vehicle_id
+    and organization_id = public.current_user_org_id();
+
+  get diagnostics updated_count = row_count;
+  if updated_count = 0 then
+    raise exception 'Vehiculo no encontrado o no pertenece a la organizacion del usuario';
+  end if;
+end;
+$$;
 
 alter table public.vehicles replica identity full;
 
@@ -338,37 +766,35 @@ create table if not exists public.alerts (
   timestamp timestamptz not null default now()
 );
 
+alter table public.alerts add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
+
 alter table public.alerts enable row level security;
 
--- Lectura para cualquier usuario con perfil.
 drop policy if exists "alerts_authenticated_all" on public.alerts;
 drop policy if exists "alerts_select" on public.alerts;
 create policy "alerts_select"
   on public.alerts for select
   to authenticated
-  using (public.has_profile());
+  using (public.has_profile() and organization_id = public.current_user_org_id());
 
--- Alta de alertas: solo admin/owner.
 drop policy if exists "alerts_admin_insert" on public.alerts;
 create policy "alerts_admin_insert"
   on public.alerts for insert
   to authenticated
-  with check (public.is_admin());
+  with check (public.is_admin() and organization_id = public.current_user_org_id());
 
--- Baja de alertas: solo admin/owner.
 drop policy if exists "alerts_admin_delete" on public.alerts;
 create policy "alerts_admin_delete"
   on public.alerts for delete
   to authenticated
-  using (public.is_admin());
+  using (public.is_admin() and organization_id = public.current_user_org_id());
 
--- Marcar alertas como leídas: operator/admin/owner.
 drop policy if exists "alerts_operator_update" on public.alerts;
 create policy "alerts_operator_update"
   on public.alerts for update
   to authenticated
-  using (public.is_operator())
-  with check (public.is_operator());
+  using (public.is_operator() and organization_id = public.current_user_org_id())
+  with check (public.is_operator() and organization_id = public.current_user_org_id());
 
 create index if not exists alerts_timestamp_idx on public.alerts (timestamp desc);
 
@@ -389,33 +815,26 @@ create table if not exists public.geofences (
   created_at timestamptz not null default now()
 );
 
--- rule='outside' (zona permitida): violación cuando el vehículo está FUERA.
--- rule='inside'  (zona prohibida): violación cuando el vehículo está DENTRO.
+alter table public.geofences add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
 
 alter table public.geofences enable row level security;
 
--- Lectura para cualquier usuario con perfil.
 drop policy if exists "geofences_authenticated_all" on public.geofences;
 drop policy if exists "geofences_select" on public.geofences;
 create policy "geofences_select"
   on public.geofences for select
   to authenticated
-  using (public.has_profile());
+  using (public.has_profile() and organization_id = public.current_user_org_id());
 
--- Crear/editar/borrar geocercas: solo admin/owner.
 drop policy if exists "geofences_admin_all" on public.geofences;
 create policy "geofences_admin_all"
   on public.geofences for all
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_admin() and organization_id = public.current_user_org_id())
+  with check (public.is_admin() and organization_id = public.current_user_org_id());
 
 -- =====================================================================
 -- Login por dispositivo (multitenant)
--- Cada dispositivo puede tener una cuenta Auth propia. Al instalar el APK,
--- una Edge Function (service_role) crea el usuario Auth del dispositivo y
--- guarda su auth_user_id en devices. El operador (fila en profiles) puede
--- ver toda la flota; el dispositivo autenticado solo ve su propia data.
 -- =====================================================================
 
 alter table public.devices add column if not exists auth_user_id uuid references auth.users(id) on delete cascade;
@@ -423,9 +842,6 @@ create unique index if not exists devices_auth_user_id_idx
   on public.devices (auth_user_id)
   where auth_user_id is not null;
 
--- Identidad del dispositivo tomada del token Auth. app_metadata solo la fija
--- el service_role al aprovisionar (el usuario no puede editarla), a
--- diferencia de user_metadata que si es editable por el propio usuario.
 create or replace function public.current_device_id()
 returns text
 language sql
@@ -434,20 +850,80 @@ as $$
   select auth.jwt() -> 'app_metadata' ->> 'device_id';
 $$;
 
--- Dispositivos: cualquier usuario con perfil ve la flota; el dispositivo
--- solo su propia fila.
 drop policy if exists "devices_authenticated_read" on public.devices;
 create policy "devices_authenticated_read"
   on public.devices for select
   to authenticated
-  using (public.has_profile() or auth_user_id = auth.uid());
+  using (
+    (public.has_profile() and organization_id = public.current_user_org_id())
+    or auth_user_id = auth.uid()
+  );
 
--- El dispositivo solo puede crear/actualizar su propia fila.
+-- Trigger para prevenir asignaciones arbitrarias de organización al insertar dispositivos
+create or replace function public.set_device_insert_org_id()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  existing_org_id uuid;
+begin
+  if not public.is_admin() then
+    select organization_id into existing_org_id
+    from public.devices
+    where id = NEW.id;
+
+    if existing_org_id is null then
+      select organization_id into existing_org_id
+      from public.device_registry
+      where device_id = NEW.id;
+    end if;
+
+    if existing_org_id is not null then
+      NEW.organization_id := existing_org_id;
+    elsif NEW.organization_id is not null then
+      raise exception 'No esta permitido asignar una organizacion arbitraria a un dispositivo sin aprovisionamiento';
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_set_device_insert_org_id on public.devices;
+create trigger trg_set_device_insert_org_id
+  before insert on public.devices
+  for each row execute function public.set_device_insert_org_id();
+
 drop policy if exists "devices_device_insert" on public.devices;
 create policy "devices_device_insert"
   on public.devices for insert
   to authenticated
   with check (id = public.current_device_id() and auth_user_id = auth.uid());
+
+-- Trigger para proteger inmutabilidad de estructura u organización en dispositivos
+create or replace function public.protect_device_structural_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_admin() then
+    if NEW.organization_id is distinct from OLD.organization_id
+       or NEW.auth_user_id is distinct from OLD.auth_user_id
+       or NEW.id is distinct from OLD.id then
+      raise exception 'No esta permitido modificar la estructura u organizacion de un dispositivo existente';
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_protect_device_structural_fields on public.devices;
+create trigger trg_protect_device_structural_fields
+  before update on public.devices
+  for each row execute function public.protect_device_structural_fields();
 
 drop policy if exists "devices_device_update" on public.devices;
 create policy "devices_device_update"
@@ -456,81 +932,102 @@ create policy "devices_device_update"
   using (id = public.current_device_id() and auth_user_id = auth.uid())
   with check (id = public.current_device_id() and auth_user_id = auth.uid());
 
--- Gestión de dispositivos (alta/baja/edición): solo admin/owner.
 drop policy if exists "devices_admin_insert" on public.devices;
 create policy "devices_admin_insert"
   on public.devices for insert
   to authenticated
-  with check (public.is_admin());
+  with check (public.is_admin() and organization_id = public.current_user_org_id());
 
 drop policy if exists "devices_admin_update" on public.devices;
 create policy "devices_admin_update"
   on public.devices for update
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_admin() and organization_id = public.current_user_org_id())
+  with check (public.is_admin() and organization_id = public.current_user_org_id());
 
 drop policy if exists "devices_admin_delete" on public.devices;
 create policy "devices_admin_delete"
   on public.devices for delete
   to authenticated
-  using (public.is_admin());
+  using (public.is_admin() and organization_id = public.current_user_org_id());
 
--- El dispositivo solo puede insertar posiciones de su propio device_id.
 drop policy if exists "gps_locations_public_insert" on public.gps_locations;
 drop policy if exists "gps_locations_device_insert" on public.gps_locations;
 create policy "gps_locations_device_insert"
   on public.gps_locations for insert
   to authenticated
-  with check (device_id = public.current_device_id());
+  with check (
+    device_id = public.current_device_id()
+    and organization_id = (
+      select d.organization_id from public.devices d where d.id = public.current_device_id()
+    )
+  );
 
--- Ubicaciones: cualquier usuario con perfil ve todo; el dispositivo solo sus propias posiciones.
 drop policy if exists "gps_locations_authenticated_read" on public.gps_locations;
 create policy "gps_locations_authenticated_read"
   on public.gps_locations for select
   to authenticated
-  using (public.has_profile()
-    or exists (
-      select 1 from public.devices d
-      where d.id = public.gps_locations.device_id
-        and d.auth_user_id = auth.uid()
-    ));
+  using (
+    (public.has_profile() and organization_id = public.current_user_org_id())
+    or device_id = public.current_device_id()
+  );
 
--- Políticas de flota/alertas/geocercas ya están definidas arriba con control de roles granular.
-
-drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
-create policy "vehicle_commands_authenticated_insert"
-  on public.vehicle_commands for insert
-  to authenticated
-  with check (public.is_operator());
-
--- Lectura de comandos: cualquier usuario con perfil, y el dispositivo los de su device_id.
-drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
-create policy "vehicle_commands_authenticated_read"
-  on public.vehicle_commands for select
-  to authenticated
-  using (public.has_profile() or device_id = public.current_device_id());
-
--- El dispositivo solo puede acusar (pending -> received/done) sus comandos.
 drop policy if exists "vehicle_commands_device_ack" on public.vehicle_commands;
 create policy "vehicle_commands_device_ack"
   on public.vehicle_commands for update
   to authenticated
-  using (device_id = public.current_device_id() and status = 'pending')
-  with check (device_id = public.current_device_id() and status in ('pending', 'received', 'done'));
+  using (device_id = public.current_device_id() and status in ('pending', 'received'))
+  with check (device_id = public.current_device_id() and status in ('pending', 'received', 'done', 'failed'));
 
--- ============================================================================
--- BOOTSTRAP DEL PRIMER OPERADOR DEL PANEL
--- ----------------------------------------------------------------------------
--- No hay trigger que cree profiles al registrar un usuario, y is_operator()
--- exige un profile con organization_id. Tras crear el usuario del panel en
--- Authentication > Users, ejecuta UNA vez estos INSERT (el SQL Editor corre
--- como postgres y omite RLS). Reemplaza el correo por el del operador real.
---
--- insert into public.organizations (name) values ('Mi empresa');
--- insert into public.profiles (user_id, organization_id, full_name, role)
--- select u.id, o.id, 'Operador', 'owner'
--- from auth.users u
--- cross join (select id from public.organizations order by created_at limit 1) o
--- where u.email = 'operador@ejemplo.com';
--- ============================================================================
+-- =====================================================================
+-- Trigger de creación de perfil para nuevos registros de Auth
+-- =====================================================================
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_org_id uuid;
+begin
+  select id into target_org_id from public.organizations order by created_at limit 1;
+
+  if target_org_id is null then
+    insert into public.organizations (name)
+    values ('Organización Principal')
+    returning id into target_org_id;
+  end if;
+
+  insert into public.profiles (user_id, organization_id, full_name, role)
+  values (new.id, target_org_id, coalesce(split_part(new.email, '@', 1), 'Usuario'), 'viewer')
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- =====================================================================
+-- Migración de Backfill AL FINAL (después de crear todas las tablas, columnas e índices) (Punto 1)
+-- =====================================================================
+do $$
+declare
+  default_org_id uuid;
+begin
+  select id into default_org_id from public.organizations order by created_at limit 1;
+  if default_org_id is null then
+    insert into public.organizations (name) values ('Organización Principal') returning id into default_org_id;
+  end if;
+
+  update public.vehicles set organization_id = default_org_id where organization_id is null;
+  update public.devices set organization_id = default_org_id where organization_id is null;
+  update public.alerts set organization_id = default_org_id where organization_id is null;
+  update public.geofences set organization_id = default_org_id where organization_id is null;
+  update public.gps_locations set organization_id = default_org_id where organization_id is null;
+  update public.vehicle_commands set organization_id = default_org_id where organization_id is null;
+end $$;

@@ -6,6 +6,22 @@ export const VehicleControlCard = ({ vehicle, onControl, onDelete, isBusy = fals
 
   if (!vehicle) return null;
 
+  const isPending = isBusy || vehicle.controlState === 'command_pending' || vehicle.status === 'command_pending';
+  const stateClass = isPending
+    ? 'command_pending'
+    : vehicle.controlState === 'immobilized' || vehicle.status === 'immobilized'
+      ? 'immobilized'
+      : vehicle.status;
+  const stateLabel = isPending
+    ? 'Enviando comando...'
+    : vehicle.controlState === 'immobilized' || vehicle.status === 'immobilized'
+      ? 'Inmovilizado'
+      : vehicle.status === 'active'
+        ? 'Activo'
+        : vehicle.status === 'stopped'
+          ? 'Detenido'
+          : 'Offline';
+
   return (
     <div className="vehicle-control-card">
       <div className="vehicle-control-heading">
@@ -14,19 +30,19 @@ export const VehicleControlCard = ({ vehicle, onControl, onDelete, isBusy = fals
           <strong>{vehicle.name}</strong>
           <small>{vehicle.plate || vehicle.id}</small>
         </div>
-        <span className={`vehicle-control-state ${vehicle.status}`}>
-          {vehicle.controlState === 'immobilized' ? 'Inmovilizado' : vehicle.status === 'active' ? 'Activo' : vehicle.status === 'stopped' ? 'Detenido' : 'Offline'}
+        <span className={`vehicle-control-state ${stateClass}`}>
+          {stateLabel}
         </span>
       </div>
 
       <div className="vehicle-control-actions">
-        <button type="button" disabled={isBusy} onClick={() => onControl('activate')}>
+        <button type="button" disabled={isPending} onClick={() => onControl('activate')}>
           <Power size={15} /> Activar
         </button>
-        <button type="button" disabled={isBusy} onClick={() => onControl('stop')}>
+        <button type="button" disabled={isPending} onClick={() => onControl('stop')}>
           <CircleStop size={15} /> Detener
         </button>
-        <button type="button" disabled={isBusy} onClick={() => onControl('immobilize')} className="vehicle-control-warning">
+        <button type="button" disabled={isPending} onClick={() => onControl('immobilize')} className="vehicle-control-warning">
           <Ban size={15} /> Inmovilizar
         </button>
       </div>
