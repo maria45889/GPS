@@ -62,19 +62,32 @@ export const deleteVehicle = async (vehicleId) => {
   if (!supabase) return { remote: false };
 
   return withAuthRetry(async () => {
-    const { data, error } = await supabase.rpc('delete_vehicle_cascade', {
-      p_vehicle_id: vehicleId,
-    });
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        return { remote: false, error: new Error('No hay sesión activa') };
+      }
 
-    if (error) {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL || 'https://tu-proyecto.supabase.co'}/functions/v1/delete-device-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
+        },
+        body: JSON.stringify({ vehicle_id: vehicleId })
+      });
+
+      const responseData = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(responseData.error || 'Error al eliminar el vehículo y dispositivo de forma segura');
+      }
+
+      return { remote: true };
+    } catch (error) {
+      console.error('Error al invocar la función de eliminación segura:', error);
       return { remote: false, error };
     }
-
-    if (data && data.success === false) {
-      return { remote: false, error: new Error(data.error || 'No se pudo eliminar el vehículo') };
-    }
-
-    return { remote: true, deviceId: data?.device_id };
   });
 };
 

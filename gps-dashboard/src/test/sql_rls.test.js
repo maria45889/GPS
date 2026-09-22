@@ -103,9 +103,9 @@ describe('SQL & RLS Security Contracts in supabase_setup.sql', () => {
     expect(sqlContent).not.toContain('select 1 from public.devices d');
   });
 
-  it('incluye el estado failed en la cláusula WITH CHECK de la política vehicle_commands_device_ack', () => {
-    expect(sqlContent).toContain('create policy "vehicle_commands_device_ack"');
-    expect(sqlContent).toContain("with check (device_id = public.current_device_id() and status in ('pending', 'received', 'done', 'failed'));");
+  it('elimina la política de actualización directa de comandos y exige el uso de la RPC ack_vehicle_command', () => {
+    expect(sqlContent).not.toContain('create policy "vehicle_commands_device_ack"');
+    expect(sqlContent).toContain('create or replace function public.ack_vehicle_command');
   });
 
   it('sobrescribe obligatoriamente la organización del dispositivo en set_gps_location_org_id y exige un dispositivo registrado', () => {

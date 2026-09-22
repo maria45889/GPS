@@ -7,9 +7,12 @@ export const useVehicles = () => {
   const [vehicles, setVehicles] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [lastSyncTime, setLastSyncTime] = useState(null)
+  const [isStale, setIsStale] = useState(false)
   const reqSeqRef = useRef(0)
   const isFetchingRef = useRef(false)
   const pendingRefetchRef = useRef(false)
+  const [refetchTrigger, setRefetchTrigger] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -55,10 +58,13 @@ export const useVehicles = () => {
         if (!cancelled && currentSeq === reqSeqRef.current) {
           setVehicles(merged)
           setError(null)
+          setLastSyncTime(Date.now())
+          setIsStale(false)
         }
       } catch (err) {
         if (!cancelled && currentSeq === reqSeqRef.current) {
           setError(err.message || 'Error al cargar vehículos')
+          setIsStale(true)
           // Conservar la lista previa de vehículos en caídas temporales de red
         }
       } finally {
@@ -127,7 +133,9 @@ export const useVehicles = () => {
         supabase.removeChannel(channel)
       }
     }
-  }, [])
+  }, [refetchTrigger])
 
-  return { vehicles, isLoading, error }
+  const refetchVehicles = () => setRefetchTrigger(t => t + 1)
+
+  return { vehicles, isLoading, error, lastSyncTime, isStale, refetchVehicles }
 }

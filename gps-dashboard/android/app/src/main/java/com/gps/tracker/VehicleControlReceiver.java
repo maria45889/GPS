@@ -37,9 +37,9 @@ public class VehicleControlReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (intent == null || !ACTION_VEHICLE_CONTROL.equals(intent.getAction())) return;
-        if (context == null || intent.getPackage() == null || !context.getPackageName().equals(intent.getPackage())) {
-            Log.w(TAG, "Rechazando broadcast de control de vehículo sin destino explícito de paquete.");
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (!ACTION_VEHICLE_CONTROL.equals(action)) {
             return;
         }
 
@@ -67,31 +67,16 @@ public class VehicleControlReceiver extends BroadcastReceiver {
         }
 
         final PendingResult pendingResult = goAsync();
-        Log.i(TAG, "Receptor físico de vehículos procesando comando: " + command + " (ID: " + commandId + ")");
+        Log.i(TAG, "Receptor físico de vehículos validó comando: " + command + " (ID: " + commandId + "). Delegando a HardwareRelayReceiver.");
 
         executor.execute(() -> {
             try {
-                SharedPreferences statePrefs = context.getSharedPreferences("vehicle_relay_execution_state", Context.MODE_PRIVATE);
-                String stateKey = "exec_state_" + commandId;
-                String previousState = statePrefs.getString(stateKey, null);
-
-                if ("done".equals(previousState)) {
-                    boolean prevSuccess = statePrefs.getBoolean("exec_result_" + commandId, true);
-                    Log.i(TAG, "Comando " + commandId + " ya fue ejecutado previamente en el relé físico (estado: done). Ignorando re-conmutación física.");
-                    sendResultBroadcast(context, commandId, command, prevSuccess, createdAt);
-                    return;
-                }
-
-                statePrefs.edit().putString(stateKey, "started").apply();
-
-                boolean success = performPhysicalRelaySwitch(context, command);
-
-                statePrefs.edit()
-                        .putString(stateKey, "done")
-                        .putBoolean("exec_result_" + commandId, success)
-                        .apply();
-
-                sendResultBroadcast(context, commandId, command, success, createdAt);
+                Intent execIntent = new Intent("com.gps.tracker.EXECUTE_HARDWARE_COMMAND");
+                execIntent.setPackage(context.getPackageName());
+                execIntent.putExtra("command_id", commandId);
+                execIntent.putExtra("command", command);
+                execIntent.putExtra("created_at_ms", createdAt);
+                context.sendBroadcast(execIntent);
             } finally {
                 pendingResult.finish();
             }
@@ -195,98 +180,4 @@ public class VehicleControlReceiver extends BroadcastReceiver {
         }
     }
 
-
-
-
-    private boolean performPhysicalRelaySwitch(Context context, String command) {
-        if (command == null || !ALLOWED_COMMANDS.contains(command.toLowerCase(Locale.ROOT))) {
-            Log.w(TAG, "Comando invalido o no permitido en la whitelist: " + command);
-            return false;
-        }
-
-        SharedPreferences prefs = context != null ? context.getSharedPreferences("vehicle_control_prefs", Context.MODE_PRIVATE) : null;
-        boolean activeLow = prefs != null && prefs.getBoolean("gpio_active_low", "true".equalsIgnoreCase(System.getProperty("gps.relay.active_low", "false")));
-        boolean immobilize = "stop".equalsIgnoreCase(command) || "immobilize".equalsIgnoreCase(command);
-        // Lógica configurable para relés Normalmente Abiertos (Active HIGH) o Normalmente Cerrados (Active LOW)
-        String pinValue = immobilize ? (activeLow ? "1" : "0") : (activeLow ? "0" : "1");
-
-        String prefPath = prefs != null ? prefs.getString("gpio_path", null) : null;
-        String sysPropPath = System.getProperty("gps.relay.gpio_path", null);
-        String customPath = (sysPropPath != null && !sysPropPath.trim().isEmpty()) ? sysPropPath : prefPath;
-        boolean isDebug = false;
-        if (context != null) {
-            try {
-                isDebug = (context.getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
-            } catch (Exception ignored) {}
-        }
-        boolean isSimulation = isDebug && "true".equalsIgnoreCase(System.getProperty("gps.relay.simulation", "false"));
-
-        try {
-            File gpioFile = null;
-            if (customPath != null && !customPath.trim().isEmpty()) {
-                gpioFile = new File(customPath);
-            } else {
-                for (String candidate : GPIO_RELAY_CANDIDATE_PATHS) {
-                    File f = new File(candidate);
-                    if (f.exists()) {
-                        gpioFile = f;
-                        break;
-                    }
-                }
-                if (gpioFile == null) {
-                    gpioFile = new File(GPIO_RELAY_CANDIDATE_PATHS[0]);
-                }
-            }
-
-            if (gpioFile.exists()) {
-                // Comprobación de idempotencia: si el relé ya está en el estado deseado, omitir reescritura
-                try (FileInputStream fis = new FileInputStream(gpioFile)) {
-                    byte[] buf = new byte[16];
-                    int readBytes = fis.read(buf);
-                    if (readBytes > 0) {
-                        String currentVal = new String(buf, 0, readBytes, StandardCharsets.UTF_8).trim();
-                        if (pinValue.equals(currentVal)) {
-                            Log.i(TAG, "Estado físico GPIO ya coincide (" + pinValue + ") en " + gpioFile.getAbsolutePath() + ". Operación idempotente confirmada.");
-                            return true;
-                        }
-                    }
-                } catch (Exception ignored) {}
-
-                if (gpioFile.canWrite()) {
-                    try (FileOutputStream fos = new FileOutputStream(gpioFile)) {
-                        fos.write(pinValue.getBytes(StandardCharsets.UTF_8));
-                        fos.flush();
-                    }
-                    Log.i(TAG, "GPIO escrito exitosamente (" + pinValue + ") en " + gpioFile.getAbsolutePath());
-                    return true;
-                }
-            }
-
-            // Emitir broadcast del sistema alternativo para dispositivos/kernels con demonios de relé personalizados
-            if (context != null) {
-                try {
-                    Intent relayIntent = new Intent("com.gps.tracker.HARDWARE_RELAY_SWITCH");
-                    relayIntent.setPackage(context.getPackageName());
-                    relayIntent.putExtra("command", command);
-                    relayIntent.putExtra("pin_value", pinValue);
-                    relayIntent.putExtra("immobilize", immobilize);
-                    context.sendBroadcast(relayIntent);
-                    Log.i(TAG, "Broadcast alternativo de hardware emitido: com.gps.tracker.HARDWARE_RELAY_SWITCH (" + command + ")");
-                } catch (Exception ex) {
-                    Log.w(TAG, "Error emitiendo broadcast alternativo de hardware", ex);
-                }
-            }
-
-            if (isSimulation) {
-                Log.i(TAG, "Modo simulación explícito activado; conmutación ficticia exitosa: " + command);
-                return true;
-            } else {
-                Log.w(TAG, "Hardware GPIO no disponible ni permisos de escritura en ruta sysfs: " + (gpioFile != null ? gpioFile.getAbsolutePath() : "ninguna"));
-                return false;
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error al conmutar relé físico GPIO: " + e.getMessage(), e);
-            return false;
-        }
-    }
 }
