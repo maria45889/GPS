@@ -70,7 +70,9 @@ security definer
 set search_path = public
 as $$
   select exists (
-    select 1 from public.profiles p where p.user_id = auth.uid()
+    select 1 from public.profiles p
+    where p.user_id = auth.uid()
+      and coalesce((auth.jwt() -> 'app_metadata' ->> 'role'), '') <> 'device'
   );
 $$;
 
@@ -1011,8 +1013,10 @@ create policy "gps_locations_device_insert"
   to authenticated
   with check (
     device_id = public.current_device_id()
-    and organization_id = (
-      select d.organization_id from public.devices d where d.id = public.current_device_id()
+    and exists (
+      select 1 from public.devices registered_device
+      where registered_device.id = public.current_device_id()
+        and registered_device.status = 'active'
     )
   );
 
@@ -1029,7 +1033,7 @@ drop policy if exists "vehicle_commands_device_ack" on public.vehicle_commands;
 create policy "vehicle_commands_device_ack"
   on public.vehicle_commands for update
   to authenticated
-  using (device_id = public.current_device_id() and status in ('pending', 'received'))
+  using (device_id = public.current_device_id())
   with check (device_id = public.current_device_id() and status in ('pending', 'received', 'done', 'failed'));
 
 -- =====================================================================
@@ -1085,11 +1089,18 @@ declare
   v_device_id text;
   v_org_id uuid;
 begin
+  if not public.is_admin() then
+    return jsonb_build_object('success', false, 'error', 'Acceso denegado: Requiere rol de administrador');
+  end if;
+
   v_org_id := public.current_user_org_id();
+  if v_org_id is null then
+    return jsonb_build_object('success', false, 'error', 'Acceso denegado: Organización no encontrada');
+  end if;
 
   select device_id into v_device_id
   from public.vehicles
-  where id = p_vehicle_id and (organization_id = v_org_id or v_org_id is null);
+  where id = p_vehicle_id and organization_id = v_org_id;
 
   if not found then
     return jsonb_build_object('success', false, 'error', 'Vehículo no encontrado o sin permisos');
@@ -1110,7 +1121,7 @@ begin
   end if;
 
   delete from public.vehicles
-  where id = p_vehicle_id;
+  where id = p_vehicle_id and organization_id = v_org_id;
 
   return jsonb_build_object('success', true, 'device_id', v_device_id);
 end;
@@ -1126,15 +1137,26 @@ do $$
 declare
   default_org_id uuid;
 begin
+  -- Limpieza de perfiles residuales pertenecientes a cuentas de dispositivo
+  delete from public.profiles
+  where user_id in (
+    select id from auth.users
+    where coalesce(raw_app_meta_data->>'role', '') = 'device'
+       or email like 'device-%@local.rideguard'
+  );
+
   select id into default_org_id from public.organizations order by created_at limit 1;
   if default_org_id is null then
     insert into public.organizations (name) values ('Organización Principal') returning id into default_org_id;
   end if;
 
-  update public.vehicles set organization_id = default_org_id where organization_id is null;
-  update public.devices set organization_id = default_org_id where organization_id is null;
-  update public.alerts set organization_id = default_org_id where organization_id is null;
-  update public.geofences set organization_id = default_org_id where organization_id is null;
-  update public.gps_locations set organization_id = default_org_id where organization_id is null;
-  update public.vehicle_commands set organization_id = default_org_id where organization_id is null;
+  if default_org_id is not null then
+    update public.vehicles set organization_id = default_org_id where organization_id is null;
+    update public.devices set organization_id = default_org_id where organization_id is null;
+    update public.geofences set organization_id = default_org_id where organization_id is null;
+    update public.alerts set organization_id = default_org_id where organization_id is null;
+    update public.profiles set organization_id = default_org_id where organization_id is null;
+    update public.gps_locations set organization_id = default_org_id where organization_id is null;
+    update public.vehicle_commands set organization_id = default_org_id where organization_id is null;
+  end if;
 end $$;

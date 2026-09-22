@@ -93,11 +93,21 @@ try {
 
 task ensureSupabaseConfig {
     doLast {
+        boolean isReleaseBuild = gradle.taskGraph.allTasks.any { task ->
+            task.name.toLowerCase().contains("releas") && !task.name.toLowerCase().contains("test")
+        }
+        def envUrl = System.getenv('SUPABASE_URL') ?: findProperty('SUPABASE_URL')
+        def envKey = System.getenv('SUPABASE_ANON_KEY') ?: System.getenv('SUPABASE_PUBLISHABLE_KEY') ?: findProperty('SUPABASE_ANON_KEY') ?: findProperty('SUPABASE_PUBLISHABLE_KEY')
+
+        if (isReleaseBuild && (!envUrl || !envKey)) {
+            throw new GradleException("ERROR CRÍTICO DE CONFIGURACIÓN RELEASE: Para generar un APK de producción (release) debes definir explícitamente las variables de entorno SUPABASE_URL y SUPABASE_ANON_KEY (o SUPABASE_PUBLISHABLE_KEY).")
+        }
+
         def configFile = file('src/main/res/values/supabase_config.xml')
         if (!configFile.exists()) {
             configFile.parentFile.mkdirs()
-            def supabaseUrl = System.getenv('SUPABASE_URL') ?: 'https://wsmqgjcfheraxorljhjc.supabase.co'
-            def supabaseKey = System.getenv('SUPABASE_ANON_KEY') ?: System.getenv('SUPABASE_PUBLISHABLE_KEY') ?: 'sb_publishable_hbG191sqB0OuXaUHZrHEFQ_uP594pS2'
+            def supabaseUrl = envUrl ?: 'https://wsmqgjcfheraxorljhjc.supabase.co'
+            def supabaseKey = envKey ?: 'sb_publishable_hbG191sqB0OuXaUHZrHEFQ_uP594pS2'
             configFile.text = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="supabase_url" translatable="false">${supabaseUrl}</string>

@@ -67,14 +67,7 @@ export const deleteVehicle = async (vehicleId) => {
     });
 
     if (error) {
-      // Fallback a eliminación directa si la RPC aún no está desplegada
-      const { error: delError } = await supabase
-        .from('vehicles')
-        .delete()
-        .eq('id', vehicleId)
-        .select('id');
-      if (delError) return { remote: false, error: delError };
-      return { remote: true };
+      return { remote: false, error };
     }
 
     if (data && data.success === false) {

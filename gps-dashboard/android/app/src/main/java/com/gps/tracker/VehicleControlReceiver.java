@@ -71,7 +71,26 @@ public class VehicleControlReceiver extends BroadcastReceiver {
 
         executor.execute(() -> {
             try {
+                SharedPreferences statePrefs = context.getSharedPreferences("vehicle_relay_execution_state", Context.MODE_PRIVATE);
+                String stateKey = "exec_state_" + commandId;
+                String previousState = statePrefs.getString(stateKey, null);
+
+                if ("done".equals(previousState)) {
+                    boolean prevSuccess = statePrefs.getBoolean("exec_result_" + commandId, true);
+                    Log.i(TAG, "Comando " + commandId + " ya fue ejecutado previamente en el relé físico (estado: done). Ignorando re-conmutación física.");
+                    sendResultBroadcast(context, commandId, command, prevSuccess, createdAt);
+                    return;
+                }
+
+                statePrefs.edit().putString(stateKey, "started").apply();
+
                 boolean success = performPhysicalRelaySwitch(context, command);
+
+                statePrefs.edit()
+                        .putString(stateKey, "done")
+                        .putBoolean("exec_result_" + commandId, success)
+                        .apply();
+
                 sendResultBroadcast(context, commandId, command, success, createdAt);
             } finally {
                 pendingResult.finish();
