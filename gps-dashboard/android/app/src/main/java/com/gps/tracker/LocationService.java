@@ -60,6 +60,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class LocationService extends Service implements LocationListener {
     private static final String TAG = "LocationService";
@@ -84,6 +85,7 @@ public class LocationService extends Service implements LocationListener {
 
     private DeviceAuthManager authManager;
     private final ConcurrentLinkedQueue<JSONObject> offlineQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicLong droppedLocationsCount = new AtomicLong(0);
     private final Set<String> processedCommandIds = Collections.synchronizedSet(new LinkedHashSet<>());
     private final Set<String> executedHardwareCommandIds = Collections.synchronizedSet(new LinkedHashSet<>());
     private final Set<String> activeExecutingCommandIds = ConcurrentHashMap.newKeySet();
@@ -1016,6 +1018,9 @@ public class LocationService extends Service implements LocationListener {
         synchronized (offlineQueue) {
             if (offlineQueue.size() >= MAX_OFFLINE_QUEUE_SIZE) {
                 offlineQueue.poll();
+                long totalDropped = droppedLocationsCount.incrementAndGet();
+                Log.w(TAG, "⚠️ Cola offline llena (" + MAX_OFFLINE_QUEUE_SIZE + " elementos). Se descartó la ubicación más antigua. Total descartadas: " + totalDropped);
+                updateNotification("Cola offline llena - descartada ubicación (" + totalDropped + " perdidas)");
             }
             offlineQueue.add(locationBody);
             boolean saved = persistOfflineQueue();

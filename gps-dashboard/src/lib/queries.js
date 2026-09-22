@@ -303,13 +303,15 @@ export const fetchLatestLocations = async () => {
     }
 
     const errCode = String(error?.code || '')
-    const errMsg = String(error?.message || '')
-    if (errCode === '42501' || errMsg.includes('permission denied')) {
-      console.warn('⚠️ Error de permisos RLS al consultar vista latest_gps_locations:', error)
+    const errMsg = String(error?.message || '').toLowerCase()
+    const isMissingRelation = errCode === 'PGRST202' || errCode === '42P01' || errMsg.includes('relation') || errMsg.includes('does not exist')
+
+    if (!isMissingRelation) {
+      console.warn('⚠️ Error al consultar vista latest_gps_locations (se relanza):', error)
       throw error
     }
 
-    console.warn('⚠️ Vista latest_gps_locations no disponible. Activando fallback sobre tabla gps_locations:', error?.message || error)
+    console.warn('⚠️ Vista latest_gps_locations no disponible (PGRST202/42P01). Activando fallback sobre tabla gps_locations:', error?.message || error)
 
     const { data: fallbackData, error: fallbackError } = await supabase
       .from('gps_locations')

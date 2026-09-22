@@ -191,9 +191,16 @@ serve(async (req) => {
 
     // Una vez confirmado y consumido el código en DB, actualizar la contraseña y revocar sesiones previas
     const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
-    if (updated.error) return json({ error: updated.error.message }, 500)
+    if (updated.error) {
+      console.error(`⚠️ Error al actualizar contraseña para ${authUserId}:`, updated.error)
+      return json({ error: updated.error.message || 'Error al actualizar credenciales de dispositivo' }, 500)
+    }
 
-    try { await supabase.auth.admin.signOut(authUserId) } catch {}
+    try {
+      await supabase.auth.admin.signOut(authUserId, 'global')
+    } catch (signOutErr) {
+      console.warn(`⚠️ Aviso al revocar sesiones globales para ${authUserId}:`, signOutErr)
+    }
 
     return json({ ok: true, deviceId, email, password, reissued: true })
   }
