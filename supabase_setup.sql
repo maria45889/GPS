@@ -440,7 +440,8 @@ begin
           else status
         end,
         last_update = now()
-    where id = NEW.vehicle_id;
+    where id = NEW.vehicle_id
+      and organization_id = NEW.organization_id;
 
     get diagnostics updated_count = row_count;
     if updated_count = 0 then
@@ -517,11 +518,23 @@ begin
     raise exception 'Estado de acuse invalido: %', p_status;
   end if;
 
+  if public.current_device_id() is null then
+    raise exception 'Dispositivo no identificado';
+  end if;
+
+  if not exists (
+    select 1 from public.devices
+    where id = public.current_device_id()
+      and auth_user_id = auth.uid()
+      and status = 'active'
+  ) then
+    raise exception 'Dispositivo inactivo o no autorizado';
+  end if;
+
   update public.vehicle_commands
   set status = p_status,
       acknowledged_at = coalesce(p_acknowledged_at, now())
   where id = p_command_id
-    and public.current_device_id() is not null
     and device_id = public.current_device_id()
     and (
       (p_status = 'received' and status = 'pending')
@@ -636,10 +649,14 @@ begin
       last_seen = now(),
       updated_at = now()
   where id = p_device_id
-    and auth_user_id = auth.uid();
+    and auth_user_id = auth.uid()
+    and status not in ('inactive', 'revoked');
 
   get diagnostics updated_count = row_count;
-  return updated_count > 0;
+  if updated_count = 0 then
+    raise exception 'El dispositivo esta inactivo, revocado o no autorizado';
+  end if;
+  return true;
 end;
 $$;
 
@@ -1030,11 +1047,41 @@ create policy "gps_locations_authenticated_read"
   );
 
 drop policy if exists "vehicle_commands_device_ack" on public.vehicle_commands;
-create policy "vehicle_commands_device_ack"
-  on public.vehicle_commands for update
-  to authenticated
-  using (device_id = public.current_device_id())
-  with check (device_id = public.current_device_id() and status in ('pending', 'received', 'done', 'failed'));
+
+
+-- Trigger para proteger inmutabilidad de comandos desde el dispositivo
+create or replace function public.protect_vehicle_commands_device_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.current_device_id() is not null then
+    if NEW.vehicle_id is distinct from OLD.vehicle_id
+       or NEW.command is distinct from OLD.command
+       or NEW.organization_id is distinct from OLD.organization_id
+       or NEW.device_id is distinct from OLD.device_id then
+      raise exception 'No esta permitido modificar campos inmutables del comando desde el dispositivo';
+    end if;
+    
+    if NEW.status is distinct from OLD.status then
+      if not (
+        (NEW.status = 'received' and OLD.status = 'pending') or
+        (NEW.status in ('done', 'failed') and OLD.status in ('pending', 'received'))
+      ) then
+        raise exception 'Transicion de estado de comando no permitida desde el dispositivo';
+      end if;
+    end if;
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists trg_protect_vehicle_commands_device_update on public.vehicle_commands;
+create trigger trg_protect_vehicle_commands_device_update
+  before update on public.vehicle_commands
+  for each row execute function public.protect_vehicle_commands_device_update();
 
 -- =====================================================================
 -- Trigger de creación de perfil para nuevos registros de Auth (Excluye dispositivos GPS)
@@ -1088,6 +1135,7 @@ as $$
 declare
   v_device_id text;
   v_org_id uuid;
+  v_auth_user_id uuid;
 begin
   if not public.is_admin() then
     return jsonb_build_object('success', false, 'error', 'Acceso denegado: Requiere rol de administrador');
@@ -1107,8 +1155,10 @@ begin
   end if;
 
   if v_device_id is not null then
+    select auth_user_id into v_auth_user_id from public.devices where id = v_device_id;
+
     update public.devices
-    set status = 'inactive', updated_at = now()
+    set status = 'inactive', auth_user_id = null, updated_at = now()
     where id = v_device_id;
 
     update public.device_registry
@@ -1123,7 +1173,7 @@ begin
   delete from public.vehicles
   where id = p_vehicle_id and organization_id = v_org_id;
 
-  return jsonb_build_object('success', true, 'device_id', v_device_id);
+  return jsonb_build_object('success', true, 'device_id', v_device_id, 'auth_user_id', v_auth_user_id);
 end;
 $$;
 

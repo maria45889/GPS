@@ -84,7 +84,6 @@ public class LocationService extends Service implements LocationListener {
     private ConnectivityManager.NetworkCallback networkCallback;
 
     private DeviceAuthManager authManager;
-    private final ConcurrentLinkedQueue<JSONObject> offlineQueue = new ConcurrentLinkedQueue<>();
     private final AtomicLong droppedLocationsCount = new AtomicLong(0);
     private final Set<String> processedCommandIds = Collections.synchronizedSet(new LinkedHashSet<>());
     private final Set<String> executedHardwareCommandIds = Collections.synchronizedSet(new LinkedHashSet<>());
@@ -131,7 +130,7 @@ public class LocationService extends Service implements LocationListener {
     }
 
     private void triggerAsyncOfflineFlush() {
-        if (!isServiceRunning || offlineQueue.isEmpty()) return;
+        if (!isServiceRunning) return;
 
         long nowElapsed = SystemClock.elapsedRealtime();
         if (nowElapsed - lastOfflineFlushAttemptElapsedMs < offlineFlushBackoffMs) {
@@ -563,7 +562,10 @@ public class LocationService extends Service implements LocationListener {
                 if (token == null) {
                     Log.w(TAG, "Sin access token al capturar ubicación. Guardando punto GPS en cola offline.");
                     enqueueOfflineLocation(body);
-                    updateNotification("Sin token - Ubicación guardada en cola offline (" + offlineQueue.size() + ")");
+                    offlineFlushExecutor.execute(() -> {
+                        int size = AppDatabase.getDatabase(getApplicationContext()).locationDao().getCount();
+                        updateNotification("Sin token - Ubicación guardada en cola offline (" + size + ")");
+                    });
                     return;
                 }
 
@@ -600,7 +602,10 @@ public class LocationService extends Service implements LocationListener {
                     enqueueOfflineLocation(body);
                 } else {
                     enqueueOfflineLocation(body);
-                    updateNotification("Error Supabase HTTP " + responseCode + " (en cola: " + offlineQueue.size() + ")");
+                    offlineFlushExecutor.execute(() -> {
+                        int size = AppDatabase.getDatabase(getApplicationContext()).locationDao().getCount();
+                        updateNotification("Error Supabase HTTP " + responseCode + " (en cola: " + size + ")");
+                    });
                 }
             } catch (Exception error) {
                 Log.e(TAG, "Error enviando ubicación en vivo; guardando en cola offline", error);
@@ -631,7 +636,10 @@ public class LocationService extends Service implements LocationListener {
                         Log.e(TAG, "Error serializando ubicación offline fallback", e);
                     }
                 }
-                updateNotification("Sin conexión, guardado en cola (" + offlineQueue.size() + ")");
+                offlineFlushExecutor.execute(() -> {
+                    int size = AppDatabase.getDatabase(getApplicationContext()).locationDao().getCount();
+                    updateNotification("Sin conexión, guardado en cola (" + size + ")");
+                });
             } finally {
                 if (connection != null) connection.disconnect();
             }
@@ -664,18 +672,28 @@ public class LocationService extends Service implements LocationListener {
     private FlushResult flushOfflineQueue(String token, String baseUrl) {
         int count = 0;
         boolean batchSuccess = true;
-        while (!offlineQueue.isEmpty() && count < 50) {
+        LocationDao dao = AppDatabase.getDatabase(getApplicationContext()).locationDao();
+        List<LocationEntity> entities = dao.getOldest(50);
+        
+        for (LocationEntity entity : entities) {
             count++;
-            JSONObject body = offlineQueue.peek();
-            if (body == null) break;
-            if (isLocationStale(body)) {
-                Log.w(TAG, "Desechando punto GPS offline obsoleto con antigüedad mayor a 24 horas");
-                synchronized (offlineQueue) {
-                    offlineQueue.poll();
-                    persistOfflineQueue();
+            
+            JSONObject body = null;
+            try {
+                String decryptedPayload = EncryptionUtils.decrypt(entity.encryptedPayload);
+                if (decryptedPayload != null) {
+                    body = new JSONObject(decryptedPayload);
+                } else {
+                    throw new Exception("Decryption failed or payload is null");
                 }
+            } catch (Exception e) {
+                Log.e(TAG, "Error decrypting or parsing JSON from Room. Descartando registro corrupto.", e);
+                dao.delete(entity);
                 continue;
             }
+
+
+            
             HttpURLConnection connection = null;
             try {
                 URL url = new URL(baseUrl + "/rest/v1/gps_locations");
@@ -696,10 +714,7 @@ public class LocationService extends Service implements LocationListener {
                 int responseCode = connection.getResponseCode();
                 // HTTP 200..299 o HTTP 409 Conflict (event_id duplicado resuelto en servidor)
                 if ((responseCode >= 200 && responseCode < 300) || responseCode == 409) {
-                    synchronized (offlineQueue) {
-                        offlineQueue.poll();
-                        persistOfflineQueue();
-                    }
+                    dao.delete(entity);
                 } else if (responseCode == 401) {
                     Log.w(TAG, "Access token expirado (HTTP 401) al vaciar cola offline. Limpiando token local.");
                     authManager.clearAccessToken();
@@ -712,10 +727,7 @@ public class LocationService extends Service implements LocationListener {
                     break;
                 } else if (responseCode == 400 || responseCode == 422) {
                     Log.w(TAG, "Punto GPS rechazado con HTTP " + responseCode + " irrecuperable. Desechando registro.");
-                    synchronized (offlineQueue) {
-                        offlineQueue.poll();
-                        persistOfflineQueue();
-                    }
+                    dao.delete(entity);
                 } else {
                     batchSuccess = false;
                     break;
@@ -729,17 +741,19 @@ public class LocationService extends Service implements LocationListener {
             }
         }
 
+        int remaining = dao.getCount();
+
         if (!batchSuccess) {
-            Log.w(TAG, "Vaciado de cola offline fallido; restan " + offlineQueue.size() + " ubicaciones pendientes.");
+            Log.w(TAG, "Vaciado de cola offline fallido; restan " + remaining + " ubicaciones pendientes.");
             return FlushResult.FAILED;
         }
 
-        if (offlineQueue.isEmpty()) {
+        if (remaining == 0) {
             Log.i(TAG, "Cola offline completamente vaciada con éxito.");
             return FlushResult.SUCCESS_EMPTY;
         } else {
-            Log.i(TAG, "Vaciado parcial de cola offline exitoso (lote de 50 enviado); restan " + offlineQueue.size() + " ubicaciones pendientes.");
-            updateNotification("Cola offline parcial enviada (quedan " + offlineQueue.size() + " pendientes)");
+            Log.i(TAG, "Vaciado parcial de cola offline exitoso (lote de 50 enviado); restan " + remaining + " ubicaciones pendientes.");
+            updateNotification("Cola offline parcial enviada (quedan " + remaining + " pendientes)");
             return FlushResult.SUCCESS_PARTIAL;
         }
     }
@@ -751,7 +765,7 @@ public class LocationService extends Service implements LocationListener {
             String line;
             while ((line = reader.readLine()) != null) sb.append(line);
             String errStr = sb.toString().toLowerCase(Locale.ROOT);
-            return errStr.contains("device_revoked") || errStr.contains("revocado") || errStr.contains("dispositivo_revocado") || errStr.contains("account_disabled");
+            return errStr.contains("device_revoked") || errStr.contains("revocado") || errStr.contains("account_disabled");
         } catch (Exception e) {
             return false;
         }
@@ -935,13 +949,18 @@ public class LocationService extends Service implements LocationListener {
         Log.i(TAG, "Ejecutando comando físico en vehículo: " + command + " (ID: " + cmdId + ")");
         try {
             Intent intent = new Intent("com.gps.tracker.ACTION_VEHICLE_CONTROL");
-            intent.setPackage(getPackageName());
             intent.putExtra("command_id", cmdId);
             intent.putExtra("command", command);
             intent.putExtra("created_at", createdAtMillis);
             intent.putExtra("created_at_ms", createdAtMillis);
             intent.putExtra("timestamp", System.currentTimeMillis());
-            sendBroadcast(intent);
+            sendBroadcast(intent, "com.gps.tracker.permission.CONTROL_VEHICLE");
+            
+            // Broadcast para integraciones hardware externas
+            Intent hardwareIntent = new Intent("com.gps.tracker.HARDWARE_RELAY_SWITCH");
+            hardwareIntent.putExtra("command_id", cmdId);
+            hardwareIntent.putExtra("command", command);
+            sendBroadcast(hardwareIntent, "com.gps.tracker.permission.CONTROL_VEHICLE");
         } catch (Exception e) {
             Log.e(TAG, "Error enviando broadcast de control de vehículo para " + cmdId, e);
             activeExecutingCommandIds.remove(cmdId);
@@ -1015,24 +1034,18 @@ public class LocationService extends Service implements LocationListener {
     }
 
     private void enqueueOfflineLocation(JSONObject locationBody) {
-        synchronized (offlineQueue) {
-            if (offlineQueue.size() >= MAX_OFFLINE_QUEUE_SIZE) {
-                offlineQueue.poll();
-                long totalDropped = droppedLocationsCount.incrementAndGet();
-                Log.w(TAG, "⚠️ Cola offline llena (" + MAX_OFFLINE_QUEUE_SIZE + " elementos). Se descartó la ubicación más antigua. Total descartadas: " + totalDropped);
-                updateNotification("Cola offline llena - descartada ubicación (" + totalDropped + " perdidas)");
+        offlineFlushExecutor.execute(() -> {
+            try {
+                LocationDao dao = AppDatabase.getDatabase(getApplicationContext()).locationDao();
+                
+                LocationEntity entity = new LocationEntity();
+                entity.encryptedPayload = EncryptionUtils.encrypt(locationBody.toString());
+                
+                dao.insertWithLimit(entity, MAX_OFFLINE_QUEUE_SIZE);
+            } catch (Exception e) {
+                Log.e(TAG, "ERROR CRÍTICO: Falló la persistencia en Room SQLite de la cola offline.", e);
             }
-            offlineQueue.add(locationBody);
-            boolean saved = persistOfflineQueue();
-            if (!saved) {
-                Log.e(TAG, "ERROR CRÍTICO: Falló la persistencia cifrada de la cola offline en storage. Reintentando guardado.");
-                updateNotification("ERROR CRÍTICO: Fallo al guardar almacenamiento cifrado");
-                saved = persistOfflineQueue();
-                if (!saved) {
-                    Log.e(TAG, "ERROR CRÍTICO: Reintento de persistencia cifrada de cola offline también falló.");
-                }
-            }
-        }
+        });
     }
 
     private boolean isLocationStale(JSONObject locationObj) {
@@ -1049,9 +1062,8 @@ public class LocationService extends Service implements LocationListener {
                 return true;
             }
             long now = System.currentTimeMillis();
-            long age = now - timeMillis;
-            if (age > MAX_OFFLINE_QUEUE_AGE_MS || timeMillis > now + 300_000L) {
-                Log.w(TAG, "Desechando punto GPS offline obsoleto (>24h) o futuro: " + tsStr);
+            if (timeMillis > now + 300_000L) {
+                Log.w(TAG, "Desechando punto GPS offline futuro: " + tsStr);
                 return true;
             }
             return false;
@@ -1062,45 +1074,12 @@ public class LocationService extends Service implements LocationListener {
     }
 
     private boolean persistOfflineQueue() {
-        try {
-            SecurePreferences securePrefs = new SecurePreferences(this, "gps_service_prefs", "GpsTrackerQueueKey");
-            JSONArray array = new JSONArray();
-            for (JSONObject item : offlineQueue) {
-                array.put(item);
-            }
-            return securePrefs.putString(QUEUE_PREFS_KEY, array.toString());
-        } catch (Exception e) {
-            Log.e(TAG, "Error al persistir cola de ubicaciones offline cifrada", e);
-            return false;
-        }
+        // Obsoleto: manejado por Room SQLite
+        return true;
     }
 
     private void loadOfflineQueueFromStorage() {
-        try {
-            SecurePreferences securePrefs = new SecurePreferences(this, "gps_service_prefs", "GpsTrackerQueueKey");
-            String rawJson = securePrefs.getString(QUEUE_PREFS_KEY, null);
-            if (!TextUtils.isEmpty(rawJson)) {
-                JSONArray array = new JSONArray(rawJson);
-                offlineQueue.clear();
-                for (int i = 0; i < array.length(); i++) {
-                    try {
-                        JSONObject obj = array.getJSONObject(i);
-                        if (!isLocationStale(obj)) {
-                            offlineQueue.add(obj);
-                        }
-                    } catch (Exception itemErr) {
-                        Log.w(TAG, "Omitiendo elemento corrupto en cola offline", itemErr);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "Error al cargar cola de ubicaciones offline cifrada desde storage; desechando cola corrupta.", e);
-            try {
-                SecurePreferences securePrefs = new SecurePreferences(this, "gps_service_prefs", "GpsTrackerQueueKey");
-                securePrefs.remove(QUEUE_PREFS_KEY);
-                offlineQueue.clear();
-            } catch (Exception ignored) {}
-        }
+        // Obsoleto: manejado por Room SQLite
     }
 
 
@@ -1486,7 +1465,18 @@ public class LocationService extends Service implements LocationListener {
         commandHandler.removeCallbacks(commandRunnable);
         locationExecutor.shutdownNow();
         commandExecutor.shutdownNow();
-        offlineFlushExecutor.shutdownNow();
+        
+        offlineFlushExecutor.shutdown();
+        try {
+            if (!offlineFlushExecutor.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS)) {
+                Log.w(TAG, "offlineFlushExecutor timeout for termination, forcing shutdown");
+                offlineFlushExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            offlineFlushExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        
         super.onDestroy();
     }
 

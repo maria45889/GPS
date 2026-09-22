@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <permission
+        android:name="com.gps.tracker.permission.CONTROL_VEHICLE"
+        android:protectionLevel="signature" />
+
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
@@ -48,11 +52,22 @@
             android:foregroundServiceType="location" />
 
         <receiver
-            android:name=".VehicleControlReceiver"
+            android:name=".HardwareRelayReceiver"
             android:enabled="true"
             android:exported="false">
             <intent-filter>
+                <action android:name="com.gps.tracker.EXECUTE_HARDWARE_COMMAND" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".VehicleControlReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="com.gps.tracker.permission.CONTROL_VEHICLE">
+            <intent-filter>
                 <action android:name="com.gps.tracker.ACTION_VEHICLE_CONTROL" />
+                <action android:name="com.gps.tracker.HARDWARE_RELAY_SWITCH" />
             </intent-filter>
         </receiver>
 

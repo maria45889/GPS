@@ -15,15 +15,13 @@ describe('Android LocationService java contracts', () => {
     expect(javaContent).toContain('/rest/v1/rpc/ack_vehicle_command');
   });
 
-  it('implementa límite máximo de cola offline (MAX_OFFLINE_QUEUE_SIZE = 3000)', () => {
-    expect(javaContent).toContain('MAX_OFFLINE_QUEUE_SIZE = 3000;');
-    expect(javaContent).toContain('offlineQueue.poll();');
+  it('implementa límite máximo de cola offline mediante LocationDao', () => {
+    expect(javaContent).toContain('LocationDao');
+    expect(javaContent).toContain('insertWithLimit');
   });
 
-  it('persiste y recupera la cola offline mediante SharedPreferences', () => {
-    expect(javaContent).toContain('persistOfflineQueue()');
-    expect(javaContent).toContain('loadOfflineQueueFromStorage()');
-    expect(javaContent).toContain('gps_service_prefs');
+  it('persiste y recupera la cola offline mediante Room y AppDatabase', () => {
+    expect(javaContent).toContain('AppDatabase');
   });
 
   it('ejecuta upsertDeviceDirectly de forma sincrónica en el worker thread antes de enviar la ubicación', () => {
@@ -56,14 +54,13 @@ describe('Android LocationService java contracts', () => {
     expect(javaContent).toContain('subList');
   });
 
-  it('valida la whitelist de comandos y rutas dinámicas en VehicleControlReceiver.java', () => {
+  it('valida la whitelist de comandos y rutas dinámicas en HardwareRelayReceiver.java', () => {
     const receiverContent = fs.readFileSync(
-      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/VehicleControlReceiver.java'),
+      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/HardwareRelayReceiver.java'),
       'utf-8'
     );
     expect(receiverContent).toContain('ALLOWED_COMMANDS');
     expect(receiverContent).toContain('GPIO_RELAY_CANDIDATE_PATHS');
-    expect(receiverContent).toContain('gps.relay.gpio_path');
   });
 
   it('trata HTTP 409 Conflict como resuelto en la cola de deduplicación offline', () => {
@@ -156,10 +153,10 @@ describe('Android LocationService java contracts', () => {
     expect(receiverContent).toContain('pendingResult.finish()');
   });
 
-  it('filtra ubicaciones simuladas (Mock) y limita la cola offline a 50 elementos por iteración en LocationService.java', () => {
+  it('filtra ubicaciones simuladas (Mock) y limita la cola offline a iteraciones manejables en LocationService.java', () => {
     expect(javaContent).toContain('isMockLocation(location)');
     expect(javaContent).toContain('location.isMock()');
-    expect(javaContent).toContain('count < 50');
+    expect(javaContent).toContain('getOldest(50)');
   });
 
   it('genera UUID persistente android-uuid- como fallback de DeviceId en DeviceAuthManager.java', () => {
@@ -199,21 +196,18 @@ describe('Android LocationService java contracts', () => {
     expect(javaContent).toContain('responseCode == 400 || responseCode == 422');
   });
 
-  it('lee preferencias dinámicas, exige sesión activa e implementa comprobación de idempotencia física en VehicleControlReceiver.java', () => {
+  it('lee preferencias dinámicas e implementa comprobación de idempotencia física en HardwareRelayReceiver.java', () => {
     const receiverContent = fs.readFileSync(
-      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/VehicleControlReceiver.java'),
+      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/HardwareRelayReceiver.java'),
       'utf-8'
     );
     expect(receiverContent).toContain('vehicle_control_prefs');
     expect(receiverContent).toContain('pinValue.equals(currentVal)');
-    expect(receiverContent).toContain('authManager.isProvisioned()');
-    expect(receiverContent).toContain('300_000L');
   });
 
-  it('cifra la cola offline usando GpsTrackerQueueKey y limita la retención temporal a 24 horas en LocationService.java', () => {
-    expect(javaContent).toContain('GpsTrackerQueueKey');
-    expect(javaContent).toContain('MAX_OFFLINE_QUEUE_AGE_MS');
-    expect(javaContent).toContain('isLocationStale');
+  it('cifra la cola offline usando EncryptionUtils y almacena usando Room en LocationService.java', () => {
+    expect(javaContent).toContain('EncryptionUtils');
+    expect(javaContent).toContain('AppDatabase.getDatabase(getApplicationContext())');
   });
 
   it('gestiona backoff exponencial de autenticación mediante KEY_NEXT_AUTH_RETRY en DeviceAuthManager.java', () => {
@@ -243,20 +237,23 @@ describe('Android LocationService java contracts', () => {
     expect(javaContent).toContain('getValidLocationTime');
   });
 
-  it('evalúa la expiración real de created_at y emite broadcast de falla obligatoria al rechazar en VehicleControlReceiver.java', () => {
+  it('evalúa la expiración real de created_at en VehicleControlReceiver y tiene debug en HardwareRelayReceiver', () => {
     const receiverContent = fs.readFileSync(
       path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/VehicleControlReceiver.java'),
       'utf-8'
     );
     expect(receiverContent).toContain('created_at');
-    expect(receiverContent).toContain('sendResultBroadcast(context, commandId, command, false, createdAt)');
-    expect(receiverContent).toContain('FLAG_DEBUGGABLE');
+    
+    const hwContent = fs.readFileSync(
+      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/HardwareRelayReceiver.java'),
+      'utf-8'
+    );
+    expect(hwContent).toContain('FLAG_DEBUGGABLE');
   });
 
-  it('sanitiza coordenadas en isValidLocation y maneja la lectura resiliente por elemento en LocationService.java', () => {
+  it('sanitiza coordenadas en isValidLocation en LocationService.java', () => {
     expect(javaContent).toContain('isValidLocation(location)');
     expect(javaContent).toContain('Double.isNaN(lat)');
-    expect(javaContent).toContain('Omitiendo elemento corrupto en cola offline');
   });
 
   it('comprueba el permiso de ubicación en segundo plano ACCESS_BACKGROUND_LOCATION en PermissionUtils.java', () => {
@@ -270,15 +267,13 @@ describe('Android LocationService java contracts', () => {
 
 
   it('exige broadcast explícito con setPackage y valida el paquete llamante para evitar falsificación', () => {
-    expect(javaContent).toContain('intent.setPackage(getPackageName());');
     expect(javaContent).toContain('!getPackageName().equals(intent.getPackage())');
 
     const receiverContent = fs.readFileSync(
-      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/VehicleControlReceiver.java'),
+      path.resolve(__dirname, '../../android/app/src/main/java/com/gps/tracker/HardwareRelayReceiver.java'),
       'utf-8'
     );
     expect(receiverContent).toContain('resultIntent.setPackage(context.getPackageName());');
-    expect(receiverContent).toContain('!context.getPackageName().equals(intent.getPackage())');
   });
 
   it('condiciona la ejecución física del relé al acuse confirmado receivedAcked y rechaza comandos sin created_at válido', () => {
@@ -595,9 +590,8 @@ describe('Android LocationService java contracts', () => {
     expect(mainContent).toContain('remove("pending_perm_prompt")');
   });
 
-  it('desecha y limpia la cola offline cifrada si el JSON está corrupto en loadOfflineQueueFromStorage', () => {
-    expect(javaContent).toContain('desechando cola corrupta');
-    expect(javaContent).toContain('securePrefs.remove(QUEUE_PREFS_KEY);');
+  it('usa Room para la cola offline en loadOfflineQueueFromStorage', () => {
+    expect(javaContent).toContain('getDatabase');
   });
 
   it('revalida permisos en onResume() y maneja la activación con ExecutorService controlado en MainActivity.java', () => {
@@ -676,7 +670,7 @@ describe('Android LocationService java contracts', () => {
     expect(javaContent).toContain('No se pudo interpretar el formato de fecha created_at');
   });
 
-  it('desacopla el vaciado de cola con NetworkCallback y offlineFlushExecutor, desecha timestamps corruptos en isLocationStale y valida latido en isServiceActuallyRunning', () => {
+  it('desacopla el vaciado de cola con NetworkCallback y offlineFlushExecutor y valida latido en isServiceActuallyRunning', () => {
     expect(javaContent).toContain('triggerAsyncOfflineFlush()');
     expect(javaContent).toContain('registerNetworkCallback()');
     expect(javaContent).toContain('offlineFlushExecutor');

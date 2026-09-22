@@ -177,7 +177,7 @@ serve(async (req) => {
       authUserId = created.data.user.id
     }
 
-    // Ejecutar primero la RPC atómica para bloquear y consumir el código de activación en DB
+    // Ejecutar la RPC atómica para bloquear y consumir el código de activación en DB
     const { data: rpcRes, error: rpcErr } = await supabase.rpc('provision_device_atomic', {
       p_device_id: deviceId,
       p_activation_code: activationCode,
@@ -189,17 +189,22 @@ serve(async (req) => {
       return json({ error: rpcErr?.message || rpcRes?.error || 'error al re-aprovisionar dispositivo' }, 403)
     }
 
-    // Una vez confirmado y consumido el código en DB, actualizar la contraseña y revocar sesiones previas
+    // Cambiar la contraseña y revocar sesiones previas ANTES de responder, pero DESPUÉS de reservar el código
     const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
     if (updated.error) {
       console.error(`⚠️ Error al actualizar contraseña para ${authUserId}:`, updated.error)
+      // Rollback del código de activación en caso de fallo crítico en GoTrue
+      await supabase.from('device_activation_codes').update({ used: false, used_at: null }).eq('code', activationCode).eq('used', true)
       return json({ error: updated.error.message || 'Error al actualizar credenciales de dispositivo' }, 500)
     }
 
     try {
-      await supabase.auth.admin.signOut(authUserId, 'global')
+      const { error: signOutErr } = await supabase.auth.admin.signOut(authUserId, 'global')
+      if (signOutErr) throw signOutErr
     } catch (signOutErr) {
-      console.warn(`⚠️ Aviso al revocar sesiones globales para ${authUserId}:`, signOutErr)
+      console.error(`⚠️ Error crítico al revocar sesiones globales para ${authUserId}:`, signOutErr)
+      await supabase.from('device_activation_codes').update({ used: false, used_at: null }).eq('code', activationCode).eq('used', true)
+      return json({ error: 'Error al revocar sesiones previas del dispositivo' }, 500)
     }
 
     return json({ ok: true, deviceId, email, password, reissued: true })

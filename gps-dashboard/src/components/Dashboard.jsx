@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
-import { hasSupabaseConfig, supabase } from '../lib/supabase';
+import { hasSupabaseConfig, supabase, withAuthRetry } from '../lib/supabase';
 import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
@@ -32,7 +32,7 @@ const buildMapEntity = (source) => ({
 })
 
 const Dashboard = () => {
-  const { vehicles: supabaseVehicles, error: vehiclesError } = useVehicles()
+  const { vehicles: supabaseVehicles, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles()
   const { devices: supabaseDevices, error: devicesError } = useDevices()
   const { alerts: supabaseAlerts, error: alertsError } = useAlerts()
   const { geofences: supabaseGeofences, error: geofencesError } = useGeofences()
@@ -144,6 +144,13 @@ const Dashboard = () => {
   const [operationMessage, setOperationMessage] = useState('')
   const [alertFocusTrigger, setAlertFocusTrigger] = useState(null)
   const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false)
+  const commandPollIntervalRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (commandPollIntervalRef.current) clearInterval(commandPollIntervalRef.current)
+    }
+  }, [])
 
   const handleLogout = async () => {
     localStorage.removeItem('gps_dev_admin')
@@ -324,26 +331,35 @@ const Dashboard = () => {
       const commandId = commandResult.commandId
       let attempts = 0
       const maxAttempts = 30 // 30 intentos * 2s = 60s max
-      const intervalId = setInterval(async () => {
+      if (commandPollIntervalRef.current) {
+        clearInterval(commandPollIntervalRef.current)
+      }
+      commandPollIntervalRef.current = setInterval(async () => {
         attempts++
         try {
-          const { data, error } = await supabase
-            .from('vehicle_commands')
-            .select('status')
-            .eq('id', commandId)
-            .maybeSingle()
+          const res = await withAuthRetry(async () => {
+            return await supabase
+              .from('vehicle_commands')
+              .select('status')
+              .eq('id', commandId)
+              .maybeSingle()
+          })
+          const data = res?.data
+          const error = res?.error
 
           if (!error && data) {
             if (data.status === 'received') {
               setOperationMessage(`Comando ${command} recibido por el APK. Ejecutando relé...`)
             } else if (data.status === 'done') {
-              clearInterval(intervalId)
+              clearInterval(commandPollIntervalRef.current)
+              commandPollIntervalRef.current = null
               setOperationMessage(`✅ Comando ${command} ejecutado exitosamente en el relé físico.`)
               setIsVehicleControlBusy(false)
               setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
               return
             } else if (data.status === 'failed') {
-              clearInterval(intervalId)
+              clearInterval(commandPollIntervalRef.current)
+              commandPollIntervalRef.current = null
               setOperationMessage(`❌ Falló la ejecución del comando ${command} en el dispositivo.`)
               setIsVehicleControlBusy(false)
               setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
@@ -355,7 +371,8 @@ const Dashboard = () => {
         }
 
         if (attempts >= maxAttempts) {
-          clearInterval(intervalId)
+          clearInterval(commandPollIntervalRef.current)
+          commandPollIntervalRef.current = null
           setOperationMessage(`⚠️ Tiempo de espera agotado esperando confirmación del comando ${command}.`)
           setIsVehicleControlBusy(false)
           setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
@@ -386,6 +403,9 @@ const Dashboard = () => {
     })
     setOperationMessage(result.remote ? 'Vehículo eliminado' : 'Eliminado del panel local')
     setIsVehicleControlBusy(false)
+    if (result.remote && refetchVehicles) {
+      refetchVehicles()
+    }
   }
 
   // --- Seguir ruta ---
@@ -425,12 +445,19 @@ const Dashboard = () => {
   // --- Última sincronización ---
   const lastSyncLabel = useMemo(() => {
     if (activeNetworkError) return 'Sin conexión (Desactualizado)'
+    if (category === 'vehicles' && vehiclesStale) return 'Sin conexión (Desactualizado)'
+    
+    if (category === 'vehicles' && vehiclesSyncTime) {
+      const date = new Date(vehiclesSyncTime)
+      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    }
+
     const lastUpdate = selectedEntity?.lastUpdate
     if (!lastUpdate || lastUpdate === '--') return 'Sin reporte'
     if (lastUpdate === 'En línea') return 'En línea'
     if (lastUpdate === 'Ahora') return 'Actualizado'
     return lastUpdate
-  }, [activeNetworkError, selectedEntity?.lastUpdate])
+  }, [activeNetworkError, selectedEntity?.lastUpdate, category, vehiclesStale, vehiclesSyncTime])
 
   // --- Entidades para el mapa ---
   const mapEntities = useMemo(

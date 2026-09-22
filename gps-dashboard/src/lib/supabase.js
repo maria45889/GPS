@@ -57,13 +57,38 @@ export const supabase = hasSupabaseConfig
         persistSession: true,
         autoRefreshToken: true,
       },
-      global: currentNativeToken ? {
-        headers: {
-          Authorization: `Bearer ${currentNativeToken}`,
+      global: {
+        fetch: (url, options) => {
+          if (currentNativeToken) {
+            options = options || {};
+            options.headers = options.headers || new Headers();
+            if (options.headers instanceof Headers) {
+              options.headers.set('Authorization', `Bearer ${currentNativeToken}`);
+            } else {
+              options.headers['Authorization'] = `Bearer ${currentNativeToken}`;
+            }
+          }
+          return fetch(url, options);
         },
-      } : undefined,
+      },
     })
   : null;
+
+export const setNativeAuthToken = (token) => {
+  currentNativeToken = token;
+  if (supabase) {
+    if (supabase.realtime) {
+      try { supabase.realtime.setAuth(token); } catch {}
+    }
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('native-auth-changed', { detail: { token } }));
+  }
+};
+
+if (typeof window !== 'undefined') {
+  window.setNativeAuthToken = setNativeAuthToken;
+}
 
 export const refreshNativeSession = async () => {
   if (!supabase) return null;
@@ -71,10 +96,7 @@ export const refreshNativeSession = async () => {
   if (freshNative?.access_token) {
     currentNativeToken = freshNative.access_token;
     
-    // Configurar inmediatamente los headers globales de REST y Realtime
-    if (supabase.rest?.headers) {
-      supabase.rest.headers['Authorization'] = `Bearer ${freshNative.access_token}`;
-    }
+    // Configurar el Realtime
     if (supabase.realtime) {
       try { supabase.realtime.setAuth(freshNative.access_token); } catch {}
     }
