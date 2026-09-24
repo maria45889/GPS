@@ -308,9 +308,15 @@ public class LocationService extends Service implements LocationListener {
         authManager = new DeviceAuthManager(this);
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         loadOfflineQueueFromStorage();
-        loadProcessedCommandIds();
-        loadExecutedHardwareCommandIds();
-        flushPendingHardwareResults();
+
+        // A2: Evitar ANR. Estas funciones acceden a SharedPreferences (E/S) y 
+        // flushPendingHardwareResults() puede hacer peticiones de red (getAccessToken).
+        // Moverlas a un hilo en segundo plano.
+        commandExecutor.execute(() -> {
+            loadProcessedCommandIds();
+            loadExecutedHardwareCommandIds();
+            flushPendingHardwareResults();
+        });
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -344,8 +350,9 @@ public class LocationService extends Service implements LocationListener {
             Intent recoveryIntent = new Intent(context, AlarmRecoveryReceiver.class);
             recoveryIntent.setAction(AlarmRecoveryReceiver.ACTION_RECOVER_SERVICE);
             recoveryIntent.setPackage(context.getPackageName());
+            // A3: requestCode 42 coincidente con BootReceiver para que pueda ser cancelado.
             PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                    context, 1, recoveryIntent,
+                    context, 42, recoveryIntent,
                     PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
             if (pendingIntent != null) {
                 AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
@@ -955,12 +962,6 @@ public class LocationService extends Service implements LocationListener {
             intent.putExtra("created_at_ms", createdAtMillis);
             intent.putExtra("timestamp", System.currentTimeMillis());
             sendBroadcast(intent, "com.gps.tracker.permission.CONTROL_VEHICLE");
-            
-            // Broadcast para integraciones hardware externas
-            Intent hardwareIntent = new Intent("com.gps.tracker.HARDWARE_RELAY_SWITCH");
-            hardwareIntent.putExtra("command_id", cmdId);
-            hardwareIntent.putExtra("command", command);
-            sendBroadcast(hardwareIntent, "com.gps.tracker.permission.CONTROL_VEHICLE");
         } catch (Exception e) {
             Log.e(TAG, "Error enviando broadcast de control de vehículo para " + cmdId, e);
             activeExecutingCommandIds.remove(cmdId);
@@ -1036,11 +1037,16 @@ public class LocationService extends Service implements LocationListener {
     private void enqueueOfflineLocation(JSONObject locationBody) {
         offlineFlushExecutor.execute(() -> {
             try {
+                String encrypted = EncryptionUtils.encrypt(locationBody.toString());
+                if (encrypted == null) {
+                    // B4: Si el Keystore falla, no insertar null. El punto se pierde pero la cola
+                    // permanece limpia y el conteo del límite sigue siendo preciso.
+                    Log.e(TAG, "Keystore no disponible: descartando punto GPS offline (no se inserta null en Room).");
+                    return;
+                }
                 LocationDao dao = AppDatabase.getDatabase(getApplicationContext()).locationDao();
-                
                 LocationEntity entity = new LocationEntity();
-                entity.encryptedPayload = EncryptionUtils.encrypt(locationBody.toString());
-                
+                entity.encryptedPayload = encrypted;
                 dao.insertWithLimit(entity, MAX_OFFLINE_QUEUE_SIZE);
             } catch (Exception e) {
                 Log.e(TAG, "ERROR CRÍTICO: Falló la persistencia en Room SQLite de la cola offline.", e);
@@ -1066,6 +1072,10 @@ public class LocationService extends Service implements LocationListener {
                 Log.w(TAG, "Desechando punto GPS offline futuro: " + tsStr);
                 return true;
             }
+            if (timeMillis < now - MAX_OFFLINE_QUEUE_AGE_MS) {
+                Log.w(TAG, "Desechando punto GPS offline obsoleto (>24h): " + tsStr);
+                return true;
+            }
             return false;
         } catch (Exception e) {
             Log.w(TAG, "Error evaluando timestamp de punto GPS offline; clasificando como inválido.", e);
@@ -1073,13 +1083,172 @@ public class LocationService extends Service implements LocationListener {
         }
     }
 
-    private boolean persistOfflineQueue() {
-        // Obsoleto: manejado por Room SQLite
-        return true;
+    private void loadOfflineQueueFromStorage() {
+        offlineFlushExecutor.execute(() -> {
+            try {
+                AppDatabase db = AppDatabase.getDatabase(getApplicationContext());
+                MigrationStatusDao statusDao = db.migrationStatusDao();
+                MigrationStatusEntity status = statusDao.getMigrationStatus("offline_queue_v1");
+                
+                SharedPreferences prefs = getSharedPreferences("gps_app_prefs", Context.MODE_PRIVATE);
+
+                if (status != null && status.isCompleted) {
+                    prefs.edit()
+                        .remove("offline_gps_queue_json")
+                        .putBoolean("offline_queue_migrated_v1", true)
+                        .apply();
+                    return;
+                }
+                
+                String oldQueueJson = prefs.getString("offline_gps_queue_json", null);
+                if (oldQueueJson == null || oldQueueJson.trim().isEmpty()) {
+                    statusDao.insertOrUpdate(new MigrationStatusEntity("offline_queue_v1", true));
+                    prefs.edit().putBoolean("offline_queue_migrated_v1", true).apply();
+                    return;
+                }
+
+                // B1+B9: Streaming con deduplicación por sourceTsKey e imposición del límite
+                // considerando registros preexistentes en Room.
+                final int BATCH_SIZE = 500;
+
+                // B9: Calcular slots disponibles considerando TODOS los registros en Room.
+                final int existingTotal = db.locationDao().getTotalCount();
+                final int availableSlots = Math.max(0, MAX_OFFLINE_QUEUE_SIZE - existingTotal);
+                if (availableSlots == 0) {
+                    // B7: Room está lleno. NO eliminar la cola antigua ni marcar como completada.
+                    // Los registros pueden enviarse al servidor cuando haya conectividad y se liberen slots.
+                    Log.w(TAG, "Room lleno (" + existingTotal + " registros). Cola SharedPreferences conservada para reintento posterior.");
+                    return; // Reintentar en el próximo inicio de la aplicación.
+                }
+
+                // Primera pasada: contar registros válidos para calcular cuántos saltear (FIFO).
+                int validCount = 0;
+                android.util.JsonReader counter = new android.util.JsonReader(new java.io.StringReader(oldQueueJson));
+                counter.beginArray();
+                while (counter.hasNext()) {
+                    org.json.JSONObject obj = readJsonObject(counter);
+                    if (obj != null && !isLocationStale(obj)) validCount++;
+                }
+                counter.endArray();
+                counter.close();
+
+                // Saltear los más antiguos para caber dentro de availableSlots.
+                final int skipCount = Math.max(0, validCount - availableSlots);
+                if (skipCount > 0) {
+                    Log.w(TAG, "Migración: descartando " + skipCount + " registros más antiguos (FIFO, slots disponibles: " + availableSlots + ").");
+                }
+
+                // Segunda pasada: cifrar e insertar por lotes.
+                // B1: sourceTsKey = timestamp del evento. insertAllIgnoreConflict garantiza
+                // que re-ejecuciones de la migración no creen duplicados.
+                int skipped = 0;
+                int migrated = 0;
+                java.util.ArrayList<LocationEntity> batch = new java.util.ArrayList<>(BATCH_SIZE);
+
+                android.util.JsonReader reader = new android.util.JsonReader(new java.io.StringReader(oldQueueJson));
+                reader.beginArray();
+                while (reader.hasNext()) {
+                    org.json.JSONObject locationObj = readJsonObject(reader);
+                    if (locationObj == null || isLocationStale(locationObj)) {
+                        continue;
+                    }
+                    if (skipped < skipCount) {
+                        skipped++;
+                        continue;
+                    }
+
+                    String encrypted = EncryptionUtils.encrypt(locationObj.toString());
+                    if (encrypted == null) {
+                        Log.e(TAG, "Cifrado falló durante la migración. Abortando para reintentar en el próximo reinicio.");
+                        reader.close();
+                        return;
+                    }
+
+                    LocationEntity entity = new LocationEntity();
+                    entity.encryptedPayload = encrypted;
+                    // B8: Clave de deduplicación compuesta: device_id + timestamp + lat + lon
+                    // Evita colisiones entre dos eventos válidos con el mismo timestamp en distintas coordenadas.
+                    String lat = locationObj.optString("latitude", "");
+                    String lon = locationObj.optString("longitude", "");
+                    String deviceIdForKey = locationObj.optString("device_id", locationObj.optString("deviceId", ""));
+                    String ts = locationObj.optString("timestamp", "");
+                    entity.sourceTsKey = deviceIdForKey + "|" + ts + "|" + lat + "|" + lon;
+                    batch.add(entity);
+
+                    if (batch.size() == BATCH_SIZE) {
+                        final java.util.List<LocationEntity> batchToInsert = new java.util.ArrayList<>(batch);
+                        // B1: IGNORE conflict → registros ya migrados en un reinicio previo se saltan.
+                        db.locationDao().insertAllIgnoreConflict(batchToInsert);
+                        migrated += batchToInsert.size();
+                        batch.clear();
+                    }
+                }
+                reader.endArray();
+                reader.close();
+
+                // Insertar el último lote parcial.
+                if (!batch.isEmpty()) {
+                    db.locationDao().insertAllIgnoreConflict(batch);
+                    migrated += batch.size();
+                }
+
+                // Confirmar migración completa de forma atómica.
+                final int finalMigrated = migrated;
+                db.runInTransaction(() ->
+                    statusDao.insertOrUpdate(new MigrationStatusEntity("offline_queue_v1", true))
+                );
+
+                Log.i(TAG, "Migración a Room completada (streaming+dedup). Puntos migrados: " + finalMigrated);
+                prefs.edit()
+                    .remove("offline_gps_queue_json")
+                    .putBoolean("offline_queue_migrated_v1", true)
+                    .apply();
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Fallo al migrar offline_gps_queue_json a Room SQLite", e);
+            }
+        });
     }
 
-    private void loadOfflineQueueFromStorage() {
-        // Obsoleto: manejado por Room SQLite
+    private org.json.JSONObject readJsonObject(android.util.JsonReader reader) throws java.io.IOException, org.json.JSONException {
+        org.json.JSONObject obj = new org.json.JSONObject();
+        reader.beginObject();
+        while (reader.hasNext()) {
+            String name = reader.nextName();
+            android.util.JsonToken token = reader.peek();
+            switch (token) {
+                case STRING:
+                    obj.put(name, reader.nextString());
+                    break;
+                case NUMBER:
+                    String numStr = reader.nextString();
+                    try {
+                        obj.put(name, Long.parseLong(numStr));
+                    } catch (Exception e) {
+                        try {
+                            obj.put(name, Double.parseDouble(numStr));
+                        } catch (Exception ex) {
+                            obj.put(name, numStr);
+                        }
+                    }
+                    break;
+                case BOOLEAN:
+                    obj.put(name, reader.nextBoolean());
+                    break;
+                case NULL:
+                    reader.nextNull();
+                    obj.put(name, org.json.JSONObject.NULL);
+                    break;
+                case BEGIN_OBJECT:
+                    obj.put(name, readJsonObject(reader));
+                    break;
+                default:
+                    reader.skipValue();
+                    break;
+            }
+        }
+        reader.endObject();
+        return obj;
     }
 
 

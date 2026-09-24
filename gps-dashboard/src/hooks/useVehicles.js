@@ -12,6 +12,7 @@ export const useVehicles = () => {
   const reqSeqRef = useRef(0)
   const isFetchingRef = useRef(false)
   const pendingRefetchRef = useRef(false)
+  const lastSyncTimeRef = useRef(null)
   const [refetchTrigger, setRefetchTrigger] = useState(0)
 
   useEffect(() => {
@@ -58,7 +59,9 @@ export const useVehicles = () => {
         if (!cancelled && currentSeq === reqSeqRef.current) {
           setVehicles(merged)
           setError(null)
-          setLastSyncTime(Date.now())
+          const now = Date.now()
+          setLastSyncTime(now)
+          lastSyncTimeRef.current = now
           setIsStale(false)
         }
       } catch (err) {
@@ -93,6 +96,15 @@ export const useVehicles = () => {
       if (!cancelled) loadVehicles()
     }, 30000)
 
+    // Evaluador de stale por tiempo (cada 5 segundos evalúa si pasaron más de 45 segundos)
+    const staleInterval = setInterval(() => {
+      if (!cancelled && lastSyncTimeRef.current) {
+        if (Date.now() - lastSyncTimeRef.current > 45000) {
+          setIsStale(true)
+        }
+      }
+    }, 5000)
+
     // Re-sincronizar al volver a la pestaña o reactivar la app en móvil
     const handleFocusOrVisibility = () => {
       if (!cancelled && document.visibilityState !== 'hidden') {
@@ -125,6 +137,7 @@ export const useVehicles = () => {
       cancelled = true
       if (debounceTimer) clearTimeout(debounceTimer)
       clearInterval(pollInterval)
+      clearInterval(staleInterval)
       if (typeof window !== 'undefined') {
         window.removeEventListener('focus', handleFocusOrVisibility)
         document.removeEventListener('visibilitychange', handleFocusOrVisibility)

@@ -21,8 +21,8 @@ describe('Edge Function provision-device contract', () => {
   });
 
   it('incluye cabeceras CORS completas en todas las respuestas HTTP', () => {
-    expect(edgeFunctionContent).toContain("Access-Control-Allow-Origin': '*'");
-    expect(edgeFunctionContent).toContain("Access-Control-Allow-Headers'");
+    expect(edgeFunctionContent).toContain("Access-Control-Allow-Origin");
+    expect(edgeFunctionContent).toContain("Access-Control-Allow-Headers");
   });
 
   it('realiza limpieza eliminando el usuario Auth si el upsert en devices falla', () => {

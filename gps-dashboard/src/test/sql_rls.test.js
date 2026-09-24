@@ -83,9 +83,13 @@ describe('SQL & RLS Security Contracts in supabase_setup.sql', () => {
   it('protege la inmutabilidad de organization_id en public.devices mediante trigger sin subconsultas autoreferenciales en RLS', () => {
     expect(sqlContent).toContain('create or replace function public.protect_device_structural_fields()');
     expect(sqlContent).toContain('before update on public.devices');
-    expect(sqlContent).toContain('create policy "devices_device_update"');
+    // B1: La política devices_device_update fue eliminada intencionalmente.
+    // Los dispositivos no pueden hacer UPDATE directo; deben usar update_device_telemetry().
+    expect(sqlContent).not.toContain('create policy "devices_device_update"');
+    expect(sqlContent).toContain('create or replace function public.update_device_telemetry(');
     expect(sqlContent).not.toContain('organization_id is not distinct from (select d.organization_id from public.devices d');
   });
+
 
   it('sincroniza automáticamente el estado del vehículo en public.vehicles cuando un comando pasa a done y exige updated_count > 0', () => {
     expect(sqlContent).toContain('create or replace function public.sync_vehicle_status_on_command_done()');

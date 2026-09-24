@@ -104,34 +104,42 @@ public class DeviceAuthManager {
 
     /** Devuelve un access_token valido, aprovisionando o renovando si hace falta. */
     public String getAccessToken() {
+        long expiresAt;
+        String token;
+        long nextRetry;
+        String refresh;
+        
+        // Solo bloquear para leer estado de preferencias local (evitar colisiones de red)
         synchronized (GLOBAL_AUTH_LOCK) {
-            long expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0);
-            String token = prefs.getString(KEY_ACCESS_TOKEN, null);
-            long now = System.currentTimeMillis() / 1000;
-            if (token != null && now < expiresAt - 60) return token;
+            expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0);
+            token = prefs.getString(KEY_ACCESS_TOKEN, null);
+            nextRetry = prefs.getLong(KEY_NEXT_AUTH_RETRY, 0);
+            refresh = prefs.getString(KEY_REFRESH_TOKEN, null);
+        }
 
-            long nextRetry = prefs.getLong(KEY_NEXT_AUTH_RETRY, 0);
-            if (now < nextRetry) {
-                return null;
-            }
+        long now = System.currentTimeMillis() / 1000;
+        if (token != null && now < expiresAt - 60) return token;
 
-            String refresh = prefs.getString(KEY_REFRESH_TOKEN, null);
-            if (refresh != null && refreshToken(refresh)) {
-                return prefs.getString(KEY_ACCESS_TOKEN, null);
-            }
+        if (now < nextRetry) {
+            return null;
+        }
 
-            if (hasCredentials()) {
-                if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
-                recordAuthFailure(now);
-                return null;
-            }
+        // A6: Realizar la petición de red fuera del bloque synchronized
+        if (refresh != null && refreshToken(refresh)) {
+            return prefs.getString(KEY_ACCESS_TOKEN, null);
+        }
 
-            if (provision()) {
-                if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
-            }
+        if (hasCredentials()) {
+            if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
             recordAuthFailure(now);
             return null;
         }
+
+        if (provision()) {
+            if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
+        }
+        recordAuthFailure(now);
+        return null;
     }
 
 

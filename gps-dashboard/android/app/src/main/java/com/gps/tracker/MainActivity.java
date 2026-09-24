@@ -33,9 +33,6 @@ public class MainActivity extends BridgeActivity {
         if (!activationInProgress) {
             startOnboardingSequence();
         }
-        
-        // Punto 19: Inicialización de GPIO al arrancar la app
-        initializeHardwareGpioAsync();
     }
 
     private void setupWebviewBridge() {
@@ -60,35 +57,7 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private void initializeHardwareGpioAsync() {
-        java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
-            try {
-                String[] pins = {"17", "18", "4"};
-                for (String pin : pins) {
-                    java.io.File exportFile = new java.io.File("/sys/class/gpio/export");
-                    if (exportFile.exists() && exportFile.canWrite()) {
-                        java.io.File gpioDir = new java.io.File("/sys/class/gpio/gpio" + pin);
-                        if (!gpioDir.exists()) {
-                            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(exportFile)) {
-                                fos.write(pin.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                                fos.flush();
-                            }
-                        }
-                        java.io.File directionFile = new java.io.File("/sys/class/gpio/gpio" + pin + "/direction");
-                        if (directionFile.exists() && directionFile.canWrite()) {
-                            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(directionFile)) {
-                                fos.write("out".getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                                fos.flush();
-                            }
-                        }
-                        Log.i(TAG, "GPIO " + pin + " inicializado correctamente para salida de relé físico.");
-                    }
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "No se pudo inicializar GPIO de hardware. Ignorando si el dispositivo no soporta GPIO nativo.", e);
-            }
-        });
-    }
+
 
     @Override
     public void onResume() {
@@ -168,7 +137,8 @@ public class MainActivity extends BridgeActivity {
                             safeRunOnUiThread(() -> {
                                 Toast.makeText(MainActivity.this, "Dispositivo activado con éxito", Toast.LENGTH_SHORT).show();
                                 if (bridge != null && bridge.getWebView() != null) {
-                                    bridge.getWebView().evaluateJavascript("if(window.setNativeAuthToken) window.setNativeAuthToken('" + token + "');", null);
+                                    String jsCode = "var _retryAuth = function(t, c) { if (window.setNativeAuthToken) { window.setNativeAuthToken(t); } else if (c > 0) { setTimeout(function(){ _retryAuth(t, c-1); }, 500); } }; _retryAuth('" + token + "', 20);";
+                                    bridge.getWebView().evaluateJavascript(jsCode, null);
                                 }
                             });
                         } else {

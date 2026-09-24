@@ -53,7 +53,7 @@ public class EncryptionUtils {
         if (plainText == null) return null;
         try {
             SecretKey secretKey = getOrCreateSecretKey();
-            if (secretKey == null) return plainText; // Fallback to plain text if keystore fails
+            if (secretKey == null) return null; // Fail securely if keystore fails
 
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, secretKey);
@@ -69,7 +69,7 @@ public class EncryptionUtils {
             return Base64.encodeToString(combined, Base64.DEFAULT);
         } catch (Exception e) {
             Log.e(TAG, "Encryption failed", e);
-            return plainText; // Fallback
+            return null; // Fail securely
         }
     }
 
@@ -77,12 +77,12 @@ public class EncryptionUtils {
         if (encryptedText == null) return null;
         try {
             SecretKey secretKey = getOrCreateSecretKey();
-            if (secretKey == null) return encryptedText;
+            if (secretKey == null) return null; // Fail securely
 
             byte[] combined = Base64.decode(encryptedText, Base64.DEFAULT);
-            if (combined.length < GCM_IV_LENGTH) {
+            if (combined == null || combined.length < GCM_IV_LENGTH) {
                 // Not encrypted or corrupted
-                return encryptedText;
+                return null;
             }
 
             byte[] iv = new byte[GCM_IV_LENGTH];
@@ -96,11 +96,16 @@ public class EncryptionUtils {
             cipher.init(Cipher.DECRYPT_MODE, secretKey, spec);
             
             byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
-            return new String(decryptedBytes, StandardCharsets.UTF_8);
+            
+            // Basic JSON validation since our payload is always JSON
+            String decryptedStr = new String(decryptedBytes, StandardCharsets.UTF_8);
+            if (!decryptedStr.startsWith("{") && !decryptedStr.startsWith("[")) {
+                return null; // Invalid payload
+            }
+            return decryptedStr;
         } catch (Exception e) {
-            // It might be plain text (before encryption was added)
-            Log.w(TAG, "Decryption failed, assuming plain text", e);
-            return encryptedText;
+            Log.e(TAG, "Decryption failed", e);
+            return null; // Fail securely
         }
     }
 }

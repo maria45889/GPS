@@ -238,7 +238,9 @@ export const fetchVehicles = async () => {
   return withAuthRetry(async () => {
     const { data, error } = await supabase
       .from('vehicles')
-      .select('id, device_id, name, plate, driver, status, speed, battery, fuel, temp, odometer, location, route, last_update, last_seen')
+      // C4: vehicles NO tiene columna last_seen — solo last_update.
+      // Incluir last_seen causa PGRST204 y hace fallar toda la lista de vehículos.
+      .select('id, device_id, name, plate, driver, status, speed, battery, fuel, temp, odometer, location, route, last_update')
       .order('last_update', { ascending: false, nullsFirst: false })
 
     if (error) throw error
