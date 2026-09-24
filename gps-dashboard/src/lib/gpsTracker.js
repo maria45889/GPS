@@ -1,4 +1,7 @@
 import { supabase, getDeviceId } from './supabase';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
 
 const getCacheKey = (deviceId = getDeviceId()) => (deviceId ? `gps_tracker_cache_${deviceId}` : 'gps_tracker_cache');
 
@@ -106,9 +109,36 @@ export const flushCachedLocations = async (deviceId = getDeviceId()) => {
 class GPSTracker {
   constructor() {
     this.intervalId = null;
+    this.watcherId = null;
     this.isRunning = false;
     this.intervalMs = 30000;
     this.currentRunId = 0;
+    this.wakeLock = null;
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', async () => {
+        if (this.intervalId && document.visibilityState === 'visible') {
+          await this.requestWakeLock();
+        }
+      });
+    }
+  }
+
+  async requestWakeLock() {
+    if ('wakeLock' in navigator) {
+      try {
+        this.wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {
+        console.warn('Wake Lock request failed:', err);
+      }
+    }
+  }
+
+  releaseWakeLock() {
+    if (this.wakeLock !== null) {
+      this.wakeLock.release().catch(console.warn);
+      this.wakeLock = null;
+    }
   }
 
   async sendCurrentLocation(position) {
@@ -220,20 +250,63 @@ class GPSTracker {
     }
   }
 
-  start(intervalMs = 30000) {
+  async start(intervalMs = 30000) {
     this.intervalMs = intervalMs;
     this.stop();
     this.currentRunId++;
     const runId = this.currentRunId;
-    this.tick(runId);
-    this.intervalId = setInterval(() => this.tick(runId), this.intervalMs);
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        this.watcherId = await BackgroundGeolocation.addWatcher(
+          {
+            backgroundMessage: 'Cancel to prevent battery drain.',
+            backgroundTitle: 'Rastreo GPS Activo',
+            requestPermissions: true,
+            stale: false,
+            distanceFilter: 5
+          },
+          async (location, error) => {
+            if (error) {
+              if (error.code === 'NOT_AUTHORIZED' && window.confirm('Esta app necesita permiso de ubicación en segundo plano. ¿Ir a ajustes?')) {
+                BackgroundGeolocation.openSettings();
+              }
+              return console.error('Background Geolocation Error:', error);
+            }
+            if (location) {
+              const pos = {
+                coords: {
+                  latitude: location.latitude,
+                  longitude: location.longitude,
+                  speed: location.speed,
+                  accuracy: location.accuracy,
+                  heading: location.bearing
+                }
+              };
+              await this.sendCurrentLocation(pos);
+            }
+          }
+        );
+      } catch (err) {
+        console.error('Error starting BackgroundGeolocation:', err);
+      }
+    } else {
+      this.requestWakeLock();
+      this.tick(runId);
+      this.intervalId = setInterval(() => this.tick(runId), this.intervalMs);
+    }
   }
 
   stop() {
+    if (this.watcherId) {
+      BackgroundGeolocation.removeWatcher({ id: this.watcherId });
+      this.watcherId = null;
+    }
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+    this.releaseWakeLock();
     this.currentRunId++;
     this.isRunning = false;
   }

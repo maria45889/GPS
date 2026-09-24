@@ -58,7 +58,7 @@ export const sendVehicleCommand = async (vehicleId, command, deviceId = null) =>
   });
 };
 
-export const deleteVehicle = async (vehicleId) => {
+export const deleteVehicle = async (entityId, category = 'vehicles') => {
   if (!supabase) return { remote: false };
 
   return withAuthRetry(async () => {
@@ -78,7 +78,7 @@ export const deleteVehicle = async (vehicleId) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${sessionData.session.access_token}`
         },
-        body: JSON.stringify({ vehicle_id: vehicleId })
+        body: JSON.stringify(category === 'vehicles' ? { vehicle_id: entityId } : { device_id: entityId })
       });
 
       const responseData = await response.json().catch(() => ({}));
@@ -99,3 +99,14 @@ export const deleteVehicle = async (vehicleId) => {
   });
 };
 
+export const updateEntity = async (entityId, category, updates) => {
+  if (!supabase) return { remote: false };
+
+  return withAuthRetry(async () => {
+    const table = category === 'vehicles' ? 'vehicles' : 'devices';
+    const { error } = await supabase.from(table).update(updates).eq('id', entityId);
+
+    if (error) return { remote: false, error };
+    return { remote: true };
+  });
+};

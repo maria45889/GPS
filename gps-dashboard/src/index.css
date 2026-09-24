@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 @layer base {
   * {
@@ -541,37 +540,41 @@
   border-radius: 8px;
 }
 
-/* Reference monitoring dashboard theme */
+/* Professional Sci-Fi Dashboard Theme */
 .reference-dashboard {
-  background: #07111c !important;
-  border-color: #183546 !important;
+  background: radial-gradient(circle at 50% 50%, #0b0f19 0%, #050811 100%) !important;
+  border-color: #0f172a !important;
 }
 
 .reference-dashboard .dashboard-header {
   min-height: 58px;
-  background: #081522 !important;
-  border-color: #173344 !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-bottom: 1px solid rgba(6, 182, 212, 0.2) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
 }
 
 .reference-dashboard .dashboard-header > div:first-child > div:first-child {
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: #071c2b !important;
-  color: #1ee6ee !important;
-  box-shadow: none;
+  background: rgba(6, 182, 212, 0.15) !important;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  color: #06b6d4 !important;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
 }
 
 .reference-dashboard .dashboard-header .text-\[15px\] {
-  color: #e8f8ff !important;
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  color: #f8fafc !important;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .reference-dashboard .dashboard-header .header-status,
 .reference-dashboard .dashboard-header .header-signal-actions,
 .reference-dashboard .dashboard-header .header-fleet-selector {
-  color: #708a9a;
+  color: #94a3b8;
 }
 
 .reference-dashboard .dashboard-header .header-status > div:first-child {
@@ -583,69 +586,72 @@
 .reference-dashboard .dashboard-header .header-status span,
 .reference-dashboard .dashboard-header .header-signal-actions span,
 .reference-dashboard .dashboard-header .header-signal-actions svg {
-  color: #66d9d8 !important;
+  color: #06b6d4 !important;
 }
 
 .reference-dashboard .header-fleet-selector > div,
 .reference-dashboard .header-fleet-selector button {
-  background: #0b1b2a !important;
-  border-color: #1b4359 !important;
-  color: #b8dbe5 !important;
+  background: rgba(6, 182, 212, 0.05) !important;
+  border-color: rgba(6, 182, 212, 0.3) !important;
+  color: #cffafe !important;
 }
 
 .reference-dashboard .header-fleet-name,
 .reference-dashboard .header-action-label {
-  color: #b8dbe5 !important;
+  color: #cffafe !important;
 }
 
 .reference-dashboard .dashboard-left-panel,
 .reference-dashboard .dashboard-right-panel {
-  background: #0b1825 !important;
-  border-color: #18384b !important;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
-  color: #8ca7b5 !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(6, 182, 212, 0.2) !important;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.1) !important;
+  color: #94a3b8 !important;
+  backdrop-filter: blur(16px);
+  border-radius: 12px;
 }
 
 .reference-dashboard .dashboard-left-panel {
-  width: 210px;
+  width: 250px;
 }
 
 .reference-dashboard .dashboard-right-panel {
-  width: 250px;
+  width: 320px;
 }
 
 .reference-dashboard .dashboard-left-panel button,
 .reference-dashboard .dashboard-right-panel button {
-  color: #8ca7b5 !important;
+  color: #94a3b8 !important;
 }
 
 .reference-dashboard .dashboard-left-panel nav button:first-child,
 .reference-dashboard .dashboard-left-panel nav button:hover,
 .reference-dashboard .dashboard-right-panel .selected {
-  background: #102b38 !important;
-  border-color: #1fc6d1 !important;
-  color: #70e5e7 !important;
+  background: rgba(6, 182, 212, 0.1) !important;
+  border-color: rgba(6, 182, 212, 0.5) !important;
+  color: #22d3ee !important;
+  box-shadow: inset 0 0 10px rgba(6, 182, 212, 0.1);
 }
 
 .reference-dashboard .dashboard-left-panel h3,
 .reference-dashboard .dashboard-right-panel h3,
 .reference-dashboard .dashboard-apk-card p,
 .reference-dashboard .dashboard-telemetry strong {
-  color: #c1dce5 !important;
+  color: #f8fafc !important;
 }
 
 .reference-dashboard .dashboard-left-panel > div,
 .reference-dashboard .dashboard-right-panel > div {
-  border-color: #173546 !important;
+  border-color: rgba(6, 182, 212, 0.15) !important;
 }
 
 .reference-dashboard .dashboard-telemetry,
 .reference-dashboard .dashboard-apk-card,
 .reference-dashboard .dashboard-right-panel > div > div,
 .reference-dashboard .dashboard-right-panel input {
-  background: #0d2030 !important;
-  border-color: #1a4054 !important;
-  color: #91adba !important;
+  background: rgba(15, 23, 42, 0.4) !important;
+  border-color: rgba(6, 182, 212, 0.2) !important;
+  color: #cbd5e1 !important;
 }
 
 .reference-dashboard .dashboard-center {
@@ -655,16 +661,17 @@
 
 .reference-dashboard .map-surface {
   height: 100%;
-  border-color: #163c51 !important;
-  background: #071522 !important;
+  border-color: rgba(6, 182, 212, 0.2) !important;
+  background: transparent !important;
+  border-radius: 12px;
 }
 
 .reference-dashboard .cyber-tiles .leaflet-tile {
-  filter: brightness(0.62) contrast(1.22) saturate(1.25) hue-rotate(100deg) !important;
+  filter: brightness(0.7) contrast(1.2) hue-rotate(100deg) !important;
 }
 
 .reference-dashboard .leaflet-container {
-  background: #071522 !important;
+  background: transparent !important;
 }
 
 .reference-dashboard .leaflet-control-attribution {
@@ -1242,4 +1249,82 @@
   color: #5f7e87;
   font-size: 10px;
   line-height: 1.5;
+}
+
+/* ============================================================
+   COMMAND CENTER (RideGuard) — Dark Mode / Glassmorphism
+   ============================================================ */
+.cmd-center body,
+.cmd-center {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.cmd-center .font-mono,
+.cmd-center font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
+}
+
+/* Mapa: neón cian sobre base oscura */
+.cmd-center .cyber-tiles .leaflet-tile {
+  filter: saturate(1.9) hue-rotate(158deg) brightness(0.88) contrast(1.28) !important;
+}
+
+/* Ruta a seguir animada (dash que fluye por la carretera) */
+.route-follow {
+  animation: cmd-route-flow 1.4s linear infinite;
+}
+@keyframes cmd-route-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* Grid HUD decorativo */
+.cmd-grid {
+  background-image:
+    linear-gradient(rgba(6, 182, 212, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.045) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, rgba(0, 0, 0, 0.9) 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 45%, rgba(0, 0, 0, 0.9) 0%, transparent 78%);
+}
+
+/* Scrollbar flota / paneles */
+.cmd-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(6, 182, 212, 0.3) transparent;
+}
+.cmd-scroll::-webkit-scrollbar { width: 5px; }
+.cmd-scroll::-webkit-scrollbar-track { background: transparent; }
+.cmd-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(6, 182, 212, 0.35), rgba(16, 185, 129, 0.25));
+  border-radius: 999px;
+}
+
+/* Leaflet en dark mode profundo */
+.cmd-center .leaflet-container {
+  background: #050811 !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+.cmd-center .leaflet-control-attribution {
+  background: rgba(5, 8, 17, 0.75) !important;
+  color: #334155 !important;
+  font-size: 9px !important;
+}
+.cmd-center .leaflet-control-attribution a {
+  color: #0e7490 !important;
+}
+
+/* Paneles glass */
+.cmd-glass {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+}
+
+/* Toast reutilizado por el dashboard (arriba de la barra inferior) */
+.dashboard-toast {
+  bottom: 112px !important;
+  z-index: 90;
 }

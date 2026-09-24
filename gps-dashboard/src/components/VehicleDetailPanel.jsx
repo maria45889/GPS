@@ -2,6 +2,7 @@ import React from 'react';
 import { Battery, Gauge, MapPin, Navigation, Share2, Thermometer, X, Crosshair } from 'lucide-react';
 import { VehicleControlCard } from './VehicleControlCard';
 import { normalizeBattery, sanitizeAccuracy } from '../lib/queries';
+import { formatTimestamp } from '../lib/formatters';
 
 const statusLabels = {
   active: 'En ruta / En línea',
@@ -19,6 +20,7 @@ export const VehicleDetailPanel = ({
   onShareRoute,
   onControlVehicle,
   onDeleteVehicle,
+  onEditVehicle,
   isControlBusy,
 }) => {
   if (!entity) return null;
@@ -55,7 +57,7 @@ export const VehicleDetailPanel = ({
       <div className={`vehicle-detail-status ${statusClass}`}>
         <span className="vehicle-detail-status-dot" />
         <strong>{statusLabel}</strong>
-        <span>{entity.lastUpdate || 'Sin actualización'}</span>
+        <span className="truncate block" title={entity.lastUpdate || '--'}>{formatTimestamp(entity.lastUpdate)}</span>
       </div>
 
       <div className="vehicle-detail-grid">
@@ -86,9 +88,7 @@ export const VehicleDetailPanel = ({
         </button>
       </div>
 
-      {!isDevices && (
-        <VehicleControlCard vehicle={entity} onControl={onControlVehicle} onDelete={onDeleteVehicle} isBusy={isControlBusy} />
-      )}
+      <VehicleControlCard vehicle={entity} onControl={onControlVehicle} onDelete={onDeleteVehicle} onEdit={onEditVehicle} isBusy={isControlBusy} />
     </aside>
   );
 };

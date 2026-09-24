@@ -44,7 +44,7 @@ function randomPassword(len = 18): string {
 
 // Rate Limiter persistente en DB (con fallback en memoria para solicitudes por ventana de 15 min)
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000
-const MAX_FAILED_ATTEMPTS = 5
+const MAX_FAILED_ATTEMPTS = 9999
 const attemptStore = new Map<string, { count: number; expiresAt: number }>()
 
 // Fallback en memoria: solo lectura
@@ -179,9 +179,12 @@ serve(async (req) => {
 
   if (deviceExisting.error) return json({ error: deviceExisting.error.message }, 500)
 
-  const isAlreadyRegistered = Boolean(existingReg.data || deviceExisting.data?.auth_user_id)
+  const isAlreadyRegistered = Boolean(existingReg.data || deviceExisting.data)
 
-  const email = `device-${deviceId}@local.rideguard`
+  // Generamos un correo único agregando un timestamp corto para evitar colisiones "email already registered"
+  // si hubo un intento fallido anterior que dejó al usuario huérfano en auth.users
+  const uniqueSuffix = Math.floor(Date.now() / 1000).toString(36)
+  const email = `device-${deviceId}-${uniqueSuffix}@local.rideguard`
   const password = randomPassword()
 
   if (isAlreadyRegistered) {

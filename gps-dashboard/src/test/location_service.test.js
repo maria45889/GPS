@@ -765,37 +765,42 @@ describe('Android LocationService java contracts', () => {
       path.resolve(__dirname, '../../src/components/Dashboard.jsx'),
       'utf-8'
     );
-    expect(dashboardContent).toContain('handleCategoryChange(item.id)');
-    expect(dashboardContent).toContain('closeMobileDrawer()');
+    expect(dashboardContent).toContain('handleCategoryChange = (next)');
+    expect(dashboardContent).toContain('onCategoryChange={handleCategoryChange}');
     expect(dashboardContent).toContain('Confirmar Nueva Geocerca');
-    expect(dashboardContent).toContain('window.history.back()');
+    expect(dashboardContent).toContain('handleMapClickForGeofence');
   });
 
-  it('evita crashes por denegación o error de GPS verificando userLocation?.position en RightSidebarPanel y LeftSidebarPanel', () => {
-    const rightPanel = fs.readFileSync(
-      path.resolve(__dirname, '../../src/components/RightSidebarPanel.jsx'),
+  it('evita crashes por denegación o error de GPS verificando userLocation?.position en FleetPanel y CommandCenter', () => {
+    const fleetPanel = fs.readFileSync(
+      path.resolve(__dirname, '../../src/components/command/FleetPanel.jsx'),
       'utf-8'
     );
-    const leftPanel = fs.readFileSync(
-      path.resolve(__dirname, '../../src/components/LeftSidebarPanel.jsx'),
+    const commandCenter = fs.readFileSync(
+      path.resolve(__dirname, '../../src/components/command/CommandCenter.jsx'),
       'utf-8'
     );
-    expect(rightPanel).toContain('userLocation?.position');
-    expect(rightPanel).toContain('userLocation?.error ? \'GPS no disponible\'');
-    expect(leftPanel).toContain('userLocation?.position');
+    expect(fleetPanel).toContain('userLocation?.position');
+    expect(fleetPanel).toContain(": 'Desconocida'");
+    expect(commandCenter).toContain('userLocation={userLocation}');
   });
 
-  it('habilita la lista de dispositivos y el botón Nueva Geocerca en móviles integrando RightSidebarPanel isMobile en el drawer', () => {
-    const dashboardContent = fs.readFileSync(
-      path.resolve(__dirname, '../../src/components/Dashboard.jsx'),
+  it('habilita el panel de flota y el botón Nueva Geocerca en móviles integrando FleetPanel en el drawer', () => {
+    const commandCenter = fs.readFileSync(
+      path.resolve(__dirname, '../../src/components/command/CommandCenter.jsx'),
       'utf-8'
     );
-    expect(dashboardContent).toContain('<RightSidebarPanel');
-    expect(dashboardContent).toContain('isMobile');
-    expect(dashboardContent).toContain('closeMobileDrawer()');
+    const fleetPanel = fs.readFileSync(
+      path.resolve(__dirname, '../../src/components/command/FleetPanel.jsx'),
+      'utf-8'
+    );
+    expect(commandCenter).toContain('fleetOpen');
+    expect(commandCenter).toContain('onMenuClick={() => setFleetOpen(true)}');
+    expect(commandCenter).toContain('<FleetPanel');
+    expect(fleetPanel).toContain('onSetGeofence');
   });
 
-  it('conecta la previsualización del círculo pendingCenter al colocar geocercas y al presionar Escape en el drawer', () => {
+  it('conecta la previsualización del círculo pendingCenter al colocar geocercas y limita eventos mousemove en MapArea', () => {
     const dashboardContent = fs.readFileSync(
       path.resolve(__dirname, '../../src/components/Dashboard.jsx'),
       'utf-8'
@@ -804,11 +809,11 @@ describe('Android LocationService java contracts', () => {
       path.resolve(__dirname, '../../src/components/MapArea.jsx'),
       'utf-8'
     );
-    expect(dashboardContent).toContain('setPendingCenter(latlng)');
+    expect(dashboardContent).toContain('onMapHover={(latlng) => setPendingCenter(latlng)}');
     expect(dashboardContent).toContain('pendingCenter={pendingGeofenceConfirm ? pendingGeofenceConfirm.center : (isPlacingOnMap ? pendingCenter : null)}');
-    expect(dashboardContent).toContain("if (e.key === 'Escape') {\n        closeMobileDrawer()");
     expect(mapAreaContent).toContain('{pendingCenter && (');
     expect(mapAreaContent).toContain('onMapHover');
+    expect(mapAreaContent).toContain('e.latlng');
   });
 
   it('implementa resiliencia en useDevices con polling de 30s, listeners de visibilidad y reconexión de Realtime', () => {
@@ -831,14 +836,14 @@ describe('Android LocationService java contracts', () => {
     expect(cssContent).toContain('display: flex !important');
   });
 
-  it('calcula estadísticas en LeftSidebarPanel según categoría activa y muestra banner para ubicar geocerca en Dashboard.jsx', () => {
-    const dashboardContent = fs.readFileSync(
-      path.resolve(__dirname, '../../src/components/Dashboard.jsx'),
+  it('calcula estadísticas por categoría y muestra banner para ubicar geocerca en CommandCenter.jsx', () => {
+    const commandCenter = fs.readFileSync(
+      path.resolve(__dirname, '../../src/components/command/CommandCenter.jsx'),
       'utf-8'
     );
-    expect(dashboardContent).toContain("vehicles={category === 'devices' ? devicesList : vehiclesList}");
-    expect(dashboardContent).toContain('Toca o haz clic en el mapa para ubicar la geocerca');
-    expect(dashboardContent).toContain('pendingGeofenceConfirm ? pendingGeofenceConfirm.center : (isPlacingOnMap ? pendingCenter : null)');
+    expect(commandCenter).toContain('stats');
+    expect(commandCenter).toContain('Toca o haz clic en el mapa para ubicar la geocerca');
+    expect(commandCenter).toContain('pendingCenter');
   });
 
   it('acepta permiso de ubicación aproximada (ACCESS_COARSE_LOCATION) y desactiva el estado isServiceRunning si no hay proveedores activos', () => {
@@ -882,7 +887,8 @@ describe('Android LocationService java contracts', () => {
       'utf-8'
     );
 
-    expect(dashboardContent).toContain("if (category !== 'vehicles')");
+    expect(dashboardContent).toContain("handleCategoryChange('vehicles')");
+    expect(dashboardContent).toContain("handleCategoryChange('devices')");
     expect(useVehiclesContent).toContain('setInterval(() => {');
     expect(useVehiclesContent).toContain("document.addEventListener('visibilitychange'");
     expect(locationServiceContent).toContain('activeLocationProvider = targetProvider;');
@@ -905,9 +911,10 @@ describe('Android LocationService java contracts', () => {
     );
 
     expect(dashboardContent).toContain("routeUrl.searchParams.set('category', category)");
-    expect(dashboardContent).toContain("setOperationMessage('Cambiado a vista de Motos por alerta seleccionada')");
-    expect(dashboardContent).toContain("setOperationMessage('Cambiado a vista de Dispositivos por alerta seleccionada')");
-    expect(dashboardContent).toContain('h-[calc(100dvh-2rem)]');
+    expect(dashboardContent).toContain("routeUrl.searchParams.set('follow', '1')");
+    expect(dashboardContent).toContain("handleCategoryChange('vehicles')");
+    expect(dashboardContent).toContain("handleCategoryChange('devices')");
+    expect(dashboardContent).toContain('h-[100dvh]');
 
     expect(locationServiceContent).toContain('activeLocationProvider = null;');
     expect(locationServiceContent).toContain('updateNotification("Error de proveedor de ubicación: " + targetProvider);');

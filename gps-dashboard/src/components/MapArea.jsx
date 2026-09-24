@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Polygon, Circle, Popup, Tool
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Plus, Minus, Crosshair, Navigation, Share2, Maximize, Layers } from 'lucide-react';
-import { isVehicleInsideCircle, isVehicleInsidePolygon, routeColorForSpeed } from '../lib/mapLogic';
+import { isVehicleInsideCircle, isVehicleInsidePolygon, routeColorForSpeed, routeAhead, projectedPath } from '../lib/mapLogic';
 import { normalizeBattery, sanitizeAccuracy, sanitizeRoute } from '../lib/queries';
 
 // Component to handle map resize
@@ -529,10 +529,19 @@ const MapArea = ({
   userLocation = null,
   onLocationChange,
   locateUserTrigger,
+  baseLayer: baseLayerProp,
+  onBaseLayerChange,
+  hideControls = false,
+  hideSelectionBar = false,
 }) => {
   const mapRef = useRef(null);
   const alertMarkerRefs = useRef({});
-  const [baseLayer, setBaseLayer] = useState('dark');
+  const [internalBaseLayer, setInternalBaseLayer] = useState('dark');
+  const baseLayer = baseLayerProp ?? internalBaseLayer;
+  const changeBaseLayer = (next) => {
+    setInternalBaseLayer(next);
+    if (onBaseLayerChange) onBaseLayerChange(next);
+  };
 
   // Default fallback center - Bogotá coordinates
   const defaultCenter = [4.6097, -74.0817];
@@ -563,9 +572,17 @@ const MapArea = ({
   // Active route to render (sanitized for safe Leaflet rendering)
   const activeRoute = selectedVehicle?.route ? sanitizeRoute(selectedVehicle.route) : [];
 
+  // Ruta "por donde ir" al estar en modo seguimiento: si hay ruta grabada se recorre desde
+  // la posición actual; si no, se proyecta una hacia delante según el rumbo actual.
   const guidanceLine = isFollowingRoute && selectedVehicle?.position && userLocation?.position
     ? [selectedVehicle.position, userLocation.position]
     : null;
+
+  const followRoute = isFollowingRoute && selectedVehicle?.position
+    ? (activeRoute.length >= 2
+        ? routeAhead(selectedVehicle.position, activeRoute)
+        : projectedPath(selectedVehicle.position, selectedVehicle.bearing || 0))
+    : [];
 
   const currentPinPosition = selectedVehicle?.position || defaultCenter;
 
@@ -727,6 +744,21 @@ const MapArea = ({
           />
         )}
 
+        {/* Ruta a seguir (modo seguimiento): línea brillante con dash animado */}
+        {isFollowingRoute && followRoute.length >= 2 && (
+          <>
+            <Polyline
+              positions={followRoute}
+              className="route-follow"
+              pathOptions={{ color: '#22d3ee', weight: 4.5, opacity: 0.95, dashArray: '8 12', lineCap: 'round', lineJoin: 'round' }}
+            />
+            <Polyline
+              positions={followRoute}
+              pathOptions={{ color: '#22d3ee', weight: 11, opacity: 0.18 }}
+            />
+          </>
+        )}
+
         {activeRoute.length > 0 && (
           <>
             <Polyline
@@ -850,7 +882,7 @@ const MapArea = ({
         ))}
       </MapContainer>
 
-      {selectedVehicle && !isVehicleDetailOpen && (
+      {selectedVehicle && !isVehicleDetailOpen && !hideSelectionBar && (
         <div className="map-selection-bar" aria-label={`Acciones para ${selectedVehicle.name}`}>
           <div className="map-selection-identity">
             <span className={`map-selection-dot ${selectedVehicle.status}`} />
@@ -881,28 +913,32 @@ const MapArea = ({
       {/* Simplified Floating UI Overlays */}
       <div className="absolute inset-0 pointer-events-none z-10 p-4 flex flex-col justify-between">
         {/* Zoom Controls */}
-        <div className="flex justify-end pointer-events-auto">
-          <div className="map-control-stack bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl flex flex-col">
-            <button
-              onClick={handleZoomIn}
-              className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors border-b border-cyan-500/20"
-            >
-              <Plus size={18} />
-            </button>
-            <button
-              onClick={handleZoomOut}
-              className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
-            >
-              <Minus size={18} />
-            </button>
+        {!hideControls && (
+          <div className="flex justify-end pointer-events-auto">
+            <div className="map-control-stack bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl flex flex-col">
+              <button
+                onClick={handleZoomIn}
+                className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors border-b border-cyan-500/20"
+              >
+                <Plus size={18} />
+              </button>
+              <button
+                onClick={handleZoomOut}
+                className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+              >
+                <Minus size={18} />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="map-secondary-controls pointer-events-auto">
-          <button onClick={handleRecenter} title="Centrar vehículo activo"><Crosshair size={16} /></button>
-          <button onClick={handleFitFleet} title="Ver toda la flota"><Maximize size={16} /></button>
-          <button onClick={() => setBaseLayer((current) => current === 'dark' ? 'satellite' : 'dark')} title="Cambiar capa del mapa"><Layers size={16} /><span>{baseLayer === 'dark' ? 'Satélite' : 'Oscuro'}</span></button>
-        </div>
+        {!hideControls && (
+          <div className="map-secondary-controls pointer-events-auto">
+            <button onClick={handleRecenter} title="Centrar vehículo activo"><Crosshair size={16} /></button>
+            <button onClick={handleFitFleet} title="Ver toda la flota"><Maximize size={16} /></button>
+            <button onClick={() => changeBaseLayer(baseLayer === 'dark' ? 'satellite' : 'dark')} title="Cambiar capa del mapa"><Layers size={16} /><span>{baseLayer === 'dark' ? 'Satélite' : 'Oscuro'}</span></button>
+          </div>
+        )}
 
         {/* Bottom Controls */}
         <div className="flex justify-between items-end pointer-events-auto">

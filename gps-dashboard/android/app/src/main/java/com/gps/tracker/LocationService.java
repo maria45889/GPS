@@ -571,7 +571,8 @@ public class LocationService extends Service implements LocationListener {
                     enqueueOfflineLocation(body);
                     offlineFlushExecutor.execute(() -> {
                         int size = AppDatabase.getDatabase(getApplicationContext()).locationDao().getCount();
-                        updateNotification("Sin token - Ubicación guardada en cola offline (" + size + ")");
+                        String err = authManager.getLastAuthError();
+                        updateNotification("Sin token (" + (err.isEmpty() ? "Unknown" : err) + ") - Cola offline (" + size + ")");
                     });
                     return;
                 }

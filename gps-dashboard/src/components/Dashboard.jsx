@@ -1,32 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X } from 'lucide-react';
 import { hasSupabaseConfig, supabase, withAuthRetry } from '../lib/supabase';
-import MapArea from './MapArea';
-import { LeftSidebarPanel } from './LeftSidebarPanel';
-import { RightSidebarPanel } from './RightSidebarPanel';
-import { HeaderBar } from './HeaderBar';
+import CommandCenter from './command/CommandCenter';
 import { useVehicles, useDevices, useAlerts, useGeofences } from '../hooks';
-import { VehicleDetailPanel } from './VehicleDetailPanel';
-import { deleteVehicle, sendVehicleCommand } from '../lib/vehicleActions';
+import { deleteVehicle, sendVehicleCommand, updateEntity } from '../lib/vehicleActions';
 import { clearAllGpsCaches } from '../lib/gpsTracker';
 import { createGeofence } from '../lib/queries';
-
-// Construye la entidad mostrada en el mapa con los campos que MapArea espera
-const buildMapEntity = (source) => ({
-  id: source.id,
-  name: source.name,
-  plate: source.plate || source.id,
-  driver: source.driver || null,
-  status: source.status || 'offline',
-  speed: source.speed || 0,
-  bearing: source.bearing || 0,
-  battery: (source.battery !== null && source.battery !== undefined && Number.isFinite(Number(source.battery))) ? Number(source.battery) : 0,
-  accuracy: (source.accuracy !== null && source.accuracy !== undefined && Number.isFinite(Number(source.accuracy))) ? Number(source.accuracy) : null,
-  lastUpdate: source.lastUpdate || '--',
-  position: source.position || null,
-  route: source.route || [],
-  controlState: source.controlState,
-})
+import { EditEntityModal } from './EditEntityModal';
 
 const Dashboard = () => {
   const { vehicles: supabaseVehicles, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles()
@@ -39,9 +18,9 @@ const Dashboard = () => {
   // --- Estado persistente de vista ---
   const [category, setCategory] = useState(() => {
     const queryCategory = new URLSearchParams(window.location.search).get('category')
-    if (queryCategory === 'devices' || queryCategory === 'vehicles') return queryCategory
+    if (queryCategory === 'devices' || queryCategory === 'vehicles' || queryCategory === 'all') return queryCategory
     const stored = localStorage.getItem('rg_category')
-    return stored === 'vehicles' ? 'vehicles' : 'devices'
+    return stored === 'vehicles' || stored === 'all' ? stored : 'devices'
   })
 
   const activeNetworkError = (category === 'devices' ? devicesError : vehiclesError) || alertsError || geofencesError
@@ -51,7 +30,6 @@ const Dashboard = () => {
     localStorage.setItem('rg_category', next)
     setSelectedEntity(null)
     setFlyToTrigger(null)
-    setIsVehicleDetailOpen(false)
   }
 
   // --- Datos con fallback ---
@@ -80,64 +58,13 @@ const Dashboard = () => {
   const [flyToTrigger, setFlyToTrigger] = useState(null)
   const [isPlacingOnMap, setIsPlacingOnMap] = useState(false)
   const [pendingCenter, setPendingCenter] = useState(null)
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [userLocation, setUserLocation] = useState(null)
   const [locateUserTrigger, setLocateUserTrigger] = useState(null)
   const [isFollowingRoute, setIsFollowingRoute] = useState(
     () => new URLSearchParams(window.location.search).get('follow') === '1',
   )
-  const [isVehicleDetailOpen, setIsVehicleDetailOpen] = useState(false)
   const [pendingGeofenceConfirm, setPendingGeofenceConfirm] = useState(null)
-  const drawerPanelRef = useRef(null)
-
-  const closeMobileDrawer = () => {
-    setIsMobileSidebarOpen(false)
-    if (window.history.state?.drawerOpen) {
-      window.history.back()
-    }
-  }
-
-  useEffect(() => {
-    if (!isMobileSidebarOpen) return undefined
-
-    window.history.pushState({ drawerOpen: true }, '')
-    const handlePopState = () => {
-      setIsMobileSidebarOpen(false)
-    }
-    window.addEventListener('popstate', handlePopState)
-
-    const timer = setTimeout(() => {
-      drawerPanelRef.current?.querySelector('button')?.focus()
-    }, 50)
-
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        closeMobileDrawer()
-      } else if (e.key === 'Tab' && drawerPanelRef.current) {
-        const focusables = drawerPanelRef.current.querySelectorAll(
-          'button, [href], input, select, textarea, [tabindex]:not([-1])'
-        )
-        if (focusables.length > 0) {
-          const first = focusables[0]
-          const last = focusables[focusables.length - 1]
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault()
-            last.focus()
-          } else if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault()
-            first.focus()
-          }
-        }
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('popstate', handlePopState)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [isMobileSidebarOpen])
+  const [entityToEdit, setEntityToEdit] = useState(null)
   const [operationMessage, setOperationMessage] = useState('')
   const [alertFocusTrigger, setAlertFocusTrigger] = useState(null)
   const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false)
@@ -150,27 +77,22 @@ const Dashboard = () => {
   }, [])
 
   const handleLogout = async () => {
-    // B4: signOut puede rechazar (red caída, sesión expirada) — siempre limpiar estado local.
     try {
       localStorage.removeItem('gps_dev_admin')
       clearAllGpsCaches()
       if (supabase) await supabase.auth.signOut()
     } catch (err) {
       console.error('Error al cerrar sesión:', err)
-      // Continuar — localStorage y caché ya están limpios.
     }
   }
 
   // --- Listas por categoría ---
   const devicesList = devices
   const vehiclesList = vehicles
-
-  // Entidad actual según la categoría
   const selectedEntityId = selectedEntity?.id
 
-
   useEffect(() => {
-    const list = category === 'devices' ? devicesList : vehiclesList
+    const list = category === 'all' ? devicesList : (category === 'vehicles' ? vehiclesList : devicesList)
     if (!selectedEntityId) {
       if (list.length > 0) setSelectedEntity(list[0])
     } else {
@@ -181,10 +103,9 @@ const Dashboard = () => {
     }
   }, [category, devicesList, vehiclesList, selectedEntityId])
 
-  const selectEntity = (entity, openDetail = false) => {
+  const selectEntity = (entity) => {
     if (!entity) return
     setSelectedEntity({ ...entity, controlState: undefined })
-    setIsVehicleDetailOpen(openDetail)
     if (entity.position) {
       setFlyToTrigger({ coords: entity.position, zoom: 16, timestamp: Date.now() })
     }
@@ -240,20 +161,13 @@ const Dashboard = () => {
     const relatedDevice = devicesList.find((d) => d.id === alert.vehicleId)
 
     if (relatedVehicle) {
-      if (category !== 'vehicles') {
-        handleCategoryChange('vehicles')
-        setOperationMessage('Cambiado a vista de Motos por alerta seleccionada')
-      }
+      if (category !== 'vehicles' && category !== 'all') handleCategoryChange('vehicles')
       selectEntity(relatedVehicle, true)
     } else if (relatedDevice) {
-      if (category !== 'devices') {
-        handleCategoryChange('devices')
-        setOperationMessage('Cambiado a vista de Dispositivos por alerta seleccionada')
-      }
+      if (category !== 'devices' && category !== 'all') handleCategoryChange('devices')
       selectEntity(relatedDevice, true)
     }
   }
-
 
   // --- Geocerca ---
   const handleMapClickForGeofence = (latlng) => {
@@ -310,7 +224,7 @@ const Dashboard = () => {
     setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position })
   }
 
-  // --- Control vehicular (solo categoría motos) ---
+  // --- Control vehicular ---
   const handleVehicleControl = async (command) => {
     if (!selectedEntity || category !== 'vehicles' || isVehicleControlBusy) return
     setIsVehicleControlBusy(true)
@@ -320,8 +234,6 @@ const Dashboard = () => {
     try {
       commandResult = await sendVehicleCommand(selectedEntity.id, command, selectedEntity.deviceId || null)
     } catch (err) {
-      // C5: sendVehicleCommand puede rechazar (withAuthRetry relanza en fallo de red).
-      // Sin este catch, isVehicleControlBusy queda true para siempre.
       setOperationMessage(`Error al enviar comando ${command}: ${err?.message || 'Error de red'}`)
       setSelectedEntity((prev) => (prev ? { ...prev, controlState: undefined } : null))
       setIsVehicleControlBusy(false)
@@ -344,7 +256,7 @@ const Dashboard = () => {
     if (commandResult.commandId && supabase) {
       const commandId = commandResult.commandId
       let attempts = 0
-      const maxAttempts = 30 // 30 intentos × 2 s = 60 s max
+      const maxAttempts = 30
       if (commandPollTimeoutRef.current) {
         clearTimeout(commandPollTimeoutRef.current)
         commandPollTimeoutRef.current = null
@@ -382,8 +294,6 @@ const Dashboard = () => {
               }
             }
           } catch (err) {
-            // P17: Terminar el poll inmediatamente en errores no transitorios.
-            // Errores de autenticación o servidor no se van a resolver solos con reintentos.
             const status = err?.status ?? err?.code
             const isFatal = status === 401 || status === 403 || status === 404
             if (isFatal) {
@@ -396,7 +306,6 @@ const Dashboard = () => {
               setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
               return
             }
-            // Errores transitorios (red, timeout): continuar reintentando
           }
 
           if (attempts >= maxAttempts) {
@@ -407,13 +316,11 @@ const Dashboard = () => {
             return
           }
 
-          // Seguir sondeando solo si no terminó
           schedulePoll()
         }, 2000)
       }
       schedulePoll()
     } else {
-      // M3: El timeout de liberación de busy también necesita ser cancelable.
       commandPollTimeoutRef.current = setTimeout(() => {
         commandPollTimeoutRef.current = null
         setIsVehicleControlBusy(false)
@@ -422,39 +329,55 @@ const Dashboard = () => {
     }
   }
 
-  const handleDeleteVehicle = async (vehicleId) => {
-    if (category !== 'vehicles' || isVehicleControlBusy) return
+  const handleDeleteVehicle = async (entityId) => {
+    if (isVehicleControlBusy) return
     setIsVehicleControlBusy(true)
-    const result = await deleteVehicle(vehicleId)
+    const result = await deleteVehicle(entityId, category)
     if (result.error) {
-      setOperationMessage('No se pudo eliminar el vehículo')
+      setOperationMessage(`No se pudo eliminar: ${result.error.message || 'Error desconocido'}`)
       setIsVehicleControlBusy(false)
       return
     }
 
-    if (result.remote && refetchVehicles) {
-      // B14: Confirmar el estado en el servidor ANTES de actualizar el estado local.
-      // Esto evita ocultar un vehículo que aún existe si el backend reportó éxito parcial.
-      await refetchVehicles()
+    if (category === 'vehicles') {
+      if (result.remote && refetchVehicles) await refetchVehicles();
+      setLocalVehicles((prev) => {
+        const remaining = prev.filter((v) => v.id !== entityId)
+        setSelectedEntity(remaining[0] || null)
+        return remaining
+      });
+    } else {
+      setSelectedEntity(null);
     }
 
-    setLocalVehicles((prev) => {
-      const remaining = prev.filter((v) => v.id !== vehicleId)
-      setSelectedEntity(remaining[0] || null)
-      setIsVehicleDetailOpen(false)
-      return remaining
-    })
-    setOperationMessage(result.remote ? 'Vehículo eliminado' : 'Eliminado del panel local')
+    setOperationMessage(result.remote ? (category === 'vehicles' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local')
     setIsVehicleControlBusy(false)
   }
 
+  const handleEditVehicle = (entity) => {
+    setEntityToEdit(entity);
+  };
+
+  const handleSaveEntity = async (entityId, currentCategory, updates) => {
+    const result = await updateEntity(entityId, currentCategory, updates);
+    if (result.error) {
+      throw new Error(result.error.message || 'Error al guardar los cambios');
+    }
+    setOperationMessage('Cambios guardados con éxito');
+    if (currentCategory === 'vehicles' && refetchVehicles) {
+      refetchVehicles();
+    }
+  };
+
   // --- Seguir ruta ---
-  const handleToggleRouteFollow = () => {
-    if (!selectedEntity?.position) {
+  const handleToggleRouteFollow = (entity) => {
+    const target = entity?.position ? entity : selectedEntity
+    if (!target?.position) {
       setIsFollowingRoute(false)
       setOperationMessage('Sin posición GPS para seguir')
       return
     }
+    if (entity?.position && entity !== selectedEntity) selectEntity(entity)
     setIsFollowingRoute((v) => !v)
   }
 
@@ -485,9 +408,8 @@ const Dashboard = () => {
   // --- Última sincronización ---
   const lastSyncLabel = useMemo(() => {
     if (activeNetworkError) return 'Sin conexión (Desactualizado)'
-    if (category === 'vehicles' && vehiclesStale) return 'Sin conexión (Desactualizado)'
-    if (category === 'devices' && devicesStale) return 'Sin conexión (Desactualizado)'
-    
+    if ((category === 'vehicles' && vehiclesStale) || (category === 'devices' && devicesStale)) return 'Sin conexión (Desactualizado)'
+
     if (category === 'vehicles' && vehiclesSyncTime) {
       const date = new Date(vehiclesSyncTime)
       return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
@@ -504,129 +426,46 @@ const Dashboard = () => {
     return lastUpdate
   }, [activeNetworkError, selectedEntity?.lastUpdate, category, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime])
 
-  // --- Entidades para el mapa ---
-  const mapEntities = useMemo(
-    () => (category === 'devices' ? devices.map(buildMapEntity) : vehiclesList.map(buildMapEntity)),
-    [category, devices, vehiclesList],
-  )
-
-  const activeAlerts = useMemo(() => alerts.filter((a) => a.status !== 'resolved'), [alerts])
-
   return (
-    <div className="reference-dashboard relative flex flex-col w-full max-w-[1680px] h-[calc(100dvh-2rem)] overflow-hidden rounded-[14px] border border-[#1a3544] bg-[#07111c] shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:h-[calc(100dvh-2.5rem)]">
-      <div className="relative z-10 flex flex-col h-full">
-        <HeaderBar
-          category={category}
-          onCategoryChange={handleCategoryChange}
-          lastSyncLabel={lastSyncLabel}
-          onLogout={handleLogout}
-          onMenuClick={() => setIsMobileSidebarOpen(true)}
-        />
-
-        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden gap-3 p-3">
-          <LeftSidebarPanel
-            category={category}
-            entity={selectedEntity}
-            vehicles={category === 'devices' ? devicesList : vehiclesList}
-            onControlVehicle={category === 'vehicles' ? handleVehicleControl : undefined}
-            onDeleteVehicle={category === 'vehicles' ? handleDeleteVehicle : undefined}
-            isControlBusy={isVehicleControlBusy}
-            userLocation={userLocation}
-            isFollowingRoute={isFollowingRoute}
-            onToggleRouteFollow={handleToggleRouteFollow}
-            onShareRoute={handleShareRoute}
-          />
-
-          <div className="dashboard-center min-h-0 min-w-0 flex-1">
-            <div className="map-surface relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-[12px] border border-[#cfe2e9] bg-[#eaf4f7] shadow-[0_8px_24px_rgba(43,93,112,0.12)]">
-              <MapArea
-                category={category}
-                vehicles={mapEntities}
-                selectedVehicle={selectedEntity ? buildMapEntity(selectedEntity) : null}
-                onSelectVehicle={(entity) => selectEntity(entity)}
-                alerts={alerts}
-                onSelectAlert={handleSelectAlert}
-                focusTrigger={alertFocusTrigger}
-                geofences={geofences}
-                isPlacingOnMap={isPlacingOnMap}
-                pendingCenter={pendingGeofenceConfirm ? pendingGeofenceConfirm.center : (isPlacingOnMap ? pendingCenter : null)}
-                onMapClick={handleMapClickForGeofence}
-                onMapHover={(latlng) => setPendingCenter(latlng)}
-                flyToTrigger={flyToTrigger}
-                isFollowingRoute={isFollowingRoute}
-                onToggleRouteFollow={handleToggleRouteFollow}
-                onShareRoute={handleShareRoute}
-                isVehicleDetailOpen={isVehicleDetailOpen}
-                userLocation={userLocation}
-                onLocationChange={setUserLocation}
-                locateUserTrigger={locateUserTrigger}
-              />
-
-              {isPlacingOnMap && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3 rounded-full border border-[#f59e0b] bg-[#11181d]/90 px-4 py-2 text-[12px] font-bold text-[#f59e0b] shadow-[0_4px_20px_rgba(245,158,11,0.3)] backdrop-blur-md">
-                  <span>Toca o haz clic en el mapa para ubicar la geocerca</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsPlacingOnMap(false)
-                      setPendingCenter(null)
-                    }}
-                    className="rounded-full bg-[#f59e0b]/20 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-[#fcd34d] hover:bg-[#f59e0b]/30"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              )}
-
-              {/* Alerts */}
-              {activeAlerts.length > 0 && (
-                <div className="reference-dashboard map-alerts-card absolute left-4 bottom-4 z-10">
-                  <div className="map-card-heading">
-                    <span>Alertas activas</span>
-                    <span className="alert-count">{activeAlerts.length}</span>
-                  </div>
-                  {activeAlerts.slice(0, 3).map((item) => (
-                    <button key={item.id} type="button" onClick={() => handleSelectAlert(item)} className="map-alert-row">
-                      <span className={`alert-dot ${item.severity}`} />
-                      <span>
-                        <strong>{item.title.split(' - ')[0]}</strong>
-                        <small>{item.timestamp} · {item.locationName}</small>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <RightSidebarPanel
-            category={category}
-            entities={category === 'devices' ? devicesList : vehiclesList}
-            selectedEntity={selectedEntity}
-            onSelectEntity={(entity) => selectEntity(entity, true)}
-            onSetGeofence={() => {
-              setIsPlacingOnMap(true)
-              setPendingCenter(null)
-            }}
-            userLocation={userLocation}
-            onLocateUser={handleLocateUser}
-          />
-        </div>
-
-        {isVehicleDetailOpen && selectedEntity && (
-          <VehicleDetailPanel
-            category={category}
-            entity={selectedEntity}
-            isFollowingRoute={isFollowingRoute}
-            onClose={() => setIsVehicleDetailOpen(false)}
-            onToggleRouteFollow={handleToggleRouteFollow}
-            onShareRoute={handleShareRoute}
-            onControlVehicle={category === 'vehicles' ? handleVehicleControl : undefined}
-            onDeleteVehicle={category === 'vehicles' ? handleDeleteVehicle : undefined}
-            isControlBusy={isVehicleControlBusy}
-          />
-        )}
-      </div>
+    <div className="relative flex w-full flex-col bg-[#0b0f19] h-[100dvh] overflow-hidden">
+      <CommandCenter
+        category={category}
+        onCategoryChange={handleCategoryChange}
+        devices={devicesList}
+        vehicles={vehiclesList}
+        selectedEntity={selectedEntity}
+        onSelectVehicle={(entity) => selectEntity(entity)}
+        alerts={alerts}
+        onSelectAlert={handleSelectAlert}
+        geofences={geofences}
+        isPlacingOnMap={isPlacingOnMap}
+        onSetGeofence={() => {
+          setIsPlacingOnMap(true)
+          setPendingCenter(null)
+        }}
+        onCancelGeofence={() => {
+          setIsPlacingOnMap(false)
+          setPendingCenter(null)
+        }}
+        pendingCenter={pendingGeofenceConfirm ? pendingGeofenceConfirm.center : (isPlacingOnMap ? pendingCenter : null)}
+        onMapClick={handleMapClickForGeofence}
+        onMapHover={(latlng) => setPendingCenter(latlng)}
+        isFollowingRoute={isFollowingRoute}
+        onToggleRouteFollow={handleToggleRouteFollow}
+        onShareRoute={handleShareRoute}
+        userLocation={userLocation}
+        onLocateUser={handleLocateUser}
+        onLocationChange={setUserLocation}
+        locateUserTrigger={locateUserTrigger}
+        flyToTrigger={flyToTrigger}
+        focusTrigger={alertFocusTrigger}
+        onControlVehicle={handleVehicleControl}
+        isControlBusy={isVehicleControlBusy}
+        onDeleteVehicle={handleDeleteVehicle}
+        onEditVehicle={handleEditVehicle}
+        onLogout={handleLogout}
+        lastSyncLabel={lastSyncLabel}
+      />
 
       {operationMessage && (
         <button type="button" className="dashboard-toast" onClick={() => setOperationMessage('')} aria-label="Cerrar mensaje">
@@ -637,77 +476,6 @@ const Dashboard = () => {
       {!operationMessage && activeNetworkError && (
         <div className="dashboard-toast border border-[#ef5c72]/60 bg-[#250d12]/95 text-[#fca5a5]">
           ⚠️ Sin conexión a la red. Mostrando datos locales previamente cargados.
-        </div>
-      )}
-
-      {isMobileSidebarOpen && (
-        <div className="mobile-drawer-layer" role="dialog" aria-modal="true" aria-label="Menú de navegación">
-          <button type="button" className="mobile-drawer-backdrop" aria-label="Cerrar menú" onClick={closeMobileDrawer} />
-          <div className="mobile-drawer-panel" ref={drawerPanelRef}>
-            <div className="mb-3 flex items-center justify-between gap-2 border-b border-[#183546] pb-3">
-              <div className="flex flex-1 items-center rounded-full border border-[#173344] bg-[#0d1d26] p-[3px]" role="tablist" aria-label="Categoría de vista en menú">
-                {[
-                  { id: 'devices', label: 'Dispositivos' },
-                  { id: 'vehicles', label: 'Motos' },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={category === item.id}
-                    onClick={() => {
-                      handleCategoryChange(item.id)
-                      closeMobileDrawer()
-                    }}
-                    className={`flex-1 rounded-full py-1 text-[11px] font-bold uppercase tracking-[0.08em] transition-all ${
-                      category === item.id
-                        ? 'bg-[#1a2d36] text-[#b8f36b] shadow-[0_0_10px_rgba(184,243,107,0.14)]'
-                        : 'text-[#5f7e87] hover:text-[#8fa5ad]'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              <button type="button" className="mobile-drawer-close flex-shrink-0" aria-label="Cerrar menú" onClick={closeMobileDrawer}>
-                <X size={18} />
-              </button>
-            </div>
-            <RightSidebarPanel
-              isMobile
-              category={category}
-              entities={category === 'devices' ? devicesList : vehiclesList}
-              selectedEntity={selectedEntity}
-              onSelectEntity={(entity) => {
-                selectEntity(entity, true)
-                closeMobileDrawer()
-              }}
-              onSetGeofence={() => {
-                setIsPlacingOnMap(true)
-                setPendingCenter(null)
-                closeMobileDrawer()
-              }}
-              userLocation={userLocation}
-              onLocateUser={() => {
-                handleLocateUser()
-                closeMobileDrawer()
-              }}
-            />
-            <div className="mt-3">
-              <LeftSidebarPanel
-                category={category}
-                entity={selectedEntity}
-                vehicles={category === 'devices' ? devicesList : vehiclesList}
-                onControlVehicle={category === 'vehicles' ? handleVehicleControl : undefined}
-                onDeleteVehicle={category === 'vehicles' ? handleDeleteVehicle : undefined}
-                isControlBusy={isVehicleControlBusy}
-                userLocation={userLocation}
-                isFollowingRoute={isFollowingRoute}
-                onToggleRouteFollow={handleToggleRouteFollow}
-                onShareRoute={handleShareRoute}
-              />
-            </div>
-          </div>
         </div>
       )}
 
@@ -736,6 +504,15 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {entityToEdit && (
+        <EditEntityModal
+          entity={entityToEdit}
+          category={category}
+          onClose={() => setEntityToEdit(null)}
+          onSave={handleSaveEntity}
+        />
       )}
     </div>
   )

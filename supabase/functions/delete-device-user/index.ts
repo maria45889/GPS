@@ -55,23 +55,23 @@ serve(async (req) => {
     return json({ error: 'Forbidden: Requires admin role' }, 403)
   }
 
-  let body: { auth_user_id?: string, vehicle_id?: string }
+  let body: { auth_user_id?: string, vehicle_id?: string, device_id?: string }
   try {
     body = await req.json()
   } catch {
     return json({ error: 'Invalid JSON' }, 400)
   }
 
-  const { auth_user_id, vehicle_id } = body
-  if (!auth_user_id && !vehicle_id) {
-    return json({ error: 'auth_user_id or vehicle_id is required' }, 400)
+  const { auth_user_id, vehicle_id, device_id } = body
+  if (!auth_user_id && !vehicle_id && !device_id) {
+    return json({ error: 'auth_user_id, vehicle_id or device_id is required' }, 400)
   }
 
   let targetAuthUserId: string | null = auth_user_id ?? null
-  let targetDeviceId: string | null = null
+  let targetDeviceId: string | null = device_id ?? null
   let resolvedVehicleId: string | null = vehicle_id ?? null
 
-  // --- Resolver device_id y vehicle_id a partir del identificador recibido ---
+  // --- Resolver identificadores faltantes ---
 
   if (vehicle_id) {
     // Caso A: se recibió vehicle_id — derivar device_id desde vehicles
@@ -128,6 +128,31 @@ serve(async (req) => {
       .from('device_registry')
       .select('vehicle_id')
       .eq('device_id', targetDeviceId)
+      .single()
+
+    resolvedVehicleId = regData?.vehicle_id ?? null
+  }
+
+  if (device_id && !vehicle_id && !auth_user_id) {
+    const { data: deviceData, error: deviceError } = await supabaseAdmin
+      .from('devices')
+      .select('organization_id, auth_user_id')
+      .eq('id', device_id)
+      .single()
+
+    if (deviceError) {
+      return json({ error: 'Could not fetch device details to verify organization' }, 500)
+    }
+    if (deviceData.organization_id !== profile?.organization_id) {
+      return json({ error: 'Forbidden: Device organization mismatch' }, 403)
+    }
+    if (!targetAuthUserId) targetAuthUserId = deviceData.auth_user_id;
+
+    // Buscar si tiene un vehículo asociado
+    const { data: regData } = await supabaseAdmin
+      .from('device_registry')
+      .select('vehicle_id')
+      .eq('device_id', device_id)
       .single()
 
     resolvedVehicleId = regData?.vehicle_id ?? null

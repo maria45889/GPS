@@ -197,34 +197,63 @@ public class DeviceAuthManager {
             body.put("battery", JSONObject.NULL);
 
             JSONObject res = post(baseUrl() + "/functions/v1/provision-device", body);
-            if (res == null) return false;
+            if (res == null) {
+                lastAuthError = "ProvNull(" + lastAuthError + ")";
+                return false;
+            }
 
             String email = res.optString("email", null);
             String password = res.optString("password", null);
             if (email != null && password != null && !email.isEmpty() && !password.isEmpty()) {
-                prefs.putString(KEY_EMAIL, email);
-                prefs.putString(KEY_PASSWORD, password);
-                clearDeviceRevoked();
-                clearActivationCode();
-                return true;
+                if (prefs.putString(KEY_EMAIL, email) && prefs.putString(KEY_PASSWORD, password)) {
+                    clearDeviceRevoked();
+                    clearActivationCode();
+                    lastAuthError = "";
+                    return true;
+                } else {
+                    lastAuthError = "ProvPrefWriteFail";
+                    return false;
+                }
             }
+            lastAuthError = "ProvNoEmailPass";
             return false;
         } catch (Exception e) {
-
+            lastAuthError = "ProvEx:" + e.getClass().getSimpleName();
             return false;
         }
+    }
+
+    private String lastAuthError = "";
+
+    public String getLastAuthError() {
+        return lastAuthError;
     }
 
     private boolean signIn() {
         String email = prefs.getString(KEY_EMAIL, null);
         String password = prefs.getString(KEY_PASSWORD, null);
-        if (email == null || password == null) return false;
+        if (email == null || password == null) {
+            lastAuthError = "NoCredentials";
+            return false;
+        }
         try {
             JSONObject body = new JSONObject();
             body.put("email", email);
             body.put("password", password);
-            return storeSession(post(baseUrl() + "/auth/v1/token?grant_type=password", body));
+            JSONObject res = post(baseUrl() + "/auth/v1/token?grant_type=password", body);
+            if (res == null) {
+                lastAuthError = "SignNull(" + lastAuthError + ")";
+                return false;
+            }
+            if (storeSession(res)) {
+                lastAuthError = "";
+                return true;
+            } else {
+                lastAuthError = "StoreSessionFailed";
+                return false;
+            }
         } catch (Exception e) {
+            lastAuthError = "SignInEx:" + e.getClass().getSimpleName();
             return false;
         }
     }
@@ -262,6 +291,7 @@ public class DeviceAuthManager {
 
     private JSONObject post(String urlStr, JSONObject body, String... extraHeaders) {
         if (Thread.currentThread().isInterrupted()) {
+            lastAuthError = "PostInterrupted1";
             return null;
         }
         HttpURLConnection connection = null;
@@ -282,6 +312,7 @@ public class DeviceAuthManager {
 
             if (Thread.currentThread().isInterrupted()) {
                 connection.disconnect();
+                lastAuthError = "PostInterrupted2";
                 return null;
             }
 
@@ -292,14 +323,28 @@ public class DeviceAuthManager {
 
             if (Thread.currentThread().isInterrupted()) {
                 connection.disconnect();
+                lastAuthError = "PostInterrupted3";
                 return null;
             }
 
             int code = connection.getResponseCode();
             InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
-            if (stream == null || Thread.currentThread().isInterrupted()) return null;
-            return new JSONObject(readStream(stream));
+            if (stream == null) {
+                lastAuthError = "PostNoStream:" + code;
+                return null;
+            }
+            if (Thread.currentThread().isInterrupted()) {
+                lastAuthError = "PostInterrupted4";
+                return null;
+            }
+            String resStr = readStream(stream);
+            if (code < 200 || code >= 300) {
+                lastAuthError = "HTTP" + code + ":" + (resStr.length() > 30 ? resStr.substring(0, 30) : resStr);
+                return null;
+            }
+            return new JSONObject(resStr);
         } catch (Exception e) {
+            lastAuthError = "PostEx:" + e.getClass().getSimpleName();
             return null;
         } finally {
             if (connection != null) connection.disconnect();

@@ -1,158 +1,159 @@
 import React from 'react';
-import { Navigation, Share2, Radio, MapPin } from 'lucide-react';
-import { VehicleControlCard } from './VehicleControlCard';
-import { normalizeBattery, sanitizeAccuracy } from '../lib/queries';
+import { Navigation, Share2, Activity, Battery, Wifi, Gauge } from 'lucide-react';
+import { normalizeBattery } from '../lib/queries';
+import { formatTimestamp } from '../lib/formatters';
 
-const DeviceInfo = ({ entity, onToggleRouteFollow, isFollowingRoute, onShareRoute }) => {
-  if (!entity) {
-    return <div className="dashboard-telemetry border-b border-[#26343b] p-4 text-[12px] text-[#6a8994]">Esperando dispositivo GPS…</div>
-  }
-  const status = entity.status === 'active' || entity.status === 'online' ? 'En línea' : entity.status === 'stopped' ? 'Detenido' : entity.status === 'immobilized' ? 'Inmovilizado' : 'Offline'
-  const batteryVal = normalizeBattery(entity.battery);
-  const accVal = sanitizeAccuracy(entity.accuracy);
-
+const StatusStreamChart = ({ label, value, color, max = 100, unit = '' }) => {
+  const safeValue = Number.isFinite(Number(value)) ? Number(value) : 0;
+  const percentage = Math.min(100, Math.max(0, (safeValue / max) * 100)) || 0;
+  
+  const points = React.useMemo(() => {
+    return `0,${40 - (Math.random() * 10)} 20,${40 - (Math.random() * 20)} 40,${40 - (percentage * 0.3)} 60,${40 - (percentage * 0.35)} 80,${40 - (percentage * 0.4)} 100,${40 - (percentage * 0.4)}`;
+  }, [percentage]);
+  
   return (
-    <div className="device-info-card">
-      <div className="card-header-row">
-        <div className="min-w-0">
-          <p className="eyebrow-text">Ubicación del dispositivo</p>
-          <h3 className="card-title">{entity.name}</h3>
-          <span className="card-subtitle"><span>{entity.model ? `${entity.model} · ` : ''}</span><span>{entity.platform || 'GPS'}</span></span>
-        </div>
-        <span className={`dashboard-status-dot ${entity.status}`} aria-label={status} />
+    <div className="mb-4">
+      <div className="flex justify-between text-[10px] text-[#94a3b8] mb-1">
+        <span className="uppercase tracking-widest">{label}</span>
+        <span style={{ color }} className="font-mono">{safeValue}{unit}</span>
       </div>
-
-      <div className="stat-metric-grid">
-        <div><span>Velocidad</span><strong>{entity.speed || 0} km/h</strong></div>
-        <div><span>Batería</span><strong>{batteryVal}%</strong></div>
-        <div><span>Precisión</span><strong>{accVal !== null ? `${accVal} m` : '--'}</strong></div>
-        <div><span>Reporte</span><strong>{entity.lastUpdate || '--'}</strong></div>
-      </div>
-
-      <div className="action-button-row">
-        <button
-          type="button"
-          onClick={onToggleRouteFollow}
-          disabled={!entity?.position}
-          title={!entity?.position ? 'Sin posición GPS para seguir' : ''}
-          className={`panel-primary-button ${isFollowingRoute && entity?.position ? 'is-active' : ''} ${!entity?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          <Navigation size={13} /> <span>{isFollowingRoute && entity?.position ? 'Siguiendo' : 'Seguir ubicación'}</span>
-        </button>
-        <button type="button" onClick={onShareRoute} className="panel-secondary-button">
-          <Share2 size={13} /> <span>Compartir</span>
-        </button>
-      </div>
-
-      <div className="panel-helper-text">
-        El mapa mantiene el foco del equipo y marca la guía visual para que el usuario entienda su posición en tiempo real.
+      <svg width="100%" height="40" preserveAspectRatio="none" className="overflow-visible">
+        <defs>
+          <linearGradient id={`grad-${label.replace(/\s+/g, '-')}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.4" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={`M0,40 L${points} L100,40 Z`} fill={`url(#grad-${label.replace(/\s+/g, '-')})`} />
+        <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" style={{ filter: `drop-shadow(0 0 4px ${color})` }} />
+      </svg>
+      <div className="flex gap-[2px] h-[6px] mt-2">
+        {Array.from({ length: 20 }).map((_, i) => (
+          <div key={i} className="flex-1 rounded-[1px]" style={{ background: i < (percentage/5) ? color : 'rgba(255,255,255,0.05)' }} />
+        ))}
       </div>
     </div>
-  )
-}
+  );
+};
 
 export const LeftSidebarPanel = ({
   category = 'vehicles',
   vehicles = [],
   entity,
-  onControlVehicle,
-  onDeleteVehicle,
-  isControlBusy,
-  userLocation,
+  selectedVehicle,
   isFollowingRoute,
   onToggleRouteFollow,
   onShareRoute,
-  selectedVehicle,
+  onEditVehicle,
+  onDeleteVehicle,
 }) => {
-  const currentEntity = entity ?? selectedVehicle ?? null
-  const effectiveCategory = category === 'devices' || category === 'vehicles' ? category : currentEntity?.plate ? 'vehicles' : 'devices'
-  const rawBattery = currentEntity?.battery
-  const hasBattery = rawBattery !== null && rawBattery !== undefined && Number.isFinite(Number(rawBattery))
-  const batteryVal = hasBattery ? Math.max(0, Math.min(100, Number(rawBattery))) : null
-  const batteryDisplay = batteryVal !== null ? `${batteryVal}%` : '--'
-  const batteryHours = batteryVal !== null ? (batteryVal * 0.48).toFixed(1) : '--'
-  const apkUrl = import.meta.env.VITE_ANDROID_APK_URL
-  const fleetCount = vehicles.length
-  const onRoute = vehicles.filter((vehicle) => vehicle.status === 'active' || vehicle.status === 'online').length
-  const stopped = vehicles.filter((vehicle) => vehicle.status === 'stopped').length
-  const offline = vehicles.filter((vehicle) => vehicle.status === 'offline' || vehicle.status === 'unknown').length
+  const currentEntity = entity ?? selectedVehicle ?? null;
+  const isDevice = category === 'devices' || !currentEntity?.plate;
+  
+  const batteryVal = normalizeBattery(currentEntity?.battery);
+  const speed = currentEntity?.speed || 0;
+  const isOnline = currentEntity?.status === 'active' || currentEntity?.status === 'online';
+
+  if (!currentEntity) {
+    return (
+      <div className="dashboard-left-panel hidden shrink-0 flex-col overflow-hidden lg:flex p-4">
+        <div className="flex items-center justify-center h-full text-[#94a3b8] text-[12px] uppercase tracking-widest border border-[rgba(45,212,191,0.2)] rounded-lg bg-[rgba(10,20,30,0.4)]">
+          <Activity size={16} className="mr-2 animate-pulse" /> Esperando telemetría...
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="dashboard-left-panel hidden w-[248px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#213a46] bg-[#0d1a24] text-[13px] lg:flex">
-      {effectiveCategory === 'devices' ? (
-        <DeviceInfo
-          entity={currentEntity}
-          isFollowingRoute={isFollowingRoute}
-          onToggleRouteFollow={onToggleRouteFollow}
-          onShareRoute={onShareRoute}
-        />
-      ) : (
-        <div className="vehicle-info-card">
-          <div className="card-header-row">
-            <div className="min-w-0">
-              <p className="eyebrow-text">Vehículo seleccionado</p>
-              <h3 className="card-title">{currentEntity?.name || 'Sin vehículo'}</h3>
-              <span className="card-subtitle"><span>{currentEntity?.plate || '--'}</span> · <span>{currentEntity?.location || 'Ubicación pendiente'}</span></span>
+    <div className="dashboard-left-panel hidden shrink-0 flex-col overflow-hidden lg:flex">
+      
+      {/* DEVICE HEADER BLOCK */}
+      <div className="p-4 border-b border-[rgba(6,182,212,0.15)] bg-gradient-to-b from-[rgba(6,182,212,0.05)] to-transparent">
+        <div className="flex justify-between items-start mb-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-[#06b6d4] font-bold mb-1">
+              {isDevice ? 'Dispositivo' : 'Vehículo'}
             </div>
-            <span className={`dashboard-status-dot ${currentEntity?.status || 'offline'}`} aria-label="Vehículo conectado" />
+            <h2 className="text-[14px] text-[#f8fafc] font-bold truncate max-w-[160px]">
+              {currentEntity.name}
+            </h2>
+            <div className="text-[10px] text-[#94a3b8] font-mono mt-0.5">
+              {currentEntity.id.split('-')[0]} {currentEntity.platform ? `, ${currentEntity.platform}` : ''}
+            </div>
           </div>
-
-          <div className="stat-metric-grid">
-            <div><span>Velocidad</span><strong>{currentEntity?.speed || 0} km/h</strong></div>
-            <div><span>Batería</span><strong>{batteryDisplay}</strong></div>
-            <div><span>Autonomía</span><strong>{batteryHours !== '--' ? `${batteryHours} h aprox.` : '--'}</strong></div>
-            <div><span>Actualizado</span><strong>{currentEntity?.lastUpdate || '--'}</strong></div>
-          </div>
-
-          <div className="bar-track mt-3">
-            <div className="bar-fill" style={{ width: `${batteryVal !== null ? batteryVal : 0}%` }} />
+          <div className="relative">
+            <Wifi size={16} className={isOnline ? "text-[#10b981]" : "text-[#ef4444]"} />
+            {isOnline && <span className="absolute top-0 right-0 w-2 h-2 bg-[#10b981] rounded-full animate-ping opacity-75"></span>}
           </div>
         </div>
-      )}
 
-      {effectiveCategory === 'devices' ? (
-        <div className="border-b border-[#26343b] px-4 pb-4">
-          <h3 className="mb-3 mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Qué ves aquí</h3>
-          <p className="text-[12px] leading-relaxed text-[#9aa9ad]">
-            El panel sigue la ubicación real del dispositivo GPS que envía coordenadas cada 30 s. Selecciónalo en la lista o en el mapa.</p>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="bg-slate-900/60 border border-[rgba(6,182,212,0.15)] rounded p-2">
+            <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Velocidad</div>
+            <div className="text-[#f8fafc] text-[12px] font-mono">{speed} <span className="text-slate-400 text-[10px]">km/h</span></div>
+          </div>
+          <div className="bg-slate-900/60 border border-[rgba(6,182,212,0.15)] rounded p-2">
+            <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Batería</div>
+            <div className="text-[#f8fafc] text-[12px] font-mono">{batteryVal}%</div>
+          </div>
+          <div className="col-span-2 bg-slate-900/60 border border-[rgba(6,182,212,0.15)] rounded p-2">
+            <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1">Último Reporte</div>
+            <div className="text-[#f8fafc] text-[11px] truncate" title={currentEntity.lastUpdate}>
+              {formatTimestamp(currentEntity.lastUpdate)}
+            </div>
+          </div>
         </div>
-      ) : (
-        <VehicleControlCard vehicle={currentEntity} onControl={onControlVehicle} onDelete={onDeleteVehicle} isBusy={isControlBusy} />
-      )}
 
-      <div className="border-b border-[#26343b] px-4 pb-4">
-        <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Resumen <span>{effectiveCategory === 'vehicles' ? 'de flota' : 'de dispositivos'}</span></h3>
-        <div className="space-y-2 text-[12px] text-[#9aa9ad]">
-          <div className="flex items-center justify-between"><span>{effectiveCategory === 'vehicles' ? 'Vehículos' : 'Dispositivos'}</span><strong className="text-[#edf5ef]">{fleetCount}</strong></div>
-          <div className="flex items-center justify-between"><span>En línea</span><strong className="text-[#b8f36b]">{onRoute}</strong></div>
-          <div className="flex items-center justify-between"><span>Detenidos</span><strong className="text-[#f2c66d]">{stopped}</strong></div>
-          <div className="flex items-center justify-between"><span>Offline</span><strong className="text-[#8b9ba1]">{offline}</strong></div>
+        <div className="flex gap-2">
+          <button
+            onClick={onToggleRouteFollow}
+            disabled={!currentEntity.position}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded text-[11px] font-bold uppercase tracking-wider transition-all
+              ${isFollowingRoute ? 'bg-[#0f172a] text-[#06b6d4] border border-[#06b6d4] shadow-[0_0_10px_rgba(6,182,212,0.2)]' 
+              : 'bg-gradient-to-r from-[#06b6d4] to-[#0891b2] text-[#0f172a] shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:shadow-[0_0_20px_rgba(6,182,212,0.6)]'}`}
+          >
+            <Navigation size={14} /> {isFollowingRoute ? 'Siguiendo' : 'Seguir Monitoreo'}
+          </button>
+          <button
+            onClick={onShareRoute}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded text-[11px] font-bold uppercase tracking-wider border border-[rgba(6,182,212,0.3)] text-[#06b6d4] hover:bg-[rgba(6,182,212,0.1)]"
+          >
+            <Share2 size={14} /> Compartir
+          </button>
+        </div>
+
+        {/* ADMIN CONTROLS (Edit & Delete) */}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => onEditVehicle && onEditVehicle(currentEntity)}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase tracking-wider border border-[#f59e0b] text-[#f59e0b] hover:bg-[rgba(245,158,11,0.1)] transition-colors"
+          >
+            Editar
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm(`¿Estás seguro de que deseas eliminar este ${isDevice ? 'dispositivo' : 'vehículo'}? Esta acción no se puede deshacer.`)) {
+                onDeleteVehicle && onDeleteVehicle(currentEntity.id);
+              }
+            }}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded text-[10px] font-bold uppercase tracking-wider border border-[#ef4444] text-[#ef4444] hover:bg-[rgba(239,68,68,0.1)] transition-colors"
+          >
+            Eliminar
+          </button>
         </div>
       </div>
 
-      {effectiveCategory === 'vehicles' && (
-        <div className="border-b border-[#26343b] p-4">
-          <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Alerta reciente</h3>
-          <div className="rounded-[8px] border border-[#5a4430] bg-[#2a2119] p-3">
-            <p className="text-[12px] font-medium text-[#f2d7a2]">Revisa la lista de alertas en el mapa.</p>
-            <p className="mt-1 text-[11px] text-[#aa9270]">Las alertas activas se muestran arriba del mapa.</p>
-          </div>
+      {/* STATUS STREAM BLOCK */}
+      <div className="p-4 flex-1 overflow-y-auto">
+        <div className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold mb-4 flex items-center gap-2">
+          <Activity size={12} className="text-[#06b6d4]" /> Flujo de Estado
         </div>
-      )}
 
-      {effectiveCategory === 'devices' && userLocation?.position && (
-        <div className="flex items-start gap-2 border-b border-[#26343b] px-4 py-3 text-[11px] text-[#6a8994]">
-          <MapPin size={13} className="mt-[1px] shrink-0 text-[#b8f36b]" />
-          <span>Operador: {userLocation.position.map((value) => value.toFixed(5)).join(', ')}</span>
-        </div>
-      )}
-
-      <div className="dashboard-apk-card mt-auto p-4">
-        <h3 className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Aplicación Android</h3>
-        <p className="text-[12px] font-semibold text-[#edf5ef]">APK de control GPS</p>
-        <p className="mt-1 text-[11px] text-[#6a8994]">{apkUrl ? 'Alojado y disponible' : 'Alojamiento pendiente de configurar'}</p>
-        {apkUrl && <a href={apkUrl} target="_blank" rel="noreferrer" className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#168ca4] py-2 text-center text-[11px] font-bold text-white"><Radio size={13} /> Abrir APK</a>}
+        <StatusStreamChart label="Velocidad" value={speed} color="#06b6d4" max={120} unit=" km/h" />
+        <StatusStreamChart label="Batería" value={batteryVal} color="#10b981" max={100} unit="%" />
+        <StatusStreamChart label="Precisión GPS" value={currentEntity.accuracy || 10} color="#eab308" max={50} unit=" m" />
       </div>
+
     </div>
-  )
-}
+  );
+};

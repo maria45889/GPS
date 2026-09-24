@@ -89,6 +89,43 @@ export const fleetPositions = (vehicles = []) => vehicles
   .filter((vehicle) => Array.isArray(vehicle.position) && vehicle.position.length === 2)
   .map((vehicle) => vehicle.position)
 
+export const routeAhead = (position, route, count = 14) => {
+  if (!position || !Array.isArray(route) || route.length === 0) return []
+  let best = 0
+  let bestD = Infinity
+  route.forEach((p, i) => {
+    if (!Array.isArray(p) || p.length < 2) return
+    const d = (p[0] - position[0]) ** 2 + (p[1] - position[1]) ** 2
+    if (d < bestD) {
+      bestD = d
+      best = i
+    }
+  })
+  const out = []
+  for (let k = 0; k < count; k++) {
+    const idx = (best + k) % route.length
+    out.push(route[idx])
+  }
+  return out
+}
+
+export const projectedPath = (position, bearing = 0, meters = 700, steps = 7) => {
+  if (!position || position.length < 2) return []
+  if (!Number.isFinite(position[0]) || !Number.isFinite(position[1])) return []
+  const [lat, lng] = position
+  const rad = ((Number(bearing) || 0) * Math.PI) / 180
+  const cosLat = Math.max(0.2, Math.cos((lat * Math.PI) / 180))
+  const out = []
+  for (let i = 1; i <= steps; i++) {
+    const d = (meters * i) / steps
+    out.push([
+      Number((lat + (d * Math.cos(rad)) / 111320).toFixed(6)),
+      Number((lng + (d * Math.sin(rad)) / (111320 * cosLat)).toFixed(6)),
+    ])
+  }
+  return out
+}
+
 export const deviceStatusFromLastSeen = (timestamp, now = Date.now(), timeoutMs = 90000, maxFutureMs = 300000) => {
   const lastSeen = new Date(timestamp).getTime()
   if (!Number.isFinite(lastSeen)) return 'offline'

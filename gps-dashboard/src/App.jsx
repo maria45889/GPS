@@ -31,10 +31,7 @@ function App() {
   // Web Dashboard Platform
   return (
     <AuthGate>
-      <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#0a0f14] p-4 text-slate-100 antialiased sm:p-5">
-        <div className="gps-status-pill absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full border border-[#2bd1d1]/30 bg-[#0b1d22]/80 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#b9f4f1] uppercase shadow-lg backdrop-blur-sm sm:left-auto sm:right-6 sm:translate-x-0">
-          Panel Web Guard (GPS PWA activo)
-        </div>
+      <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#0b0f19] text-slate-100 antialiased">
         <Dashboard />
       </div>
     </AuthGate>

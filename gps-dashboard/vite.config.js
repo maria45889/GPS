@@ -3,6 +3,11 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    watch: {
+      ignored: ['**/.gradle_home/**']
+    }
+  },
   build: {
     rollupOptions: {
       output: {
