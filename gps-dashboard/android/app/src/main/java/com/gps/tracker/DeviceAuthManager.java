@@ -183,34 +183,52 @@ public class DeviceAuthManager {
 
     private boolean provision() {
         try {
-            String activationCode = getActivationCode();
-            if (activationCode == null || activationCode.trim().isEmpty()) {
-                activationCode = "AUTO_PROVISION";
+            String deviceId = getDeviceId();
+            String email = "device-" + deviceId + "@local.rideguard";
+            String password = "Auto-" + deviceId.substring(0, 8) + "-Prov!";
+
+            // Try to sign in first
+            JSONObject signInBody = new JSONObject();
+            signInBody.put("email", email);
+            signInBody.put("password", password);
+            boolean signedIn = storeSession(post(baseUrl() + "/auth/v1/token?grant_type=password", signInBody));
+
+            if (!signedIn) {
+                // Not signed in, try to sign up
+                JSONObject signUpBody = new JSONObject();
+                signUpBody.put("email", email);
+                signUpBody.put("password", password);
+                JSONObject signUpRes = post(baseUrl() + "/auth/v1/signup", signUpBody);
+                if (!storeSession(signUpRes)) {
+                    android.util.Log.e("DeviceAuthManager", "Fallo signUp: " + (signUpRes != null ? signUpRes.toString() : "null"));
+                    return false;
+                }
             }
+            
+            // Now we have a session. Call provision_device_atomic
+            String token = prefs.getString(KEY_ACCESS_TOKEN, null);
+            if (token == null) return false;
 
-            JSONObject body = new JSONObject();
-            body.put("deviceId", getDeviceId());
-            body.put("activationCode", activationCode);
-            body.put("platform", "android");
-            body.put("model", Build.MODEL);
-            body.put("app_version", getAppVersion());
-            body.put("battery", JSONObject.NULL);
+            JSONObject rpcBody = new JSONObject();
+            rpcBody.put("p_device_id", deviceId);
+            rpcBody.put("p_activation_code", "AUTO_PROVISION");
+            rpcBody.put("p_auth_user_id", prefs.getString(KEY_USER_ID, ""));
 
-            JSONObject res = post(baseUrl() + "/functions/v1/provision-device", body);
-            if (res == null) return false;
-
-            String email = res.optString("email", null);
-            String password = res.optString("password", null);
-            if (email != null && password != null && !email.isEmpty() && !password.isEmpty()) {
+            JSONObject rpcRes = post(baseUrl() + "/rest/v1/rpc/provision_device_atomic", rpcBody, "Authorization", "Bearer " + token);
+            
+            if (rpcRes != null && rpcRes.optBoolean("success", false)) {
                 prefs.putString(KEY_EMAIL, email);
                 prefs.putString(KEY_PASSWORD, password);
                 clearDeviceRevoked();
                 clearActivationCode();
+                android.util.Log.i("DeviceAuthManager", "Auto-Provisioning Success");
                 return true;
+            } else {
+                android.util.Log.e("DeviceAuthManager", "RPC Failed: " + (rpcRes != null ? rpcRes.toString() : "null"));
+                return false;
             }
-            return false;
         } catch (Exception e) {
-
+            android.util.Log.e("DeviceAuthManager", "Exception in provision", e);
             return false;
         }
     }
