@@ -185,8 +185,36 @@ serve(async (req) => {
   const password = randomPassword()
 
   if (isAlreadyRegistered) {
-    await recordDbFailedAttempt(`ip:${clientIp}`);
-    return json({ error: 'Dispositivo ya registrado. Contacte a soporte para re-asignación.' }, 403)
+    // Auto-re-provisioning for development purposes
+    let authUserId = deviceExisting.data?.auth_user_id
+    if (!authUserId) {
+      const created = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        app_metadata: { role: 'device', device_id: deviceId },
+      })
+      if (created.error) return json({ error: created.error.message }, 500)
+      authUserId = created.data.user.id
+      
+      const { data: orgData } = await supabase.from('organizations').select('id').limit(1).single()
+      
+      await supabase.from('devices').update({ auth_user_id: authUserId }).eq('id', deviceId)
+    }
+
+    try {
+      const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
+      if (updated.error) throw updated.error
+      await supabase.auth.admin.signOut(authUserId, 'global')
+    } catch (error: any) {
+      console.error(`⚠️ Error al re-aprovisionar ${authUserId}:`, error)
+      await recordDbFailedAttempt(`ip:${clientIp}`)
+      return json({ error: error.message || 'Error al actualizar credenciales de dispositivo' }, 500)
+    }
+
+    await clearDbRateLimit(`ip:${clientIp}`)
+    await clearDbRateLimit(`device:${deviceId}`)
+    return json({ ok: true, deviceId, email, password, reissued: true })
   }
 
   // Primer aprovisionamiento del dispositivo
