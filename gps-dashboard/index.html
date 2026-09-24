@@ -25,6 +25,30 @@
           }
           return originalInsertBefore.apply(this, arguments);
         };
+        const originalReplaceChild = Node.prototype.replaceChild;
+        Node.prototype.replaceChild = function(newChild, oldChild) {
+          if (oldChild && oldChild.parentNode !== this) {
+            if (console) console.warn('React translation crash prevented (replaceChild).');
+            return oldChild;
+          }
+          return originalReplaceChild.apply(this, arguments);
+        };
+      }
+      
+      // React 19 usa remove() directamente en Element y CharacterData (Text)
+      if (typeof Element !== 'undefined' && Element.prototype.remove) {
+        const origRemove = Element.prototype.remove;
+        Element.prototype.remove = function() {
+          if (!this.parentNode) return;
+          return origRemove.call(this);
+        };
+      }
+      if (typeof CharacterData !== 'undefined' && CharacterData.prototype.remove) {
+        const origTextRemove = CharacterData.prototype.remove;
+        CharacterData.prototype.remove = function() {
+          if (!this.parentNode) return;
+          return origTextRemove.call(this);
+        };
       }
     </script>
   </head>
