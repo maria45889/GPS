@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react'
-import { Search, Crosshair, MapPin, Plus, AlertTriangle, Trash2 } from 'lucide-react'
+import { Search, Crosshair, MapPin, Plus, AlertTriangle, Trash2, RotateCcw } from 'lucide-react'
 import { isOnline, statusColor, signalFor, hashSpark } from './normalize'
 
-const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, userLocation, onLocateUser, onSetGeofence, alerts, onSelectAlert }) => {
+const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onResetDemos, userLocation, onLocateUser, onSetGeofence, alerts, onSelectAlert }) => {
   const [query, setQuery] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(null)
 
@@ -59,7 +59,18 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, user
       {/* Lista */}
       <div className="cmd-scroll mt-3 -mr-1 max-h-[36vh] min-h-[120px] flex-1 space-y-1.5 overflow-y-auto pr-1">
         {filtered.length === 0 && (
-          <div className="py-6 text-center text-[10px] uppercase tracking-widest text-slate-600">Sin dispositivos</div>
+          <div className="py-6 text-center text-[10px] uppercase tracking-widest text-slate-600">
+            Sin dispositivos
+            {onResetDemos && (
+              <button
+                type="button"
+                onClick={onResetDemos}
+                className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-500/25 bg-[#06b6d4]/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-cyan-300 transition-all hover:bg-[#06b6d4]/20"
+              >
+                <RotateCcw size={12} /> Restaurar demos
+              </button>
+            )}
+          </div>
         )}
         {filtered.map((entity) => {
           const isSel = entity.id === selectedId

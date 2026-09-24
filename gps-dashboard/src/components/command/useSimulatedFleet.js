@@ -6,6 +6,27 @@ const MOCK_ROUTES = [
   { id: 'SIM-CHARLIE', name: 'Charlie-05', base: [4.6289, -74.0952], radius: 0.0009, speedBase: 28, phase: 4.2 },
 ]
 
+const STORAGE_KEY = 'rg_deleted_demos'
+const storage = () => (typeof window !== 'undefined' && window.localStorage ? window.localStorage : null)
+
+export const getDeletedDemos = () => {
+  try {
+    const raw = storage()?.getItem(STORAGE_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? new Set(arr) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+const persistDeletedDemos = (deleted) => {
+  try {
+    storage()?.setItem(STORAGE_KEY, JSON.stringify([...deleted]))
+  } catch {
+    /* almacenamiento no disponible */
+  }
+}
+
 const buildRoute = (base, radius) => {
   const route = []
   const STEPS = 44
@@ -38,7 +59,10 @@ const seedUnit = (route) => ({
 })
 
 export const useSimulatedFleet = (realCount) => {
-  const [units, setUnits] = useState(() => MOCK_ROUTES.map((r) => seedUnit({ ...r, route: buildRoute(r.base, r.radius) })))
+  const [deleted, setDeleted] = useState(getDeletedDemos)
+  const [units, setUnits] = useState(() =>
+    MOCK_ROUTES.filter((r) => !getDeletedDemos().has(r.id)).map((r) => seedUnit({ ...r, route: buildRoute(r.base, r.radius) })),
+  )
 
   useEffect(() => {
     if (realCount >= 3) return undefined
@@ -48,7 +72,7 @@ export const useSimulatedFleet = (realCount) => {
       step++
       setUnits((prev) =>
         prev.map((u, i) => {
-          const r = MOCK_ROUTES[i]
+          const r = MOCK_ROUTES.find((c) => c.id === u.id) || MOCK_ROUTES[i]
           const route = prev[i]?.route || buildRoute(r.base, r.radius)
           const idx = step % route.length
           const next = route[(idx + 1) % route.length]
@@ -66,14 +90,27 @@ export const useSimulatedFleet = (realCount) => {
 
   const removeUnit = (unitId) => {
     setUnits((prev) => prev.filter((u) => u.id !== unitId))
+    setDeleted((prevIds) => {
+      const next = new Set(prevIds)
+      next.add(unitId)
+      persistDeletedDemos(next)
+      return next
+    })
+  }
+
+  const resetDemos = () => {
+    setDeleted(new Set())
+    persistDeletedDemos(new Set())
+    setUnits(MOCK_ROUTES.map((r) => seedUnit({ ...r, route: buildRoute(r.base, r.radius) })))
   }
 
   return useMemo(
     () => ({
       units: realCount >= 3 ? [] : units,
       removeUnit,
+      resetDemos,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- units se regenera cada tick; solo interesa realCount para recalcul
-    [realCount, units],
+    [realCount, units, deleted],
   )
 }
