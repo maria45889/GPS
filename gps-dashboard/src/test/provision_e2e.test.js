@@ -27,9 +27,9 @@ describe('Pruebas End-to-End de Contrato para Re-aprovisionamiento de Dispositiv
     expect(edgeFunctionCode).toContain('updateUserById');
   });
 
-  it('función edge ejecuta la función RPC check_and_record_rate_limit para limitar de forma persistente en DB', () => {
-    expect(edgeFunctionCode).toContain('supabase.rpc(\'check_and_record_rate_limit\'');
+  it('función edge ejecuta la función RPC check_rate_limit para limitar de forma persistente en DB', () => {
+    expect(edgeFunctionCode).toContain('supabase.rpc(\'check_rate_limit\'');
     expect(sqlSetupCode).toContain('create table if not exists public.provision_rate_limits');
-    expect(sqlSetupCode).toContain('create or replace function public.check_and_record_rate_limit');
+    expect(sqlSetupCode).toContain('create or replace function public.check_rate_limit');
   });
 });

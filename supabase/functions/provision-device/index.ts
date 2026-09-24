@@ -11,8 +11,17 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 )
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+// B4: ALLOWED_ORIGIN es obligatorio en producción. Si falta, el worker falla rápido
+// y la función retorna 500 en todas las solicitudes hasta que se configure.
+const CORS_ORIGIN = Deno.env.get('ALLOWED_ORIGIN')
+if (!CORS_ORIGIN) {
+  throw new Error(
+    '[provision-device] Variable de entorno ALLOWED_ORIGIN no configurada. ' +
+    'Defina el secret antes de desplegar: supabase secrets set ALLOWED_ORIGIN=https://tu-dominio.com'
+  )
+}
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': CORS_ORIGIN,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-provision-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
@@ -20,10 +29,7 @@ const corsHeaders = {
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   })
 
 // Password aleatorio legible (sin 0/O/1/l/I para evitar confusiones).
@@ -41,6 +47,7 @@ const ATTEMPT_WINDOW_MS = 15 * 60 * 1000
 const MAX_FAILED_ATTEMPTS = 5
 const attemptStore = new Map<string, { count: number; expiresAt: number }>()
 
+// Fallback en memoria: solo lectura
 function checkRateLimit(key: string): boolean {
   const now = Date.now()
   const record = attemptStore.get(key)
@@ -52,7 +59,8 @@ function checkRateLimit(key: string): boolean {
   return record.count < MAX_FAILED_ATTEMPTS
 }
 
-function recordFailedAttempt(key: string) {
+// Fallback en memoria: incremento solo en fallo
+function recordFailedAttemptMemory(key: string) {
   const now = Date.now()
   const record = attemptStore.get(key)
   if (!record || now > record.expiresAt) {
@@ -62,12 +70,24 @@ function recordFailedAttempt(key: string) {
   }
 }
 
+async function clearDbRateLimit(key: string) {
+  try {
+    const { error } = await supabase.rpc('clear_rate_limit', { p_key: key })
+    // B2: Verificar el objeto error de Supabase — no siempre lanza excepción.
+    if (error) console.warn(`clearDbRateLimit(${key}) RPC error:`, error.message)
+  } catch (e) {
+    console.warn(`clearDbRateLimit(${key}) network error:`, e)
+  }
+  // Siempre limpiar memoria (independientemente de si DB tuvo éxito)
+  attemptStore.delete(key)
+}
+
+// B3: check es SOLO LECTURA en DB. No incrementa.
 async function checkDbRateLimit(key: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase.rpc('check_and_record_rate_limit', {
+    const { data, error } = await supabase.rpc('check_rate_limit', {
       p_key: key,
       p_max_attempts: MAX_FAILED_ATTEMPTS,
-      p_window_seconds: 900,
     })
     if (!error && typeof data === 'boolean') {
       return data
@@ -78,19 +98,39 @@ async function checkDbRateLimit(key: string): Promise<boolean> {
   return checkRateLimit(key)
 }
 
+// B2: Incremento en DB solo cuando hay un fallo real.
+// recordFailedAttemptMemory se llama SOLO como fallback si la RPC falla — nunca las dos juntas.
+async function recordDbFailedAttempt(key: string) {
+  try {
+    const { error } = await supabase.rpc('record_rate_limit_failure', { p_key: key })
+    // B2: Supabase devuelve { error } sin lanzar excepción. Verificar explícitamente.
+    if (error) throw error
+    // RPC exitosa: solo la DB tiene el registro — no duplicar en memoria.
+  } catch {
+    // DB no disponible: registrar solo en memoria como fallback.
+    recordFailedAttemptMemory(key)
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: CORS_HEADERS })
   }
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown-ip'
 
-  // Validación de secreto administrativo (si se incluye header x-provision-secret debe coincidir)
+  // A8: El secreto de aprovisionamiento es OBLIGATORIO en producción.
+  // Si no está configurado, la Edge Function falla para evitar registros abiertos.
   const expectedSecret = Deno.env.get('PROVISION_SECRET')
+  if (!expectedSecret) {
+    console.error('CRITICAL: PROVISION_SECRET is not set in environment variables.')
+    return json({ error: 'Configuración del servidor incompleta. Contacte al administrador.' }, 500)
+  }
+
   const providedSecret = req.headers.get('x-provision-secret')
-  if (expectedSecret && providedSecret && providedSecret !== expectedSecret) {
-    recordFailedAttempt(`ip:${clientIp}`)
+  if (providedSecret !== expectedSecret) {
+    await recordDbFailedAttempt(`ip:${clientIp}`)
     return json({ error: 'no autorizado: secreto de aprovisionamiento invalido' }, 403)
   }
 
@@ -104,14 +144,14 @@ serve(async (req) => {
 
   const activationCode = String(body.activationCode || body.activation_code || '').trim()
   if (!activationCode) {
-    recordFailedAttempt(`ip:${clientIp}`)
+    await recordDbFailedAttempt(`ip:${clientIp}`)
     return json({ error: 'codigo de activacion es obligatorio' }, 400)
   }
 
   const rawDeviceId = String(body.deviceId ?? '').trim()
   const deviceId = rawDeviceId.slice(0, 64)
   if (!deviceId || !/^[a-zA-Z0-9_-]+$/.test(deviceId)) {
-    recordFailedAttempt(`ip:${clientIp}`)
+    await recordDbFailedAttempt(`ip:${clientIp}`)
     return json({ error: 'deviceId invalido' }, 400)
   }
 
@@ -159,9 +199,9 @@ serve(async (req) => {
     const isExpired = validCode?.expires_at ? new Date(validCode.expires_at).getTime() <= Date.now() : false
 
     if (codeErr || !validCode || isExpired) {
-      recordFailedAttempt(`ip:${clientIp}`)
-      recordFailedAttempt(`device:${deviceId}`)
-      recordFailedAttempt(`code:${activationCode}`)
+      await recordDbFailedAttempt(`ip:${clientIp}`)
+      await recordDbFailedAttempt(`device:${deviceId}`)
+      await recordDbFailedAttempt(`code:${activationCode}`)
       return json({ error: 'dispositivo ya registrado. requiere un codigo de activacion nuevo y valido para restablecer credenciales' }, 403)
     }
 
@@ -177,36 +217,34 @@ serve(async (req) => {
       authUserId = created.data.user.id
     }
 
-    // Ejecutar la RPC atómica para bloquear y consumir el código de activación en DB
-    const { data: rpcRes, error: rpcErr } = await supabase.rpc('provision_device_atomic', {
-      p_device_id: deviceId,
-      p_activation_code: activationCode,
-      p_auth_user_id: authUserId,
-    })
-
-    if (rpcErr || !rpcRes?.success) {
-      recordFailedAttempt(`ip:${clientIp}`)
-      return json({ error: rpcErr?.message || rpcRes?.error || 'error al re-aprovisionar dispositivo' }, 403)
-    }
-
-    // Cambiar la contraseña y revocar sesiones previas ANTES de responder, pero DESPUÉS de reservar el código
-    const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
-    if (updated.error) {
-      console.error(`⚠️ Error al actualizar contraseña para ${authUserId}:`, updated.error)
-      // Rollback del código de activación en caso de fallo crítico en GoTrue
-      await supabase.from('device_activation_codes').update({ used: false, used_at: null }).eq('code', activationCode).eq('used', true)
-      return json({ error: updated.error.message || 'Error al actualizar credenciales de dispositivo' }, 500)
-    }
-
     try {
+      // B7: Ejecutar la RPC atómica PRIMERO. Si falla, las credenciales anteriores siguen siendo válidas
+      // y el APK no pierde acceso. Solo si la RPC tiene éxito se cambia la contraseña.
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('provision_device_atomic', {
+        p_device_id: deviceId,
+        p_activation_code: activationCode,
+        p_auth_user_id: authUserId,
+      })
+
+      if (rpcErr || !rpcRes?.success) {
+        throw new Error(rpcErr?.message || rpcRes?.error || 'error al re-aprovisionar dispositivo en DB')
+      }
+
+      // RPC exitosa: ahora es seguro cambiar credenciales Auth
+      const updated = await supabase.auth.admin.updateUserById(authUserId, { password })
+      if (updated.error) throw updated.error
+
       const { error: signOutErr } = await supabase.auth.admin.signOut(authUserId, 'global')
-      if (signOutErr) throw signOutErr
-    } catch (signOutErr) {
-      console.error(`⚠️ Error crítico al revocar sesiones globales para ${authUserId}:`, signOutErr)
-      await supabase.from('device_activation_codes').update({ used: false, used_at: null }).eq('code', activationCode).eq('used', true)
-      return json({ error: 'Error al revocar sesiones previas del dispositivo' }, 500)
+      if (signOutErr) console.warn('signOut parcial (no fatal):', signOutErr)
+    } catch (error: any) {
+      console.error(`⚠️ Error al re-aprovisionar ${authUserId}:`, error)
+      await recordDbFailedAttempt(`ip:${clientIp}`)
+      return json({ error: error.message || 'Error al actualizar credenciales de dispositivo' }, 500)
     }
 
+    await clearDbRateLimit(`ip:${clientIp}`)
+    await clearDbRateLimit(`device:${deviceId}`)
+    await clearDbRateLimit(`code:${activationCode}`)
     return json({ ok: true, deviceId, email, password, reissued: true })
   }
 
@@ -218,7 +256,8 @@ serve(async (req) => {
     app_metadata: { role: 'device', device_id: deviceId },
   })
   if (created.error) {
-    recordFailedAttempt(`ip:${clientIp}`)
+    // B1: Era recordFailedAttempt (no existe) — corregido a recordDbFailedAttempt.
+    await recordDbFailedAttempt(`ip:${clientIp}`)
     return json({ error: created.error.message }, 500)
   }
 
@@ -229,14 +268,27 @@ serve(async (req) => {
   })
 
   if (rpcErr || !rpcRes?.success) {
-    recordFailedAttempt(`ip:${clientIp}`)
-    recordFailedAttempt(`device:${deviceId}`)
-    recordFailedAttempt(`code:${activationCode}`)
+    await recordDbFailedAttempt(`ip:${clientIp}`)
+    await recordDbFailedAttempt(`device:${deviceId}`)
+    await recordDbFailedAttempt(`code:${activationCode}`)
     if (created.data?.user?.id) {
-      await supabase.auth.admin.deleteUser(created.data.user.id)
+      // B6: Intentar eliminar el usuario Auth huérfano. Si falla, registrar en orphan_auth_users
+      // para que el operador o un job automático pueda limpiarlo.
+      const { error: deleteErr } = await supabase.auth.admin.deleteUser(created.data.user.id)
+      if (deleteErr) {
+        console.error(`⚠️ ORPHAN AUTH USER: ${created.data.user.id} (device: ${deviceId}) — eliminación fallida: ${deleteErr.message}. Registrando en orphan_auth_users.`)
+        await supabase.from('orphan_auth_users').insert({
+          auth_user_id: created.data.user.id,
+          device_id: deviceId,
+          reason: `provision_device_atomic failed: ${rpcErr?.message || rpcRes?.error || 'unknown'}. deleteUser also failed: ${deleteErr.message}`,
+        })
+      }
     }
     return json({ error: rpcErr?.message || rpcRes?.error || 'error al aprovisionar dispositivo' }, 403)
   }
 
+  await clearDbRateLimit(`ip:${clientIp}`)
+  await clearDbRateLimit(`device:${deviceId}`)
+  await clearDbRateLimit(`code:${activationCode}`)
   return json({ ok: true, deviceId, email, password })
 })

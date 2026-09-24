@@ -2,6 +2,20 @@ import { supabase, getDeviceId } from './supabase';
 
 const getCacheKey = (deviceId = getDeviceId()) => (deviceId ? `gps_tracker_cache_${deviceId}` : 'gps_tracker_cache');
 
+// B10: Generador de event_id estable a partir de los campos de la posición.
+// Permite idempotencia: reintentos con el mismo evento no crean duplicados en Supabase
+// si existe la restricción única ON (device_id, event_id).
+function generateEventId(deviceId, timestamp, latitude, longitude) {
+  const raw = `${deviceId}|${timestamp}|${latitude}|${longitude}`;
+  // Hash FNV-1a de 32 bits → cadena hexadecimal estable (sin crypto, sin dependencias externas)
+  let h = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i++) {
+    h ^= raw.charCodeAt(i);
+    h = (h * 0x01000193) >>> 0;
+  }
+  return `evt-${h.toString(16).padStart(8, '0')}`;
+}
+
 export const getCachedLocations = (deviceId = getDeviceId()) => {
   try {
     const raw = localStorage.getItem(getCacheKey(deviceId));
@@ -49,6 +63,11 @@ export const clearAllGpsCaches = () => {
   }
 };
 
+// B13: Inserción por lotes de 50 eventos en lugar de uno por uno.
+// Usa upsert con onConflict: 'event_id' para que reintentos sean idempotentes.
+// Reduce el tiempo de sincronización de O(n) roundtrips a O(n/50).
+const FLUSH_BATCH_SIZE = 50;
+
 export const flushCachedLocations = async (deviceId = getDeviceId()) => {
   if (!supabase || !deviceId) return;
   const cached = getCachedLocations(deviceId);
@@ -56,8 +75,9 @@ export const flushCachedLocations = async (deviceId = getDeviceId()) => {
 
   const remaining = [];
 
-  for (const item of cached) {
-    const payload = {
+  for (let i = 0; i < cached.length; i += FLUSH_BATCH_SIZE) {
+    const batch = cached.slice(i, i + FLUSH_BATCH_SIZE);
+    const payloads = batch.map((item) => ({
       device_id: deviceId,
       latitude: item.latitude,
       longitude: item.longitude,
@@ -65,11 +85,18 @@ export const flushCachedLocations = async (deviceId = getDeviceId()) => {
       accuracy: (item.accuracy !== null && item.accuracy !== undefined && Number.isFinite(Number(item.accuracy))) ? Number(item.accuracy) : null,
       bearing: item.bearing || null,
       timestamp: item.timestamp || new Date().toISOString(),
-    };
+      // B10: Preservar el event_id de la cola; generarlo si no existe (datos anteriores sin él).
+      event_id: item.event_id || generateEventId(deviceId, item.timestamp || '', item.latitude, item.longitude),
+    }));
 
-    const { error } = await supabase.from('gps_locations').insert(payload);
+    // onConflict: 'event_id' → duplicados por timeout de red se ignoran silenciosamente.
+    const { error } = await supabase
+      .from('gps_locations')
+      .upsert(payloads, { onConflict: 'event_id', ignoreDuplicates: true });
+
     if (error) {
-      remaining.push(item);
+      // Si el lote falla, conservar todos los ítems del lote para reintento.
+      remaining.push(...batch);
     }
   }
 
@@ -102,9 +129,13 @@ class GPSTracker {
       return;
     }
 
+    // B1 CRÍTICO: Declarar currentDeviceId ANTES del try para que el catch pueda accederlo.
+    // Si se declara dentro del try con const, el catch lanza ReferenceError y la posición se pierde.
+    let currentDeviceId = null;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const currentDeviceId = user?.app_metadata?.device_id || user?.user_metadata?.device_id;
+      currentDeviceId = user?.app_metadata?.device_id || user?.user_metadata?.device_id;
 
       // Si el usuario es un operador web sin claim de device_id provisionado, no intentamos registrarlo como dispositivo físico en la DB
       if (!currentDeviceId) {
@@ -118,7 +149,11 @@ class GPSTracker {
         };
       }
 
-      const { error } = await supabase.from('gps_locations').insert({
+      // B10: Generar event_id estable antes del insert.
+      // Reintento de red con mismo evento → mismo event_id → upsert lo ignora.
+      const eventId = generateEventId(currentDeviceId, locationData.timestamp, latitude, longitude);
+
+      const { error } = await supabase.from('gps_locations').upsert({
         device_id: currentDeviceId,
         latitude,
         longitude,
@@ -126,17 +161,23 @@ class GPSTracker {
         accuracy: locationData.accuracy,
         bearing: locationData.bearing,
         timestamp: locationData.timestamp,
-      });
+        event_id: eventId,
+      }, { onConflict: 'event_id', ignoreDuplicates: true });
 
       if (error) {
-        cacheLocation(locationData, currentDeviceId);
+        // Incluir el event_id en el ítem cacheado para que el flush lo reutilice idénticamente.
+        cacheLocation({ ...locationData, event_id: eventId }, currentDeviceId);
       } else {
         // Al enviar con éxito, intenta reenviar posiciones previamente cacheadas
         await flushCachedLocations(currentDeviceId);
       }
     } catch {
-      const deviceId = getDeviceId();
-      cacheLocation(locationData, deviceId);
+      // B1: currentDeviceId fue declarado antes del try — siempre accesible aquí aunque falle auth.
+      // Si aún es null (error ocurrió antes de resolver auth), usar getDeviceId() como último recurso.
+      const fallbackId = currentDeviceId || getDeviceId();
+      if (fallbackId) {
+        cacheLocation(locationData, fallbackId);
+      }
     }
   }
 

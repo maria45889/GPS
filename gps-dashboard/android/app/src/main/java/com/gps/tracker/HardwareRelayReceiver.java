@@ -38,15 +38,21 @@ public class HardwareRelayReceiver extends BroadcastReceiver {
         final String command = intent.getStringExtra("command");
         final long createdAt = intent.getLongExtra("created_at_ms", 0L);
 
+        final PendingResult pendingResult = goAsync();
+
         executor.execute(() -> {
-            boolean success = performPhysicalRelaySwitch(context, command);
-            Intent resultIntent = new Intent(VehicleControlReceiver.ACTION_VEHICLE_CONTROL_RESULT);
-            resultIntent.setPackage(context.getPackageName());
-            resultIntent.putExtra("command_id", commandId);
-            resultIntent.putExtra("command", command);
-            resultIntent.putExtra("success", success);
-            resultIntent.putExtra("created_at_ms", createdAt);
-            context.sendBroadcast(resultIntent);
+            try {
+                boolean success = performPhysicalRelaySwitch(context, command);
+                Intent resultIntent = new Intent(VehicleControlReceiver.ACTION_VEHICLE_CONTROL_RESULT);
+                resultIntent.setPackage(context.getPackageName());
+                resultIntent.putExtra("command_id", commandId);
+                resultIntent.putExtra("command", command);
+                resultIntent.putExtra("success", success);
+                resultIntent.putExtra("created_at_ms", createdAt);
+                context.sendBroadcast(resultIntent);
+            } finally {
+                if (pendingResult != null) pendingResult.finish();
+            }
         });
     }
 
@@ -74,6 +80,13 @@ public class HardwareRelayReceiver extends BroadcastReceiver {
 
         try {
             File gpioFile = null;
+            // P10: En builds de producción (release) el path GPIO es fijo para evitar que una
+            // configuración incorrecta escriba en hardware equivocado. customPath solo se usa en debug.
+            if (!isDebug && customPath != null && !customPath.trim().isEmpty()) {
+                Log.w(TAG, "[PRODUCCIÓN] gpio_path personalizado ignorado. Usando solo candidatos fijos.");
+                customPath = null;
+            }
+
             if (customPath != null && !customPath.trim().isEmpty()) {
                 gpioFile = new File(customPath);
             } else {

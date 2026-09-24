@@ -33,7 +33,7 @@ const buildMapEntity = (source) => ({
 
 const Dashboard = () => {
   const { vehicles: supabaseVehicles, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles()
-  const { devices: supabaseDevices, error: devicesError } = useDevices()
+  const { devices: supabaseDevices, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime } = useDevices()
   const { alerts: supabaseAlerts, error: alertsError } = useAlerts()
   const { geofences: supabaseGeofences, error: geofencesError } = useGeofences()
 
@@ -144,18 +144,24 @@ const Dashboard = () => {
   const [operationMessage, setOperationMessage] = useState('')
   const [alertFocusTrigger, setAlertFocusTrigger] = useState(null)
   const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false)
-  const commandPollIntervalRef = useRef(null)
+  const commandPollTimeoutRef = useRef(null)
 
   useEffect(() => {
     return () => {
-      if (commandPollIntervalRef.current) clearInterval(commandPollIntervalRef.current)
+      if (commandPollTimeoutRef.current) clearTimeout(commandPollTimeoutRef.current)
     }
   }, [])
 
   const handleLogout = async () => {
-    localStorage.removeItem('gps_dev_admin')
-    clearAllGpsCaches()
-    if (supabase) await supabase.auth.signOut()
+    // B4: signOut puede rechazar (red caída, sesión expirada) — siempre limpiar estado local.
+    try {
+      localStorage.removeItem('gps_dev_admin')
+      clearAllGpsCaches()
+      if (supabase) await supabase.auth.signOut()
+    } catch (err) {
+      console.error('Error al cerrar sesión:', err)
+      // Continuar — localStorage y caché ya están limpios.
+    }
   }
 
   // --- Listas por categoría ---
@@ -313,7 +319,18 @@ const Dashboard = () => {
     setIsVehicleControlBusy(true)
     setSelectedEntity((prev) => (prev ? { ...prev, controlState: 'command_pending' } : null))
 
-    const commandResult = await sendVehicleCommand(selectedEntity.id, command, selectedEntity.deviceId || null)
+    let commandResult
+    try {
+      commandResult = await sendVehicleCommand(selectedEntity.id, command, selectedEntity.deviceId || null)
+    } catch (err) {
+      // C5: sendVehicleCommand puede rechazar (withAuthRetry relanza en fallo de red).
+      // Sin este catch, isVehicleControlBusy queda true para siempre.
+      setOperationMessage(`Error al enviar comando ${command}: ${err?.message || 'Error de red'}`)
+      setSelectedEntity((prev) => (prev ? { ...prev, controlState: undefined } : null))
+      setIsVehicleControlBusy(false)
+      return
+    }
+
     if (commandResult.error) {
       setOperationMessage(`Error al registrar comando ${command}: ${commandResult.error.message || 'Falló envío'}`)
       setSelectedEntity((prev) => (prev ? { ...prev, controlState: undefined } : null))
@@ -330,56 +347,78 @@ const Dashboard = () => {
     if (commandResult.commandId && supabase) {
       const commandId = commandResult.commandId
       let attempts = 0
-      const maxAttempts = 30 // 30 intentos * 2s = 60s max
-      if (commandPollIntervalRef.current) {
-        clearInterval(commandPollIntervalRef.current)
+      const maxAttempts = 30 // 30 intentos × 2 s = 60 s max
+      if (commandPollTimeoutRef.current) {
+        clearTimeout(commandPollTimeoutRef.current)
+        commandPollTimeoutRef.current = null
       }
-      commandPollIntervalRef.current = setInterval(async () => {
-        attempts++
-        try {
-          const res = await withAuthRetry(async () => {
-            return await supabase
-              .from('vehicle_commands')
-              .select('status')
-              .eq('id', commandId)
-              .maybeSingle()
-          })
-          const data = res?.data
-          const error = res?.error
 
-          if (!error && data) {
-            if (data.status === 'received') {
-              setOperationMessage(`Comando ${command} recibido por el APK. Ejecutando relé...`)
-            } else if (data.status === 'done') {
-              clearInterval(commandPollIntervalRef.current)
-              commandPollIntervalRef.current = null
-              setOperationMessage(`✅ Comando ${command} ejecutado exitosamente en el relé físico.`)
-              setIsVehicleControlBusy(false)
-              setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-              return
-            } else if (data.status === 'failed') {
-              clearInterval(commandPollIntervalRef.current)
-              commandPollIntervalRef.current = null
-              setOperationMessage(`❌ Falló la ejecución del comando ${command} en el dispositivo.`)
+      const schedulePoll = () => {
+        commandPollTimeoutRef.current = setTimeout(async () => {
+          attempts++
+          try {
+            const res = await withAuthRetry(async () =>
+              supabase
+                .from('vehicle_commands')
+                .select('status')
+                .eq('id', commandId)
+                .maybeSingle()
+            )
+            const data = res?.data
+            const error = res?.error
+
+            if (!error && data) {
+              if (data.status === 'received') {
+                setOperationMessage(`Comando ${command} recibido por el APK. Ejecutando relé...`)
+              } else if (data.status === 'done') {
+                commandPollTimeoutRef.current = null
+                setOperationMessage(`✅ Comando ${command} ejecutado exitosamente en el relé físico.`)
+                setIsVehicleControlBusy(false)
+                setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
+                return
+              } else if (data.status === 'failed') {
+                commandPollTimeoutRef.current = null
+                setOperationMessage(`❌ Falló la ejecución del comando ${command} en el dispositivo.`)
+                setIsVehicleControlBusy(false)
+                setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
+                return
+              }
+            }
+          } catch (err) {
+            // P17: Terminar el poll inmediatamente en errores no transitorios.
+            // Errores de autenticación o servidor no se van a resolver solos con reintentos.
+            const status = err?.status ?? err?.code
+            const isFatal = status === 401 || status === 403 || status === 404
+            if (isFatal) {
+              commandPollTimeoutRef.current = null
+              const msg = status === 401 || status === 403
+                ? `⚠️ Sesión expirada o sin permisos. Recarga la página.`
+                : `⚠️ Comando ${command} no encontrado. Es posible que haya sido cancelado.`
+              setOperationMessage(msg)
               setIsVehicleControlBusy(false)
               setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
               return
             }
+            // Errores transitorios (red, timeout): continuar reintentando
           }
-        } catch {
-          // Ignorar errores temporales de polling
-        }
 
-        if (attempts >= maxAttempts) {
-          clearInterval(commandPollIntervalRef.current)
-          commandPollIntervalRef.current = null
-          setOperationMessage(`⚠️ Tiempo de espera agotado esperando confirmación del comando ${command}.`)
-          setIsVehicleControlBusy(false)
-          setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-        }
-      }, 2000)
+          if (attempts >= maxAttempts) {
+            commandPollTimeoutRef.current = null
+            setOperationMessage(`⚠️ Tiempo de espera agotado esperando confirmación del comando ${command}.`)
+            setIsVehicleControlBusy(false)
+            setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
+            return
+          }
+
+          // Seguir sondeando solo si no terminó
+          schedulePoll()
+        }, 2000)
+      }
+      schedulePoll()
     } else {
-      setTimeout(() => {
+      // M3: El timeout de liberación de busy también necesita ser cancelable.
+      commandPollTimeoutRef.current = setTimeout(() => {
+        commandPollTimeoutRef.current = null
         setIsVehicleControlBusy(false)
         setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
       }, 5000)
@@ -395,6 +434,13 @@ const Dashboard = () => {
       setIsVehicleControlBusy(false)
       return
     }
+
+    if (result.remote && refetchVehicles) {
+      // B14: Confirmar el estado en el servidor ANTES de actualizar el estado local.
+      // Esto evita ocultar un vehículo que aún existe si el backend reportó éxito parcial.
+      await refetchVehicles()
+    }
+
     setLocalVehicles((prev) => {
       const remaining = prev.filter((v) => v.id !== vehicleId)
       setSelectedEntity(remaining[0] || null)
@@ -403,9 +449,6 @@ const Dashboard = () => {
     })
     setOperationMessage(result.remote ? 'Vehículo eliminado' : 'Eliminado del panel local')
     setIsVehicleControlBusy(false)
-    if (result.remote && refetchVehicles) {
-      refetchVehicles()
-    }
   }
 
   // --- Seguir ruta ---
@@ -446,9 +489,14 @@ const Dashboard = () => {
   const lastSyncLabel = useMemo(() => {
     if (activeNetworkError) return 'Sin conexión (Desactualizado)'
     if (category === 'vehicles' && vehiclesStale) return 'Sin conexión (Desactualizado)'
+    if (category === 'devices' && devicesStale) return 'Sin conexión (Desactualizado)'
     
     if (category === 'vehicles' && vehiclesSyncTime) {
       const date = new Date(vehiclesSyncTime)
+      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    }
+    if (category === 'devices' && devicesSyncTime) {
+      const date = new Date(devicesSyncTime)
       return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
     }
 
@@ -457,7 +505,7 @@ const Dashboard = () => {
     if (lastUpdate === 'En línea') return 'En línea'
     if (lastUpdate === 'Ahora') return 'Actualizado'
     return lastUpdate
-  }, [activeNetworkError, selectedEntity?.lastUpdate, category, vehiclesStale, vehiclesSyncTime])
+  }, [activeNetworkError, selectedEntity?.lastUpdate, category, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime])
 
   // --- Entidades para el mapa ---
   const mapEntities = useMemo(

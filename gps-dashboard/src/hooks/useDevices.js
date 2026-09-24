@@ -18,9 +18,12 @@ export const useDevices = () => {
   const [devices, setDevices] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [isStale, setIsStale] = useState(false)
+  const [lastSyncTime, setLastSyncTime] = useState(null)
   const reqSeqRef = useRef(0)
   const isFetchingRef = useRef(false)
   const pendingRefetchRef = useRef(false)
+  const lastSyncTimeRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -60,6 +63,9 @@ export const useDevices = () => {
         if (!cancelled && currentSeq === reqSeqRef.current) {
           setDevices(result)
           setError(null)
+          setIsStale(false)
+          lastSyncTimeRef.current = Date.now()
+          setLastSyncTime(Date.now())
         }
       } catch (err) {
         if (!cancelled && currentSeq === reqSeqRef.current) {
@@ -92,6 +98,15 @@ export const useDevices = () => {
       if (!cancelled) loadDevices()
     }, 30000)
 
+    // Evaluador de stale por tiempo (cada 5 segundos evalúa si pasaron más de 45 segundos)
+    const staleInterval = setInterval(() => {
+      if (!cancelled && lastSyncTimeRef.current) {
+        if (Date.now() - lastSyncTimeRef.current > 45000) {
+          setIsStale(true)
+        }
+      }
+    }, 5000)
+
     // Re-sincronizar al volver a la pestaña o reactivar la app en móvil
     const handleFocusOrVisibility = () => {
       if (!cancelled && document.visibilityState !== 'hidden') {
@@ -123,6 +138,7 @@ export const useDevices = () => {
       cancelled = true
       if (debounceTimer) clearTimeout(debounceTimer)
       clearInterval(pollInterval)
+      clearInterval(staleInterval)
       if (typeof window !== 'undefined') {
         window.removeEventListener('focus', handleFocusOrVisibility)
         document.removeEventListener('visibilitychange', handleFocusOrVisibility)
@@ -133,5 +149,5 @@ export const useDevices = () => {
     }
   }, [])
 
-  return { devices, isLoading, error }
+  return { devices, isLoading, error, isStale, lastSyncTime }
 }

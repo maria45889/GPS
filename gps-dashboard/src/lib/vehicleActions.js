@@ -68,7 +68,11 @@ export const deleteVehicle = async (vehicleId) => {
         return { remote: false, error: new Error('No hay sesión activa') };
       }
 
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL || 'https://tu-proyecto.supabase.co'}/functions/v1/delete-device-user`, {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl) {
+        throw new Error('Configuración de Supabase URL no encontrada');
+      }
+      const response = await fetch(`${supabaseUrl}/functions/v1/delete-device-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -80,7 +84,11 @@ export const deleteVehicle = async (vehicleId) => {
       const responseData = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(responseData.error || 'Error al eliminar el vehículo y dispositivo de forma segura');
+        // B13: Preservar el código HTTP en el error para que withAuthRetry
+        // pueda detectar 401 y renovar el token correctamente.
+        const err = new Error(responseData.error || 'Error al eliminar el vehículo y dispositivo de forma segura')
+        err.status = response.status
+        throw err
       }
 
       return { remote: true };

@@ -7,8 +7,8 @@ android {
         applicationId "com.gps.tracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.1"
+        versionCode 3
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -109,15 +109,16 @@ task ensureSupabaseConfig {
 
         def configFile = file('src/main/res/values/supabase_config.xml')
         if (!configFile.exists()) {
+            if (!envUrl || !envKey) {
+                throw new GradleException("ERROR DE CONFIGURACIÓN: supabase_config.xml no existe y SUPABASE_URL / SUPABASE_ANON_KEY no están definidas. No se generará configuración con valores por defecto.")
+            }
             configFile.parentFile.mkdirs()
-            def supabaseUrl = envUrl ?: 'https://wsmqgjcfheraxorljhjc.supabase.co'
-            def supabaseKey = envKey ?: 'sb_publishable_hbG191sqB0OuXaUHZrHEFQ_uP594pS2'
             configFile.text = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="supabase_url" translatable="false">${supabaseUrl}</string>
-    <string name="supabase_publishable_key" translatable="false">${supabaseKey}</string>
+    <string name="supabase_url" translatable="false">${envUrl}</string>
+    <string name="supabase_publishable_key" translatable="false">${envKey}</string>
 </resources>"""
-            println("Generado supabase_config.xml de forma automática para la compilación del APK.")
+            println("Generado supabase_config.xml desde variables de entorno.")
         }
     }
 }

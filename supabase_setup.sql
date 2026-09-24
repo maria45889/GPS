@@ -93,7 +93,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.current_profile_role() in ('admin', 'owner');
+  -- B4: Aceptar también service_role para que pg_cron y RPCs internas puedan
+  -- llamar a delete_vehicle_cascade y reconcile_pending_deletions sin fallar.
+  -- current_role = 'service_role' cuando se invoca vía pg_cron o service_role JWT.
+  select public.current_profile_role() in ('admin', 'owner')
+      or current_role = 'service_role';
 $$;
 
 create or replace function public.protect_profile_fields()
@@ -151,13 +155,37 @@ create index if not exists gps_locations_device_timestamp_idx
 create index if not exists gps_locations_org_device_ts_idx
   on public.gps_locations (organization_id, device_id, timestamp desc);
 
+-- C1: Índice único NO parcial sobre (device_id, event_id).
+-- NULL != NULL en SQL → múltiples filas con event_id NULL conviven sin conflicto.
+-- Un índice parcial (WHERE event_id IS NOT NULL) impide que PostgREST resuelva
+-- el ON CONFLICT, lo que causa error 42P10 y que NINGUNA posición llegue a la DB.
 create unique index if not exists gps_locations_device_event_idx
-  on public.gps_locations (device_id, event_id)
-  where event_id is not null;
+  on public.gps_locations (device_id, event_id);
 
 alter table public.gps_locations enable row level security;
 
+-- C7: FORCE ROW LEVEL SECURITY garantiza que las suscripciones de Supabase Realtime
+-- (que se conectan como owner, saltando RLS por defecto) apliquen las policies.
+-- Sin esto, cualquier suscriptor ve filas de TODAS las organizaciones.
+alter table public.gps_locations force row level security;
+
 alter table public.gps_locations replica identity full;
+
+-- B6: Tabla para rastrear usuarios Auth huérfanos que no pudieron eliminarse automáticamente.
+-- Se inserta cuando provision-device crea un usuario Auth pero la RPC falla Y la eliminación
+-- del usuario también falla. Permite limpieza manual o automatizada.
+create table if not exists public.orphan_auth_users (
+  id          uuid primary key default gen_random_uuid(),
+  auth_user_id uuid not null,
+  device_id   text,
+  reason      text,
+  created_at  timestamptz not null default now()
+);
+
+-- Solo service_role puede leer/escribir (no exponer a clientes).
+alter table public.orphan_auth_users enable row level security;
+revoke all on public.orphan_auth_users from public, anon, authenticated;
+grant all on public.orphan_auth_users to service_role;
 
 do $$
 begin
@@ -211,8 +239,9 @@ drop policy if exists "device_activation_codes_admin_all" on public.device_activ
 create policy "device_activation_codes_admin_all"
   on public.device_activation_codes for all
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  -- A7: Filtrar por organization_id para que un admin de la org A no toque códigos de la org B.
+  using (public.is_admin() and organization_id = public.current_user_org_id())
+  with check (public.is_admin() and organization_id = public.current_user_org_id());
 
 -- =====================================================================
 -- Procedimiento atómico de aprovisionamiento de dispositivos (Restringido a service_role)
@@ -312,7 +341,9 @@ alter table public.provision_rate_limits enable row level security;
 revoke all on public.provision_rate_limits from public, anon, authenticated;
 grant all on public.provision_rate_limits to service_role;
 
-create or replace function public.check_and_record_rate_limit(
+-- B3: check_rate_limit ahora es SOLO LECTURA. No incrementa.
+-- Solo registra fallo quien llama a record_rate_limit_failure.
+create or replace function public.check_rate_limit(
   p_key text,
   p_max_attempts int default 5,
   p_window_seconds int default 900
@@ -323,30 +354,63 @@ security definer
 set search_path = public
 as $$
 declare
-  rec record;
   now_ts timestamptz := now();
+  v_attempts int;
 begin
+  -- Limpiar expirados (efecto secundario mínimo aceptable)
   delete from public.provision_rate_limits where expires_at < now_ts;
 
-  select * into rec from public.provision_rate_limits where key = p_key for update;
+  -- Solo leer, sin incrementar
+  select attempts into v_attempts
+  from public.provision_rate_limits
+  where key = p_key and expires_at >= now_ts;
 
   if not found then
-    insert into public.provision_rate_limits (key, attempts, expires_at)
-    values (p_key, 1, now_ts + (p_window_seconds || ' seconds')::interval);
-    return true;
-  elsif rec.attempts >= p_max_attempts then
-    return false;
-  else
-    update public.provision_rate_limits
-    set attempts = attempts + 1
-    where key = p_key;
-    return true;
+    return true; -- Sin registro = permitido
   end if;
+
+  return v_attempts < p_max_attempts;
 end;
 $$;
 
-revoke execute on function public.check_and_record_rate_limit(text, int, int) from public, anon, authenticated;
-grant execute on function public.check_and_record_rate_limit(text, int, int) to service_role;
+create or replace function public.clear_rate_limit(
+  p_key text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.provision_rate_limits where key = p_key;
+end;
+$$;
+
+-- B3: record_rate_limit_failure ahora realmente incrementa el contador.
+-- Se llama ÚNICAMENTE cuando una solicitud falla.
+create or replace function public.record_rate_limit_failure(
+  p_key text,
+  p_window_seconds int default 900
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.provision_rate_limits (key, attempts, expires_at)
+  values (p_key, 1, now() + (p_window_seconds || ' seconds')::interval)
+  on conflict (key) do update
+  set attempts = public.provision_rate_limits.attempts + 1;
+end;
+$$;
+
+revoke execute on function public.check_rate_limit(text, int, int) from public, anon, authenticated;
+grant execute on function public.check_rate_limit(text, int, int) to service_role;
+revoke execute on function public.clear_rate_limit(text) from public, anon, authenticated;
+grant execute on function public.clear_rate_limit(text) to service_role;
+revoke execute on function public.record_rate_limit_failure(text, int) from public, anon, authenticated;
+grant execute on function public.record_rate_limit_failure(text, int) to service_role;
 
 
 create or replace function public.set_gps_location_org_id()
@@ -462,29 +526,13 @@ create index if not exists vehicle_commands_device_status_idx
 
 alter table public.vehicle_commands enable row level security;
 
+-- C2: Las policies que referencian public.vehicles (definida en ~l.759) y
+-- current_device_id() (definida en ~l.995) se crean DESPUÉS de esas definiciones.
+-- Aquí solo se borran si existían de una ejecución anterior, para que el script
+-- sea ejecutable desde cero sin errores de dependencia.
 drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
-create policy "vehicle_commands_authenticated_insert"
-  on public.vehicle_commands for insert
-  to authenticated
-  with check (
-    public.is_operator()
-    and (organization_id = public.current_user_org_id())
-    and exists (
-      select 1 from public.vehicles v
-      where v.id = vehicle_commands.vehicle_id
-        and v.device_id = vehicle_commands.device_id
-        and v.organization_id = public.current_user_org_id()
-    )
-  );
-
 drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
-create policy "vehicle_commands_authenticated_read"
-  on public.vehicle_commands for select
-  to authenticated
-  using (
-    (public.has_profile() and organization_id = public.current_user_org_id())
-    or device_id = public.current_device_id()
-  );
+-- Las policies se recrean después de que vehicles y current_device_id() están definidos.
 
 alter table public.vehicle_commands replica identity full;
 
@@ -607,7 +655,7 @@ begin
   where (
     (status = 'pending' and created_at < (now() - (p_timeout_minutes || ' minutes')::interval))
     or
-    (status = 'received' and coalesce(acknowledged_at, updated_at, created_at) < (now() - (p_timeout_minutes || ' minutes')::interval))
+    (status = 'received' and coalesce(acknowledged_at, created_at) < (now() - (p_timeout_minutes || ' minutes')::interval))
   );
 
   get diagnostics affected_count = row_count;
@@ -677,8 +725,14 @@ alter table public.devices add column if not exists battery smallint;
 alter table public.devices add column if not exists label text;
 alter table public.devices add column if not exists location_status text;
 alter table public.devices add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
+alter table public.devices add column if not exists auth_user_id uuid references auth.users(id) on delete set null;
+-- B6: flag para eliminación segura. Marcado antes de borrar Auth; limpiado por la cascada SQL.
+alter table public.devices add column if not exists deletion_pending boolean not null default false;
 
 alter table public.devices enable row level security;
+
+-- C7: FORCE ROW LEVEL SECURITY para Realtime.
+alter table public.devices force row level security;
 
 alter table public.devices replica identity full;
 
@@ -817,6 +871,9 @@ begin
   end if;
 end $$;
 
+-- C7: FORCE ROW LEVEL SECURITY para vehicles — Realtime usaría owner sin esto.
+alter table public.vehicles force row level security;
+
 -- =====================================================================
 -- Alertas
 -- =====================================================================
@@ -870,6 +927,22 @@ create policy "alerts_operator_update"
 
 create index if not exists alerts_timestamp_idx on public.alerts (timestamp desc);
 
+-- C7: Realtime de alertas sin fuga entre orgs.
+alter table public.alerts force row level security;
+
+-- A11: Agregar alerts a la publicación de Realtime (el frontend se suscribe pero la tabla no estaba).
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'alerts'
+  ) then
+    alter publication supabase_realtime add table public.alerts;
+  end if;
+end $$;
+
 -- =====================================================================
 -- Geocercas
 -- =====================================================================
@@ -905,11 +978,47 @@ create policy "geofences_admin_all"
   using (public.is_admin() and organization_id = public.current_user_org_id())
   with check (public.is_admin() and organization_id = public.current_user_org_id());
 
+-- C7: Realtime de geocercas sin fuga entre orgs.
+alter table public.geofences force row level security;
+
+-- A11: Agregar geofences a la publicación de Realtime.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'geofences'
+  ) then
+    alter publication supabase_realtime add table public.geofences;
+  end if;
+end $$;
+
 -- =====================================================================
 -- Login por dispositivo (multitenant)
 -- =====================================================================
 
-alter table public.devices add column if not exists auth_user_id uuid references auth.users(id) on delete cascade;
+-- P8: Migración explícita de FK auth_user_id: CASCADE → SET NULL.
+-- ADD COLUMN IF NOT EXISTS no modifica constraints existentes, por lo que bases antiguas
+-- pueden tener ON DELETE CASCADE. Este bloque normaliza el comportamiento.
+do $$ begin
+  -- Detectar y eliminar la constraint antigua (ON DELETE CASCADE)
+  if exists (
+    select 1 from information_schema.referential_constraints rc
+    join information_schema.key_column_usage kcu
+      on kcu.constraint_name = rc.constraint_name
+    where kcu.table_name = 'devices'
+      and kcu.column_name = 'auth_user_id'
+      and rc.delete_rule = 'CASCADE'
+  ) then
+    alter table public.devices drop constraint if exists devices_auth_user_id_fkey;
+    alter table public.devices
+      add constraint devices_auth_user_id_fkey
+      foreign key (auth_user_id) references auth.users(id) on delete set null;
+  end if;
+end $$;
+
+alter table public.devices add column if not exists auth_user_id uuid references auth.users(id) on delete set null;
 create unique index if not exists devices_auth_user_id_idx
   on public.devices (auth_user_id)
   where auth_user_id is not null;
@@ -973,7 +1082,36 @@ create policy "devices_device_insert"
   to authenticated
   with check (id = public.current_device_id() and auth_user_id = auth.uid());
 
--- Trigger para proteger inmutabilidad de estructura u organización en dispositivos
+-- C2 (deferred): Recrear las policies de vehicle_commands que referencian public.vehicles
+-- y current_device_id() — ambas ya definidas en este punto del script.
+drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
+create policy "vehicle_commands_authenticated_insert"
+  on public.vehicle_commands for insert
+  to authenticated
+  with check (
+    public.is_operator()
+    and (organization_id = public.current_user_org_id())
+    and exists (
+      select 1 from public.vehicles v
+      where v.id = vehicle_commands.vehicle_id
+        and v.device_id = vehicle_commands.device_id
+        and v.organization_id = public.current_user_org_id()
+    )
+  );
+
+drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
+create policy "vehicle_commands_authenticated_read"
+  on public.vehicle_commands for select
+  to authenticated
+  using (
+    (public.has_profile() and organization_id = public.current_user_org_id())
+    or device_id = public.current_device_id()
+  );
+
+-- C7: FORCE ROW LEVEL SECURITY para vehicle_commands (Realtime).
+alter table public.vehicle_commands force row level security;
+
+
 create or replace function public.protect_device_structural_fields()
 returns trigger
 language plpgsql
@@ -997,12 +1135,11 @@ create trigger trg_protect_device_structural_fields
   before update on public.devices
   for each row execute function public.protect_device_structural_fields();
 
-drop policy if exists "devices_device_update" on public.devices;
-create policy "devices_device_update"
-  on public.devices for update
-  to authenticated
-  using (id = public.current_device_id() and auth_user_id = auth.uid())
-  with check (id = public.current_device_id() and auth_user_id = auth.uid());
+-- B1: Los dispositivos NO pueden hacer UPDATE directo de su propia fila.
+-- Solo pueden actualizar telemetría a través de la RPC update_device_telemetry(),
+-- que está definida con security definer y controla exactamente qué campos puede tocar.
+-- Se elimina esta política para evitar que un JWT comprometido modifique status, deletion_pending, etc.
+-- (política eliminada intencionalmente)
 
 drop policy if exists "devices_admin_insert" on public.devices;
 create policy "devices_admin_insert"
@@ -1100,17 +1237,24 @@ begin
     return new;
   end if;
 
-  select id into target_org_id from public.organizations order by created_at limit 1;
-
-  if target_org_id is null then
-    insert into public.organizations (name)
-    values ('Organización Principal')
-    returning id into target_org_id;
-  end if;
-
-  insert into public.profiles (user_id, organization_id, full_name, role)
-  values (new.id, target_org_id, coalesce(split_part(new.email, '@', 1), 'Usuario'), 'viewer')
-  on conflict (user_id) do nothing;
+  -- C6 SEGURIDAD: NO auto-asignar la primera organización a usuarios nuevos.
+  -- Un usuario que se registra por sí mismo NO debe poder leer flota ajena.
+  -- La asignación de organización debe hacerse SOLO por invitación de un admin.
+  -- Los admins otorgan acceso mediante un INSERT directo en profiles con el org_id correcto.
+  --
+  -- Si esta lógica se comenta, cualquier persona puede registrarse y ver toda la flota
+  -- de la primera organización creada (IDOR total).
+  --
+  -- Para entornos de desarrollo de instancia única donde el comportamiento anterior
+  -- es intencional, descomentar el bloque siguiente:
+  --
+  -- select id into target_org_id from public.organizations order by created_at limit 1;
+  -- if target_org_id is null then
+  --   insert into public.organizations (name) values ('Organización Principal') returning id into target_org_id;
+  -- end if;
+  -- insert into public.profiles (user_id, organization_id, full_name, role)
+  -- values (new.id, target_org_id, coalesce(split_part(new.email, '@', 1), 'Usuario'), 'viewer')
+  -- on conflict (user_id) do nothing;
 
   return new;
 end;
@@ -1166,7 +1310,7 @@ begin
     where device_id = v_device_id;
 
     update public.vehicle_commands
-    set status = 'failed', updated_at = now()
+    set status = 'failed'
     where device_id = v_device_id and status in ('pending', 'received');
   end if;
 
@@ -1210,3 +1354,88 @@ begin
     update public.vehicle_commands set organization_id = default_org_id where organization_id is null;
   end if;
 end $$;
+
+-- =====================================================================
+-- B4/B12: Reconciliación de eliminaciones pendientes
+-- Cierra el gap donde deletion_pending = true queda sin finalizar si
+-- falla algún paso de la eliminación distribuida en delete-device-user.
+-- La función usa vehicle_id del registro (no auth_user_id) para que
+-- funcione incluso después de que Auth fue eliminado exitosamente.
+-- =====================================================================
+create or replace function public.reconcile_pending_deletions()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  rec record;
+  reconciled int := 0;
+  rpc_result jsonb;
+begin
+  for rec in
+    -- C3: device_registry tiene vehicle_id; devices NO.
+    select d.id as device_id, dr.vehicle_id, d.auth_user_id, d.organization_id
+    from public.devices d
+    left join public.device_registry dr on dr.device_id = d.id
+    where d.deletion_pending = true
+    order by d.updated_at asc
+    limit 50  -- Procesar máximo 50 por llamada para evitar timeouts
+  loop
+    begin
+      -- Caso 1: auth_user_id ya es NULL (Auth fue eliminado, faltó la RPC SQL).
+      -- Ejecutar delete_vehicle_cascade si hay vehicle_id pendiente.
+      if rec.vehicle_id is not null then
+        select public.delete_vehicle_cascade(rec.vehicle_id) into rpc_result;
+        if rpc_result->>'success' = 'true' or
+           (rpc_result->>'error' is not null and rpc_result->>'error' like '%no encontrado%') then
+          -- A10: Limpiar deletion_pending explícitamente para evitar reproceso infinito.
+          update public.devices set deletion_pending = false where id = rec.device_id;
+          reconciled := reconciled + 1;
+        end if;
+      else
+        -- No hay vehículo asociado: solo eliminar el registro del dispositivo.
+        delete from public.devices where id = rec.device_id;
+        reconciled := reconciled + 1;
+      end if;
+
+    exception when others then
+      -- Registrar pero continuar con el siguiente registro.
+      raise warning 'reconcile_pending_deletions: error procesando device_id=% vehicle_id=%: %',
+        rec.device_id, rec.vehicle_id, sqlerrm;
+    end;
+  end loop;
+
+  return reconciled;
+end;
+$$;
+
+revoke execute on function public.reconcile_pending_deletions() from public, anon, authenticated;
+grant execute on function public.reconcile_pending_deletions() to service_role;
+
+-- B5: Programar reconciliación en un bloque DO para que un error de pg_cron
+-- no aborte el script completo de configuración.
+do $$
+begin
+  create extension if not exists pg_cron;
+
+  -- Upsert del cron: eliminar antes de recrear (idempotente).
+  begin
+    perform cron.unschedule('reconcile-pending-deletions');
+  exception when others then
+    null; -- El schedule no existía todavía, ignorar.
+  end;
+
+  perform cron.schedule(
+    'reconcile-pending-deletions',
+    '*/15 * * * *',
+    $$select public.reconcile_pending_deletions()$$
+  );
+exception when others then
+  raise notice 'pg_cron no disponible o no instalado: %. La reconciliación debe invocarse manualmente con: SELECT public.reconcile_pending_deletions();', sqlerrm;
+end $$;
+
+-- Para invocar manualmente desde service_role:
+-- SELECT public.reconcile_pending_deletions();
+
+

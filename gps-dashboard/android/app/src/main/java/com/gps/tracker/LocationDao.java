@@ -13,6 +13,18 @@ public interface LocationDao {
     @Insert
     void insert(LocationEntity location);
 
+    @Insert
+    void insertAll(List<LocationEntity> locations);
+
+    // B1: Inserción que ignora conflictos de clave única (sourceTsKey).
+    // Usada en migración para que re-ejecuciones sean idempotentes.
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
+    void insertAllIgnoreConflict(List<LocationEntity> locations);
+
+    // B9: Contar TODOS los registros (migrados y normales) para calcular correctamente el presupuesto de slots.
+    @Query("SELECT COUNT(*) FROM offline_locations")
+    int getTotalCount();
+
     @Query("SELECT * FROM offline_locations ORDER BY id ASC LIMIT :limit")
     List<LocationEntity> getOldest(int limit);
 
@@ -31,5 +43,15 @@ public interface LocationDao {
             deleteOldest();
         }
         insert(location);
+    }
+
+    @Transaction
+    default void insertAllWithLimit(List<LocationEntity> locations, int limit) {
+        for (LocationEntity loc : locations) {
+            if (getCount() >= limit) {
+                deleteOldest();
+            }
+            insert(loc);
+        }
     }
 }
