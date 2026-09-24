@@ -1293,6 +1293,10 @@ begin
   end if;
 
   v_org_id := public.current_user_org_id();
+  if current_role = 'service_role' then
+    select organization_id into v_org_id from public.vehicles where id = p_vehicle_id;
+  end if;
+
   if v_org_id is null then
     return jsonb_build_object('success', false, 'error', 'Acceso denegado: Organización no encontrada');
   end if;
