@@ -12,11 +12,26 @@ function App() {
   const dashboard = <Dashboard />;
 
   return (
-    <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#0a0f14] p-4 text-slate-100 antialiased sm:p-5">
-      <div className="gps-status-pill pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#2bd1d1]/30 bg-[#0b1d22]/80 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#b9f4f1] uppercase shadow-lg backdrop-blur-sm">
+    <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#0a0f14] p-4 text-slate-100 antialiased sm:p-5 flex items-center justify-center flex-col text-center">
+      <div className="gps-status-pill absolute left-4 top-4 z-20 rounded-full border border-[#2bd1d1]/30 bg-[#0b1d22]/80 px-3 py-1.5 text-[10px] font-medium tracking-[0.18em] text-[#b9f4f1] uppercase shadow-lg backdrop-blur-sm">
         {gpsStatus}
       </div>
-      {isNativePlatform ? dashboard : <AuthGate>{dashboard}</AuthGate>}
+      
+      {isNativePlatform ? (
+        <div className="flex flex-col items-center gap-6 p-8 rounded-2xl bg-[#0b1d22]/50 border border-[#2bd1d1]/20">
+          <div className="w-24 h-24 rounded-full bg-[#2bd1d1]/10 flex items-center justify-center animate-pulse">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2bd1d1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-[#b9f4f1] mb-2">Rastreo GPS Activo</h1>
+            <p className="text-slate-400 text-sm max-w-[250px]">Este dispositivo está siendo monitoreado y enviando su ubicación en segundo plano.</p>
+          </div>
+        </div>
+      ) : (
+        <AuthGate><Dashboard /></AuthGate>
+      )}
     </div>
   );
 }
