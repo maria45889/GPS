@@ -87,13 +87,13 @@ export const RightSidebarPanel = ({
           </div>
         </div>
         <button type="button" onClick={onLocateUser} className="right-panel-action-button mt-3">
-          <Navigation size={14} /> Mi ubicación
+          <Navigation size={14} /> <span>Mi ubicación</span>
         </button>
       </div>
 
       <div className="mb-3 flex min-h-0 flex-1 flex-col">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#7da1b0]">Lista {category === 'vehicles' ? 'de vehículos' : 'de dispositivos'}</h3>
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#7da1b0]">Lista <span>{category === 'vehicles' ? 'de vehículos' : 'de dispositivos'}</span></h3>
           <span className="rounded-full border border-[#1f4d59] bg-[#102b38] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[#67e8f9]">{list.length}</span>
         </div>
 
@@ -125,7 +125,7 @@ export const RightSidebarPanel = ({
                 <div className="mt-1 flex items-center gap-2 text-[11px] text-[#8b9ba1]">
                   <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${statusColor(entry.status)}`}></span>
                   <span>{statusLabel(entry.status)}</span>
-                  {entry.lastUpdate && <span className="truncate text-[#5f7e87]">· {entry.lastUpdate}</span>}
+                  {entry.lastUpdate && <span className="truncate text-[#5f7e87]">· <span>{entry.lastUpdate}</span></span>}
                 </div>
               </div>
               <div className="shrink-0 text-right">

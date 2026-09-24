@@ -5,9 +5,6 @@ import MapArea from './MapArea';
 import { LeftSidebarPanel } from './LeftSidebarPanel';
 import { RightSidebarPanel } from './RightSidebarPanel';
 import { HeaderBar } from './HeaderBar';
-import { initialFleet } from '../data/fleetData';
-import { initialAlerts } from '../data/alertsData';
-import { initialGeofences } from '../data/geofencesData';
 import { useVehicles, useDevices, useAlerts, useGeofences } from '../hooks';
 import { VehicleDetailPanel } from './VehicleDetailPanel';
 import { deleteVehicle, sendVehicleCommand } from '../lib/vehicleActions';
@@ -58,8 +55,8 @@ const Dashboard = () => {
   }
 
   // --- Datos con fallback ---
-  const [localVehicles, setLocalVehicles] = useState(initialFleet)
-  const [localGeofences, setLocalGeofences] = useState(initialGeofences)
+  const [localVehicles, setLocalVehicles] = useState([])
+  const [localGeofences, setLocalGeofences] = useState([])
 
   const vehicles = useMemo(
     () => (hasSupabaseConfig ? supabaseVehicles : localVehicles),
@@ -70,7 +67,7 @@ const Dashboard = () => {
     [supabaseDevices],
   )
   const alerts = useMemo(
-    () => (hasSupabaseConfig ? supabaseAlerts : initialAlerts),
+    () => (hasSupabaseConfig ? supabaseAlerts : []),
     [supabaseAlerts],
   )
   const geofences = useMemo(

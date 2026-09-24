@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { fetchAlerts } from '../lib/queries'
-import { initialAlerts } from '../data/alertsData'
 import { supabase } from '../lib/supabase'
 
 export const useAlerts = () => {
@@ -22,7 +21,7 @@ export const useAlerts = () => {
       } catch (err) {
         if (!cancelled) {
           setError(err.message)
-          setAlerts((prev) => (prev && prev.length > 0 ? prev : (import.meta.env.VITE_SUPABASE_URL ? [] : initialAlerts)))
+          setAlerts((prev) => (prev && prev.length > 0 ? prev : []))
         }
       } finally {
         if (!cancelled) setIsLoading(false)

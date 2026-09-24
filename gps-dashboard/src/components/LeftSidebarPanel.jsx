@@ -17,7 +17,7 @@ const DeviceInfo = ({ entity, onToggleRouteFollow, isFollowingRoute, onShareRout
         <div className="min-w-0">
           <p className="eyebrow-text">Ubicación del dispositivo</p>
           <h3 className="card-title">{entity.name}</h3>
-          <span className="card-subtitle">{entity.model ? `${entity.model} · ` : ''}{entity.platform || 'GPS'}</span>
+          <span className="card-subtitle"><span>{entity.model ? `${entity.model} · ` : ''}</span><span>{entity.platform || 'GPS'}</span></span>
         </div>
         <span className={`dashboard-status-dot ${entity.status}`} aria-label={status} />
       </div>
@@ -37,10 +37,10 @@ const DeviceInfo = ({ entity, onToggleRouteFollow, isFollowingRoute, onShareRout
           title={!entity?.position ? 'Sin posición GPS para seguir' : ''}
           className={`panel-primary-button ${isFollowingRoute && entity?.position ? 'is-active' : ''} ${!entity?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          <Navigation size={13} /> {isFollowingRoute && entity?.position ? 'Siguiendo' : 'Seguir ubicación'}
+          <Navigation size={13} /> <span>{isFollowingRoute && entity?.position ? 'Siguiendo' : 'Seguir ubicación'}</span>
         </button>
         <button type="button" onClick={onShareRoute} className="panel-secondary-button">
-          <Share2 size={13} /> Compartir
+          <Share2 size={13} /> <span>Compartir</span>
         </button>
       </div>
 
@@ -92,7 +92,7 @@ export const LeftSidebarPanel = ({
             <div className="min-w-0">
               <p className="eyebrow-text">Vehículo seleccionado</p>
               <h3 className="card-title">{currentEntity?.name || 'Sin vehículo'}</h3>
-              <span className="card-subtitle">{currentEntity?.plate || '--'} · {currentEntity?.location || 'Ubicación pendiente'}</span>
+              <span className="card-subtitle"><span>{currentEntity?.plate || '--'}</span> · <span>{currentEntity?.location || 'Ubicación pendiente'}</span></span>
             </div>
             <span className={`dashboard-status-dot ${currentEntity?.status || 'offline'}`} aria-label="Vehículo conectado" />
           </div>
@@ -121,7 +121,7 @@ export const LeftSidebarPanel = ({
       )}
 
       <div className="border-b border-[#26343b] px-4 pb-4">
-        <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Resumen {effectiveCategory === 'vehicles' ? 'de flota' : 'de dispositivos'}</h3>
+        <h3 className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#73838a]">Resumen <span>{effectiveCategory === 'vehicles' ? 'de flota' : 'de dispositivos'}</span></h3>
         <div className="space-y-2 text-[12px] text-[#9aa9ad]">
           <div className="flex items-center justify-between"><span>{effectiveCategory === 'vehicles' ? 'Vehículos' : 'Dispositivos'}</span><strong className="text-[#edf5ef]">{fleetCount}</strong></div>
           <div className="flex items-center justify-between"><span>En línea</span><strong className="text-[#b8f36b]">{onRoute}</strong></div>
