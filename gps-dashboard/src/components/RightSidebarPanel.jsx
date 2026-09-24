@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Search, Radar, Navigation, MapPinned } from 'lucide-react';
 import { normalizeBattery } from '../lib/queries';
+import { ProvisionDeviceModal } from './ProvisionDeviceModal';
 
 const statusLabel = (status) => {
   if (status === 'active' || status === 'online') return 'En línea'
@@ -30,6 +31,7 @@ export const RightSidebarPanel = ({
   isMobile = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
+  const [isProvisionModalOpen, setIsProvisionModalOpen] = useState(false)
   const list = entities?.length ? entities : vehicles
   const activeCount = list.filter((entry) => entry.status === 'active' || entry.status === 'online').length
   const offlineCount = list.filter((entry) => entry.status === 'offline' || entry.status === 'unknown').length
@@ -138,10 +140,15 @@ export const RightSidebarPanel = ({
       </div>
 
       <div className="mt-auto space-y-2 pt-3">
+        <button type="button" onClick={() => setIsProvisionModalOpen(true)} className="right-panel-secondary-button w-full border border-[#67e8f9] text-[#67e8f9] hover:bg-[#67e8f9]/10">
+          Vincular Nuevo Móvil
+        </button>
         <button type="button" onClick={onSetGeofence} className="right-panel-secondary-button">
           Nueva geocerca
         </button>
       </div>
+      
+      {isProvisionModalOpen && <ProvisionDeviceModal onClose={() => setIsProvisionModalOpen(false)} />}
     </aside>
   )
 }
