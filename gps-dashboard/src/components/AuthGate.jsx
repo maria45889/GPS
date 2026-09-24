@@ -155,17 +155,10 @@ export const AuthGate = ({ children }) => {
         return;
       }
 
-      const result = mode === 'login'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+      const result = await supabase.auth.signInWithPassword({ email, password });
 
       if (result.error) {
-        setError(result.error.message);
-      } else if (mode === 'signup') {
-        if (result.data?.user) {
-          await verifyProfile({ user: result.data.user });
-        }
-        setMessage('Cuenta creada. Si requiere confirmación, revisa tu correo para ingresar.');
+        setError(result.error.message === 'Invalid login credentials' ? 'Correo o contraseña incorrectos' : result.error.message);
       }
     } catch (err) {
       setError(err.message || 'Error de conexión a internet o de red');
@@ -179,18 +172,14 @@ export const AuthGate = ({ children }) => {
       <section className="auth-card">
         <div className="auth-mark"><LogIn size={20} /></div>
         <span className="auth-eyebrow">RideGuard · Panel privado</span>
-        <h1>{mode === 'login' ? 'Entrar al monitoreo' : 'Crear acceso de operador'}</h1>
-        <p>Solo los usuarios autorizados pueden consultar y controlar la flota.</p>
+        <h1>Entrar al monitoreo</h1>
+        <p>Acceso restringido solo a personal autorizado.</p>
         <form onSubmit={handleSubmit} className="auth-form">
           <label>Correo<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" /></label>
-          <label>Contraseña<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>
+          <label>Contraseña<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={6} autoComplete="current-password" /></label>
           {error && <div className="auth-error">{error}</div>}
-          {message && <div className="auth-message">{message}</div>}
-          <button type="submit" disabled={isBusy}>{isBusy ? 'Procesando...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}</button>
+          <button type="submit" disabled={isBusy}>{isBusy ? 'Verificando...' : 'Entrar'}</button>
         </form>
-        <button type="button" className="auth-switch" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-          <UserPlus size={15} /> <span>{mode === 'login' ? 'Crear una cuenta nueva' : 'Ya tengo una cuenta'}</span>
-        </button>
       </section>
     </main>
   );
