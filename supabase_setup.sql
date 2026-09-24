@@ -1440,7 +1440,7 @@ begin
   perform cron.schedule(
     'reconcile-pending-deletions',
     '*/15 * * * *',
-    $$select public.reconcile_pending_deletions()$$
+    $cmd$select public.reconcile_pending_deletions()$cmd$
   );
 exception when others then
   raise notice 'pg_cron no disponible o no instalado: %. La reconciliación debe invocarse manualmente con: SELECT public.reconcile_pending_deletions();', sqlerrm;
