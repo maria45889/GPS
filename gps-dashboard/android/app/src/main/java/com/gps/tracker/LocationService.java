@@ -981,13 +981,18 @@ public class LocationService extends Service implements LocationListener {
             Intent recoveryIntent = new Intent(getApplicationContext(), AlarmRecoveryReceiver.class);
             recoveryIntent.setAction(AlarmRecoveryReceiver.ACTION_RECOVER_SERVICE);
             recoveryIntent.setPackage(getPackageName());
+            // A1: Usar requestCode 42 coincidente con el resto
             PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                    getApplicationContext(), 1, recoveryIntent,
+                    getApplicationContext(), 42, recoveryIntent,
                     PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
             AlarmManager alarmService = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
             if (alarmService != null) {
                 long triggerAt = SystemClock.elapsedRealtime() + 2000;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    long triggerAtRtc = System.currentTimeMillis() + 2000;
+                    AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(triggerAtRtc, null);
+                    alarmService.setAlarmClock(info, pendingIntent);
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     alarmService.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME, triggerAt, pendingIntent);
                 } else {
                     alarmService.set(AlarmManager.ELAPSED_REALTIME, triggerAt, pendingIntent);

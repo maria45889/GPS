@@ -260,6 +260,7 @@ declare
   code_rec record;
   user_exists boolean;
   device_bound text;
+  current_org uuid;
 begin
   select exists (
     select 1 from auth.users where id = p_auth_user_id
@@ -286,6 +287,12 @@ begin
 
   if not found then
     return jsonb_build_object('success', false, 'error', 'Código de activación inválido, expirado o ya utilizado');
+  end if;
+
+  -- A9: Validación para evitar re-aprovisionamiento cruzado (secuestro de dispositivos)
+  select organization_id into current_org from public.devices where id = p_device_id;
+  if current_org is not null and current_org is distinct from code_rec.organization_id then
+    return jsonb_build_object('success', false, 'error', 'El dispositivo ya está aprovisionado en otra organización');
   end if;
 
   update public.device_activation_codes

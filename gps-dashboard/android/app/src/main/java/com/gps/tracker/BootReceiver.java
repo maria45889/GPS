@@ -91,7 +91,12 @@ public class BootReceiver extends BroadcastReceiver {
             AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (alarmManager != null) {
                 long triggerAt = SystemClock.elapsedRealtime() + delayMs;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    // A1: Android 12+ no permite iniciar Foreground Services desde alarmas inexactas.
+                    long triggerAtRtc = System.currentTimeMillis() + delayMs;
+                    AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(triggerAtRtc, null);
+                    alarmManager.setAlarmClock(info, pendingIntent);
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
                 } else {
                     alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);

@@ -111,7 +111,7 @@ serve(async (req) => {
     // Caso B: solo se recibió auth_user_id — resolver vehicle_id y device_id
     const { data: deviceData, error: deviceError } = await supabaseAdmin
       .from('devices')
-      .select('organization_id, vehicle_id, id')
+      .select('organization_id, id')
       .eq('auth_user_id', auth_user_id)
       .single()
 
@@ -122,7 +122,15 @@ serve(async (req) => {
       return json({ error: 'Forbidden: Device organization mismatch' }, 403)
     }
     targetDeviceId = deviceData.id
-    resolvedVehicleId = deviceData.vehicle_id ?? null
+
+    // C3: Buscar vehicle_id en device_registry (devices NO tiene vehicle_id)
+    const { data: regData } = await supabaseAdmin
+      .from('device_registry')
+      .select('vehicle_id')
+      .eq('device_id', targetDeviceId)
+      .single()
+
+    resolvedVehicleId = regData?.vehicle_id ?? null
   }
 
   // B2: Si el llamador envió AMBOS identificadores, verificar que apunten al MISMO dispositivo.
