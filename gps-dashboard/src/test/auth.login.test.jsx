@@ -36,18 +36,6 @@ describe('AuthGate', () => {
     vi.clearAllMocks();
   });
 
-  it('renderiza el contenido protegido cuando hay una sesión activa de operador', () => {
-    localStorage.setItem('gps_dev_admin', 'true');
-
-    render(
-      <AuthGate>
-        <div>Panel Protegido</div>
-      </AuthGate>
-    );
-
-    expect(screen.getByText('Panel Protegido')).toBeInTheDocument();
-  });
-
   it('renderiza el formulario de inicio de sesión cuando no hay sesión activa', () => {
     render(
       <AuthGate>

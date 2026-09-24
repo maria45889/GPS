@@ -1024,7 +1024,7 @@ describe('Android LocationService java contracts', () => {
     expect(supabaseJsContent).toContain('setSession');
 
     // A8: El secreto es OBLIGATORIO en producción (falla con 500 si falta).
-    expect(provisionEdgeContent).toContain('!expectedSecret');
+    expect(provisionEdgeContent).toContain('!PROVISION_SECRET');
 
 
     expect(useAlertsContent).toContain('prev && prev.length > 0 ? prev');
