@@ -89,10 +89,10 @@ export const flushCachedLocations = async (deviceId = getDeviceId()) => {
       event_id: item.event_id || generateEventId(deviceId, item.timestamp || '', item.latitude, item.longitude),
     }));
 
-    // onConflict: 'event_id' → duplicados por timeout de red se ignoran silenciosamente.
+    // C1: onConflict compuesto ['device_id', 'event_id'] requerido por Postgres.
     const { error } = await supabase
       .from('gps_locations')
-      .upsert(payloads, { onConflict: 'event_id', ignoreDuplicates: true });
+      .upsert(payloads, { onConflict: 'device_id,event_id', ignoreDuplicates: true });
 
     if (error) {
       // Si el lote falla, conservar todos los ítems del lote para reintento.
@@ -162,7 +162,7 @@ class GPSTracker {
         bearing: locationData.bearing,
         timestamp: locationData.timestamp,
         event_id: eventId,
-      }, { onConflict: 'event_id', ignoreDuplicates: true });
+      }, { onConflict: 'device_id,event_id', ignoreDuplicates: true });
 
       if (error) {
         // Incluir el event_id en el ítem cacheado para que el flush lo reutilice idénticamente.

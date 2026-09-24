@@ -1023,8 +1023,8 @@ describe('Android LocationService java contracts', () => {
     expect(supabaseJsContent).toContain('Authorization');
     expect(supabaseJsContent).toContain('setSession');
 
-    // B3: El secreto es obligatorio cuando está configurado — header ausente también rechaza.
-    expect(provisionEdgeContent).toContain('expectedSecret && providedSecret !== expectedSecret');
+    // A8: El secreto es OBLIGATORIO en producción (falla con 500 si falta).
+    expect(provisionEdgeContent).toContain('!expectedSecret');
 
 
     expect(useAlertsContent).toContain('prev && prev.length > 0 ? prev');
