@@ -52,7 +52,7 @@ async function verifyDeployment() {
   }
 
   // 3. Verificar RPCs requeridas
-  const requiredRpcs = ['provision_device_atomic', 'check_rate_limit', 'record_rate_limit_failure', 'clear_rate_limit', 'update_vehicle_status', 'ack_vehicle_command', 'delete_vehicle_cascade'];
+  const requiredRpcs = ['check_rate_limit', 'record_rate_limit_failure', 'clear_rate_limit', 'update_vehicle_status', 'ack_vehicle_command', 'delete_vehicle_cascade'];
   for (const rpcName of requiredRpcs) {
     try {
       const { error } = await supabase.rpc(rpcName, {});
