@@ -92,16 +92,16 @@ serve(async (req) => {
         .from('devices')
         .select('auth_user_id, organization_id')
         .eq('id', targetDeviceId)
-        .single()
+        .maybeSingle()
 
       if (deviceError) {
         return json({ error: 'Could not fetch device details' }, 500)
       }
-      if (deviceData.organization_id !== profile?.organization_id) {
+      if (deviceData && deviceData.organization_id !== profile?.organization_id) {
         return json({ error: 'Forbidden: Device organization mismatch' }, 403)
       }
       // Resolver auth_user_id solo si no fue enviado en el body
-      if (!targetAuthUserId) {
+      if (!targetAuthUserId && deviceData) {
         targetAuthUserId = deviceData.auth_user_id
       }
     }
@@ -113,22 +113,22 @@ serve(async (req) => {
       .from('devices')
       .select('organization_id, id')
       .eq('auth_user_id', auth_user_id)
-      .single()
+      .maybeSingle()
 
     if (deviceError) {
       return json({ error: 'Could not fetch device details to verify organization' }, 500)
     }
-    if (deviceData.organization_id !== profile?.organization_id) {
+    if (deviceData && deviceData.organization_id !== profile?.organization_id) {
       return json({ error: 'Forbidden: Device organization mismatch' }, 403)
     }
-    targetDeviceId = deviceData.id
+    targetDeviceId = deviceData?.id ?? null
 
     // C3: Buscar vehicle_id en device_registry (devices NO tiene vehicle_id)
     const { data: regData } = await supabaseAdmin
       .from('device_registry')
       .select('vehicle_id')
       .eq('device_id', targetDeviceId)
-      .single()
+      .maybeSingle()
 
     resolvedVehicleId = regData?.vehicle_id ?? null
   }
@@ -138,22 +138,22 @@ serve(async (req) => {
       .from('devices')
       .select('organization_id, auth_user_id')
       .eq('id', device_id)
-      .single()
+      .maybeSingle()
 
     if (deviceError) {
       return json({ error: 'Could not fetch device details to verify organization' }, 500)
     }
-    if (deviceData.organization_id !== profile?.organization_id) {
+    if (deviceData && deviceData.organization_id !== profile?.organization_id) {
       return json({ error: 'Forbidden: Device organization mismatch' }, 403)
     }
-    if (!targetAuthUserId) targetAuthUserId = deviceData.auth_user_id;
+    if (!targetAuthUserId && deviceData) targetAuthUserId = deviceData.auth_user_id;
 
     // Buscar si tiene un vehículo asociado
     const { data: regData } = await supabaseAdmin
       .from('device_registry')
       .select('vehicle_id')
       .eq('device_id', device_id)
-      .single()
+      .maybeSingle()
 
     resolvedVehicleId = regData?.vehicle_id ?? null
   }

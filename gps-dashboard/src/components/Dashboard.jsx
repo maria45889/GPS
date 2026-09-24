@@ -9,7 +9,7 @@ import { EditEntityModal } from './EditEntityModal';
 
 const Dashboard = () => {
   const { vehicles: supabaseVehicles, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles()
-  const { devices: supabaseDevices, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime } = useDevices()
+  const { devices: supabaseDevices, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime, hideEphemeral } = useDevices()
   const { alerts: supabaseAlerts, error: alertsError } = useAlerts()
   const { geofences: supabaseGeofences, error: geofencesError } = useGeofences()
 
@@ -462,6 +462,7 @@ const Dashboard = () => {
         onControlVehicle={handleVehicleControl}
         isControlBusy={isVehicleControlBusy}
         onDeleteVehicle={handleDeleteVehicle}
+        onDeleteEphemeral={hideEphemeral}
         onEditVehicle={handleEditVehicle}
         onLogout={handleLogout}
         lastSyncLabel={lastSyncLabel}

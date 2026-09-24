@@ -117,6 +117,7 @@ export const transformDevice = (dbDevice, live = null, maxAgeMs = REALTIME_LOCAT
     accuracy: live ? sanitizeAccuracy(live.accuracy) : null,
     bearing: live?.bearing || 0,
     route: [],
+    _ephemeral: Boolean(dbDevice._ephemeral) || Boolean(dbDevice._mock_ephemeral),
   }
 }
 

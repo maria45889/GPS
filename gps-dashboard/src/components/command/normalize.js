@@ -17,6 +17,7 @@ export const normalizeEntity = (e) => ({
   driver: e?.driver || null,
   controlState: e?.controlState,
   _mock: Boolean(e?._mock),
+  _ephemeral: Boolean(e?._ephemeral),
   _kind: e?._kind || 'device',
 })
 

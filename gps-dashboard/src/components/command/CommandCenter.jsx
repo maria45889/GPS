@@ -51,6 +51,7 @@ const CommandCenter = ({
   onControlVehicle,
   isControlBusy,
   onDeleteVehicle,
+  onDeleteEphemeral,
   onEditVehicle,
   onLogout,
   lastSyncLabel,
@@ -123,6 +124,10 @@ const CommandCenter = ({
     if (!entity) return
     if (entity?._mock) {
       simulated.removeUnit(entity.id)
+      return
+    }
+    if (entity?._ephemeral) {
+      onDeleteEphemeral?.(entity.id)
       return
     }
     onDeleteVehicle?.(entity.id)

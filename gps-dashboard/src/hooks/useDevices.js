@@ -1,7 +1,28 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchDevices, fetchLatestLocations, transformDevice } from '../lib/queries'
 import { hasSupabaseConfig, supabase } from '../lib/supabase'
 import { deviceStatusFromLastSeen } from '../lib/mapLogic'
+
+const HIDDEN_EPHEMERAL_KEY = 'rg_hidden_ephemerals'
+const storage = () => (typeof window !== 'undefined' && window.localStorage ? window.localStorage : null)
+
+const readHiddenEphemerals = () => {
+  try {
+    const raw = storage()?.getItem(HIDDEN_EPHEMERAL_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return Array.isArray(arr) ? new Set(arr) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+const persistHiddenEphemerals = (hidden) => {
+  try {
+    storage()?.setItem(HIDDEN_EPHEMERAL_KEY, JSON.stringify([...hidden]))
+  } catch {
+    /* almacenamiento no disponible */
+  }
+}
 
 const ephemeralDevice = (location) => ({
   id: location.device_id,
@@ -12,6 +33,7 @@ const ephemeralDevice = (location) => ({
   app_version: null,
   battery: null,
   label: null,
+  _ephemeral: true,
 })
 
 export const useDevices = () => {
@@ -20,6 +42,8 @@ export const useDevices = () => {
   const [error, setError] = useState(null)
   const [isStale, setIsStale] = useState(false)
   const [lastSyncTime, setLastSyncTime] = useState(null)
+  const [hiddenEphemerals, setHiddenEphemerals] = useState(readHiddenEphemerals)
+  const hiddenRef = useRef(hiddenEphemerals)
   const reqSeqRef = useRef(0)
   const isFetchingRef = useRef(false)
   const pendingRefetchRef = useRef(false)
@@ -46,6 +70,7 @@ export const useDevices = () => {
 
         const ephemerals = liveLocations
           .filter((location) => !knownIds.has(location.device_id))
+          .filter((location) => !hiddenRef.current.has(location.device_id))
           .map(ephemeralDevice)
 
         const merged = [...dbDevices, ...ephemerals].map((dbDevice) => {
@@ -149,5 +174,20 @@ export const useDevices = () => {
     }
   }, [])
 
-  return { devices, isLoading, error, isStale, lastSyncTime }
+  const hideEphemeral = (deviceId) => {
+    setHiddenEphemerals((prev) => {
+      const next = new Set(prev)
+      next.add(deviceId)
+      hiddenRef.current = next
+      persistHiddenEphemerals(next)
+      return next
+    })
+    setDevices((prev) => prev.filter((d) => d.id !== deviceId))
+  }
+
+  return useMemo(
+    () => ({ devices, isLoading, error, isStale, lastSyncTime, hideEphemeral, hiddenEphemerals }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [devices, isLoading, error, isStale, lastSyncTime],
+  )
 }
