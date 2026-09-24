@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { fetchGeofences } from '../lib/queries'
-import { initialGeofences } from '../data/geofencesData'
 import { supabase } from '../lib/supabase'
 
 export const useGeofences = () => {
@@ -22,7 +21,7 @@ export const useGeofences = () => {
       } catch (err) {
         if (!cancelled) {
           setError(err.message)
-          setGeofences((prev) => (prev && prev.length > 0 ? prev : (import.meta.env.VITE_SUPABASE_URL ? [] : initialGeofences)))
+          setGeofences((prev) => (prev && prev.length > 0 ? prev : []))
         }
       } finally {
         if (!cancelled) setIsLoading(false)

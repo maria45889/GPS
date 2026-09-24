@@ -189,7 +189,7 @@ export const AuthGate = ({ children }) => {
           <button type="submit" disabled={isBusy}>{isBusy ? 'Procesando...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}</button>
         </form>
         <button type="button" className="auth-switch" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
-          <UserPlus size={15} /> {mode === 'login' ? 'Crear una cuenta nueva' : 'Ya tengo una cuenta'}
+          <UserPlus size={15} /> <span>{mode === 'login' ? 'Crear una cuenta nueva' : 'Ya tengo una cuenta'}</span>
         </button>
       </section>
     </main>
