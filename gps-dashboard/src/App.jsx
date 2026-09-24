@@ -1,17 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Dashboard from './components/Dashboard';
 import { AuthGate } from './components/AuthGate';
 import { Capacitor } from '@capacitor/core';
 
 function App() {
   const isNativePlatform = Capacitor.isNativePlatform();
-  const [gpsStatus, setGpsStatus] = useState(() => (
-    isNativePlatform ? 'GPS inicializando...' : 'Panel protegido'
+  const [gpsStatus] = useState(() => (
+    isNativePlatform ? 'GPS Nativo Activo (Android)' : 'Panel Web Guard (GPS PWA activo)'
   ));
-
-  useEffect(() => {
-    setGpsStatus(Capacitor.isNativePlatform() ? 'GPS nativo activo' : 'Panel protegido');
-  }, []);
 
   const dashboard = <Dashboard />;
 

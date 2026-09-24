@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "compile:android": "cd android && ./gradlew :app:compileDebugJavaWithJavac",
     "preview": "vite preview"
   },
   "dependencies": {

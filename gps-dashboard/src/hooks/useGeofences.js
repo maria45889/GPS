@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchGeofences } from '../lib/queries'
 import { initialGeofences } from '../data/geofencesData'
+import { supabase } from '../lib/supabase'
 
 export const useGeofences = () => {
   const [geofences, setGeofences] = useState([])
@@ -19,9 +20,9 @@ export const useGeofences = () => {
           setError(null)
         }
       } catch (err) {
-        setError(err.message)
         if (!cancelled) {
-          setGeofences(initialGeofences)
+          setError(err.message)
+          setGeofences((prev) => (prev && prev.length > 0 ? prev : (import.meta.env.VITE_SUPABASE_URL ? [] : initialGeofences)))
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -30,8 +31,31 @@ export const useGeofences = () => {
 
     loadGeofences()
 
+    if (!supabase) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const channel = supabase
+      .channel('geofences-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'geofences' },
+        () => {
+          if (!cancelled) loadGeofences()
+        }
+      )
+      .subscribe((status, err) => {
+        if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')) {
+          console.warn('Geofences realtime error:', status, err)
+          setError(`Realtime error: ${status}`)
+        }
+      })
+
     return () => {
       cancelled = true
+      supabase.removeChannel(channel)
     }
   }, [])
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchAlerts } from '../lib/queries'
 import { initialAlerts } from '../data/alertsData'
+import { supabase } from '../lib/supabase'
 
 export const useAlerts = () => {
   const [alerts, setAlerts] = useState([])
@@ -19,9 +20,9 @@ export const useAlerts = () => {
           setError(null)
         }
       } catch (err) {
-        setError(err.message)
         if (!cancelled) {
-          setAlerts(initialAlerts)
+          setError(err.message)
+          setAlerts((prev) => (prev && prev.length > 0 ? prev : (import.meta.env.VITE_SUPABASE_URL ? [] : initialAlerts)))
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -30,8 +31,31 @@ export const useAlerts = () => {
 
     loadAlerts()
 
+    if (!supabase) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const channel = supabase
+      .channel('alerts-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'alerts' },
+        () => {
+          if (!cancelled) loadAlerts()
+        }
+      )
+      .subscribe((status, err) => {
+        if (!cancelled && (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT')) {
+          console.warn('Alerts realtime error:', status, err)
+          setError(`Realtime error: ${status}`)
+        }
+      })
+
     return () => {
       cancelled = true
+      supabase.removeChannel(channel)
     }
   }, [])
 

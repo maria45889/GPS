@@ -3,15 +3,15 @@ import { Signal, Wifi, LogOut, Menu } from 'lucide-react';
 
 export const HeaderBar = ({ category, onCategoryChange, lastSyncLabel, onLogout, onMenuClick }) => {
   return (
-    <div className="reference-dashboard-header dashboard-header relative z-20 flex min-h-[58px] items-center justify-between gap-3 border-b border-[#173344] bg-[#081522] px-4 py-3 sm:px-6">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#071c2b] text-[#1ee6ee]">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
+    <div className="reference-dashboard-header dashboard-header relative z-20 flex min-h-[50px] sm:min-h-[58px] max-w-full items-center justify-between gap-1 sm:gap-3 overflow-hidden border-b border-[#173344] bg-[#081522] px-1.5 sm:px-6 py-1.5 sm:py-3">
+      <div className="flex shrink-0 min-w-0 items-center gap-1.5 sm:gap-3">
+        <div className="flex h-6 w-6 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-[8px] bg-[#071c2b] text-[#1ee6ee]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
         </div>
         <div className="min-w-0">
-          <div className="truncate text-[14px] font-bold tracking-[-0.02em] text-[#edf5ef]">RideGuard</div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#5f7e87]">
-            {category === 'devices' ? 'Monitoreo de dispositivos' : 'Control de flota'}
+          <div className="truncate text-[12px] sm:text-[14px] font-bold tracking-[-0.02em] text-[#edf5ef]">RideGuard</div>
+          <div className="hidden min-[380px]:block truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-[#5f7e87]">
+            {category === 'devices' ? 'Monitoreo' : 'Flota'}
           </div>
         </div>
       </div>
@@ -19,15 +19,15 @@ export const HeaderBar = ({ category, onCategoryChange, lastSyncLabel, onLogout,
       <button
         type="button"
         onClick={onMenuClick}
-        className="mobile-menu-button"
+        className="mobile-menu-button shrink-0"
         aria-label="Abrir menú"
       >
         <Menu size={18} />
       </button>
 
-      <div className="hidden items-center rounded-full border border-[#173344] bg-[#0d1d26] p-[3px] sm:flex" role="tablist" aria-label="Categoría de vista">
+      <div className="hidden min-[310px]:flex shrink-0 items-center rounded-full border border-[#173344] bg-[#0d1d26] p-[2px] sm:p-[3px]" role="tablist" aria-label="Categoría de vista">
         {[
-          { id: 'devices', label: 'Dispositivos' },
+          { id: 'devices', label: 'Equipos' },
           { id: 'vehicles', label: 'Motos' },
         ].map((item) => (
           <button
@@ -36,7 +36,7 @@ export const HeaderBar = ({ category, onCategoryChange, lastSyncLabel, onLogout,
             role="tab"
             aria-selected={category === item.id}
             onClick={() => onCategoryChange(item.id)}
-            className={`relative min-w-[84px] rounded-full px-3 py-[5px] text-[11px] font-bold uppercase tracking-[0.1em] transition-all ${
+            className={`relative min-w-[44px] sm:min-w-[84px] rounded-full px-1.5 sm:px-3 py-[3px] sm:py-[5px] text-[9px] sm:text-[11px] font-bold uppercase tracking-[0.02em] sm:tracking-[0.1em] transition-all ${
               category === item.id
                 ? 'bg-[#1a2d36] text-[#b8f36b] shadow-[0_0_10px_rgba(184,243,107,0.14)]'
                 : 'text-[#5f7e87] hover:text-[#8fa5ad]'
@@ -47,10 +47,10 @@ export const HeaderBar = ({ category, onCategoryChange, lastSyncLabel, onLogout,
         ))}
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="header-status flex items-center gap-2 rounded-full border border-[#30443b] bg-[#1a2925] px-3 py-1.5">
-          <div className="h-[7px] w-[7px] rounded-full bg-[#b8f36b]"></div>
-          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#c8ef9b]">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
+        <div className="header-status hidden min-[340px]:flex items-center gap-1 sm:gap-2 rounded-full border border-[#30443b] bg-[#1a2925] px-1.5 sm:px-3 py-1 sm:py-1.5">
+          <div className="h-[7px] w-[7px] shrink-0 rounded-full bg-[#b8f36b]"></div>
+          <span className="hidden min-[420px]:inline text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.06em] text-[#c8ef9b]">
             {lastSyncLabel || 'Sistema activo'}
           </span>
         </div>

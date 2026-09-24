@@ -27,3 +27,13 @@ Thumbs.db
 dist/
 build/
 .vercel
+
+# Android & Gradle
+.gradle/
+.gradle_home/
+local.properties
+*.jks
+*.keystore
+/android/.gradle/
+/android/app/build/
+/android/build/

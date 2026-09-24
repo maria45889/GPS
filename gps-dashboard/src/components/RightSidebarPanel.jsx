@@ -1,15 +1,18 @@
 import React, { useMemo, useState } from 'react';
 import { Search, Radar, Navigation, MapPinned } from 'lucide-react';
+import { normalizeBattery } from '../lib/queries';
 
 const statusLabel = (status) => {
   if (status === 'active' || status === 'online') return 'En línea'
   if (status === 'stopped') return 'Detenido'
+  if (status === 'immobilized') return 'Inmovilizado'
   return 'Offline'
 }
 
 const statusColor = (status) => {
   if (status === 'active' || status === 'online') return 'bg-[#5ee6a8]'
   if (status === 'stopped') return 'bg-[#f2c66d]'
+  if (status === 'immobilized') return 'bg-[#ef5c72]'
   return 'bg-[#8b9ba1]'
 }
 
@@ -24,6 +27,7 @@ export const RightSidebarPanel = ({
   vehicles = [],
   selectedVehicle,
   onSelectVehicle,
+  isMobile = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const list = entities?.length ? entities : vehicles
@@ -45,7 +49,7 @@ export const RightSidebarPanel = ({
   }
 
   return (
-    <aside className="dashboard-right-panel hidden w-[312px] shrink-0 flex-col overflow-hidden rounded-[12px] border border-[#213a46] bg-[#0d1a24] p-4 xl:flex">
+    <aside className={`dashboard-right-panel flex flex-col overflow-hidden rounded-[12px] border border-[#213a46] bg-[#0d1a24] p-4 ${isMobile ? 'w-full' : 'hidden w-[312px] shrink-0 xl:flex'}`}>
       <div className="mb-5 grid grid-cols-3 gap-2">
         <div className="right-panel-stat-card">
           <div className="right-panel-stat-value">{list.length}</div>
@@ -69,15 +73,17 @@ export const RightSidebarPanel = ({
         <div className="space-y-1 text-[12px] text-[#9aa9ad]">
           <div className="flex items-center justify-between gap-3">
             <span>Coordenadas</span>
-            <span className="text-right text-[#edf5ef]">{userLocation ? userLocation.position.map((value) => value.toFixed(5)).join(', ') : 'Solicitando…'}</span>
+            <span className="text-right text-[#edf5ef]">
+              {userLocation?.position ? userLocation.position.map((value) => value.toFixed(5)).join(', ') : userLocation?.error ? 'GPS no disponible' : 'Solicitando…'}
+            </span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>Velocidad</span>
-            <span className="text-[#edf5ef]">{userLocation?.speed ? `${Math.round(userLocation.speed * 3.6)} km/h` : 'No disponible'}</span>
+            <span className="text-[#edf5ef]">{userLocation?.speed != null ? `${Math.round(userLocation.speed * 3.6)} km/h` : 'No disponible'}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <span>Precisión</span>
-            <span className="text-[#edf5ef]">{userLocation ? `${Math.round(userLocation.accuracy)} m` : 'Esperando GPS'}</span>
+            <span className="text-[#edf5ef]">{userLocation?.accuracy != null ? `${Math.round(userLocation.accuracy)} m` : userLocation?.error ? 'Sin señal' : 'Esperando GPS'}</span>
           </div>
         </div>
         <button type="button" onClick={onLocateUser} className="right-panel-action-button mt-3">
@@ -124,7 +130,7 @@ export const RightSidebarPanel = ({
               </div>
               <div className="shrink-0 text-right">
                 <div className="text-[13px] font-semibold text-[#c8ef9b]">{entry.speed || 0} km/h</div>
-                <div className="mt-1 text-[10px] text-[#8b9ba1]">{entry.battery ? `${entry.battery}%` : '--'}</div>
+                <div className="mt-1 text-[10px] text-[#8b9ba1]">{normalizeBattery(entry.battery)}%</div>
               </div>
             </button>
           ))}

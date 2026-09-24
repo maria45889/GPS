@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <permission
+        android:name="com.gps.tracker.permission.CONTROL_VEHICLE"
+        android:protectionLevel="signature" />
+
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"
@@ -25,6 +29,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="gpstracker" android:host="activate" />
+            </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.gpstracker.com" android:pathPrefix="/activate" />
+            </intent-filter>
+
         </activity>
 
         <service
@@ -32,6 +50,49 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <receiver
+            android:name=".HardwareRelayReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.gps.tracker.EXECUTE_HARDWARE_COMMAND" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".VehicleControlReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="com.gps.tracker.permission.CONTROL_VEHICLE">
+            <intent-filter>
+                <action android:name="com.gps.tracker.ACTION_VEHICLE_CONTROL" />
+                <action android:name="com.gps.tracker.HARDWARE_RELAY_SWITCH" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".AlarmRecoveryReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.gps.tracker.ACTION_RECOVER_SERVICE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- BootReceiver requiere android:exported="true" por norma de Android OS al escuchar BOOT_COMPLETED.
+             La seguridad está protegida por android:permission="android.permission.RECEIVE_BOOT_COMPLETED" para permitir entregas únicamente desde el sistema. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -49,7 +110,10 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

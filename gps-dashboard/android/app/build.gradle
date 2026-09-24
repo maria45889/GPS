@@ -7,8 +7,8 @@ android {
         applicationId "com.gps.tracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "1.1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -46,6 +46,22 @@ android {
     }
 }
 
+gradle.taskGraph.whenReady { taskGraph ->
+    boolean isReleaseBuild = taskGraph.allTasks.any { task ->
+        task.name.toLowerCase().contains("releas") && !task.name.toLowerCase().contains("test")
+    }
+    if (isReleaseBuild) {
+        def storeFile = findProperty('GPS_RELEASE_STORE_FILE') ?: System.getenv('GPS_RELEASE_STORE_FILE')
+        def storePassword = findProperty('GPS_RELEASE_STORE_PASSWORD') ?: System.getenv('GPS_RELEASE_STORE_PASSWORD')
+        def keyAlias = findProperty('GPS_RELEASE_KEY_ALIAS') ?: System.getenv('GPS_RELEASE_KEY_ALIAS')
+        def keyPassword = findProperty('GPS_RELEASE_KEY_PASSWORD') ?: System.getenv('GPS_RELEASE_KEY_PASSWORD')
+        if (!storeFile || !storePassword || !keyAlias || !keyPassword) {
+            throw new GradleException("ERROR CRÍTICO DE FIRMA: Para generar la versión de producción (release) debes definir las variables GPS_RELEASE_STORE_FILE, GPS_RELEASE_STORE_PASSWORD, GPS_RELEASE_KEY_ALIAS y GPS_RELEASE_KEY_PASSWORD.")
+        }
+    }
+}
+
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
@@ -62,6 +78,10 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    def room_version = "2.5.2"
+    implementation "androidx.room:room-runtime:$room_version"
+    annotationProcessor "androidx.room:room-compiler:$room_version"
 }
 
 apply from: 'capacitor.build.gradle'
@@ -74,3 +94,32 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
+task ensureSupabaseConfig {
+    doLast {
+        boolean isReleaseBuild = gradle.taskGraph.allTasks.any { task ->
+            task.name.toLowerCase().contains("releas") && !task.name.toLowerCase().contains("test")
+        }
+        def envUrl = System.getenv('SUPABASE_URL') ?: findProperty('SUPABASE_URL')
+        def envKey = System.getenv('SUPABASE_ANON_KEY') ?: System.getenv('SUPABASE_PUBLISHABLE_KEY') ?: findProperty('SUPABASE_ANON_KEY') ?: findProperty('SUPABASE_PUBLISHABLE_KEY')
+
+        if (isReleaseBuild && (!envUrl || !envKey)) {
+            throw new GradleException("ERROR CRÍTICO DE CONFIGURACIÓN RELEASE: Para generar un APK de producción (release) debes definir explícitamente las variables de entorno SUPABASE_URL y SUPABASE_ANON_KEY (o SUPABASE_PUBLISHABLE_KEY).")
+        }
+
+        def configFile = file('src/main/res/values/supabase_config.xml')
+        if (!configFile.exists()) {
+            if (!envUrl || !envKey) {
+                throw new GradleException("ERROR DE CONFIGURACIÓN: supabase_config.xml no existe y SUPABASE_URL / SUPABASE_ANON_KEY no están definidas. No se generará configuración con valores por defecto.")
+            }
+            configFile.parentFile.mkdirs()
+            configFile.text = """<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="supabase_url" translatable="false">${envUrl}</string>
+    <string name="supabase_publishable_key" translatable="false">${envKey}</string>
+</resources>"""
+            println("Generado supabase_config.xml desde variables de entorno.")
+        }
+    }
+}
+preBuild.dependsOn ensureSupabaseConfig

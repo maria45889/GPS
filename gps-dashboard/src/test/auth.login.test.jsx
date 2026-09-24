@@ -1,22 +1,61 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { LoginScreen } from '../components/auth/LoginScreen';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
+import { render, screen } from '@testing-library/react';
+import { AuthGate } from '../components/AuthGate';
 
-describe('LoginScreen', () => {
-  it('renders the login form and signs in with a demo user', async () => {
-    const user = userEvent.setup();
-    const handleLogin = vi.fn();
+vi.mock('../lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+      signInWithPassword: vi.fn(),
+      signUp: vi.fn(),
+    },
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+        limit: vi.fn().mockResolvedValue({ data: [{ id: 'org-1' }] }),
+      }),
+      upsert: vi.fn().mockResolvedValue({ error: null }),
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: { id: 'org-1' } }),
+        }),
+      }),
+    }),
+  },
+}));
 
-    render(<LoginScreen onLogin={handleLogin} />);
+describe('AuthGate', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
 
-    const submit = screen.getByRole('button', { name: /entrar/i });
-    await user.click(submit);
+  it('renderiza el contenido protegido cuando hay una sesión activa de operador', () => {
+    localStorage.setItem('gps_dev_admin', 'true');
 
-    await waitFor(() => {
-      expect(handleLogin).toHaveBeenCalledTimes(1);
-    });
+    render(
+      <AuthGate>
+        <div>Panel Protegido</div>
+      </AuthGate>
+    );
+
+    expect(screen.getByText('Panel Protegido')).toBeInTheDocument();
+  });
+
+  it('renderiza el formulario de inicio de sesión cuando no hay sesión activa', () => {
+    render(
+      <AuthGate>
+        <div>Panel Protegido</div>
+      </AuthGate>
+    );
+
+    expect(screen.getAllByText('Entrar al monitoreo')[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Entrar' })[0]).toBeInTheDocument();
   });
 });
