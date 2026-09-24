@@ -3,11 +3,7 @@ import { LogIn, UserPlus, LogOut, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export const AuthGate = ({ children }) => {
-  const [session, setSession] = useState(() => (
-    import.meta.env.DEV && localStorage.getItem('gps_dev_admin') === 'true'
-      ? { user: { email: 'admin' }, isDevelopment: true }
-      : null
-  ));
+  const [session, setSession] = useState(null);
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -149,11 +145,7 @@ export const AuthGate = ({ children }) => {
     setIsBusy(true);
 
     try {
-      if (import.meta.env.DEV && email === 'admin' && password === 'admin') {
-        localStorage.setItem('gps_dev_admin', 'true');
-        setSession({ user: { email: 'admin' }, isDevelopment: true });
-        return;
-      }
+
 
       const result = await supabase.auth.signInWithPassword({ email, password });
 

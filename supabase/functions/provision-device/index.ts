@@ -129,11 +129,21 @@ serve(async (req) => {
   }
 
   const activationCode = String(body.activationCode || body.activation_code || '').trim()
-  // Optional activation code for auto-provisioning
-  // if (!activationCode) {
-  //   await recordDbFailedAttempt(`ip:${clientIp}`)
-  //   return json({ error: 'codigo de activacion es obligatorio' }, 400)
-  // }
+  
+  const PROVISION_SECRET = Deno.env.get('PROVISION_SECRET')
+  if (!PROVISION_SECRET) {
+    throw new Error('PROVISION_SECRET no configurada')
+  }
+
+  if (!activationCode) {
+    await recordDbFailedAttempt(`ip:${clientIp}`)
+    return json({ error: 'codigo de activacion es obligatorio' }, 400)
+  }
+
+  if (activationCode !== PROVISION_SECRET) {
+    await recordDbFailedAttempt(`ip:${clientIp}`)
+    return json({ error: 'codigo de activacion invalido' }, 403)
+  }
 
   const rawDeviceId = String(body.deviceId ?? '').trim()
   const deviceId = rawDeviceId.slice(0, 64)
