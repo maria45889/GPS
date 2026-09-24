@@ -378,7 +378,12 @@ const Dashboard = () => {
       return
     }
     if (entity?.position && entity !== selectedEntity) selectEntity(entity)
-    setIsFollowingRoute((v) => !v)
+    const next = !isFollowingRoute
+    setIsFollowingRoute(next)
+    if (next && !userLocation?.position) {
+      handleLocateUser()
+      setOperationMessage('Activando seguimiento... solicitud de ubicación')
+    }
   }
 
   // --- Compartido ---

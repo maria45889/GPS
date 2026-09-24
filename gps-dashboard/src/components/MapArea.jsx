@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { Plus, Minus, Crosshair, Navigation, Share2, Maximize, Layers } from 'lucide-react';
 import { isVehicleInsideCircle, isVehicleInsidePolygon, routeColorForSpeed, routeAhead, projectedPath } from '../lib/mapLogic';
 import { normalizeBattery, sanitizeAccuracy, sanitizeRoute } from '../lib/queries';
+import { fetchDrivingRoute, formatNavDistance, formatNavDuration } from '../lib/routing';
 
 // Component to handle map resize
 const MapController = () => {
@@ -537,11 +538,72 @@ const MapArea = ({
   const mapRef = useRef(null);
   const alertMarkerRefs = useRef({});
   const [internalBaseLayer, setInternalBaseLayer] = useState('dark');
+  const [navRoute, setNavRoute] = useState([]);
+  const [navMeta, setNavMeta] = useState(null);
+  const [navError, setNavError] = useState(false);
   const baseLayer = baseLayerProp ?? internalBaseLayer;
   const changeBaseLayer = (next) => {
     setInternalBaseLayer(next);
     if (onBaseLayerChange) onBaseLayerChange(next);
   };
+
+  // Ruta de navegación por calles (OSRM) desde la posición actual del usuario
+  // hasta el dispositivo en movimiento, mientras dure el modo seguimiento.
+  useEffect(() => {
+    if (!isFollowingRoute) {
+      setNavRoute([]);
+      setNavMeta(null);
+      setNavError(false);
+      return undefined;
+    }
+    if (!userLocation?.position || !selectedVehicle?.position) {
+      setNavRoute([]);
+      setNavMeta(null);
+      setNavError(false);
+      return undefined;
+    }
+
+    let active = true;
+    let controller = null;
+
+    const loadRoute = async () => {
+      const origin = userLocation.position;
+      const destination = selectedVehicle.position;
+      if (!origin || !destination) return;
+
+      const ctrl = new AbortController();
+      controller = ctrl;
+      try {
+        const result = await fetchDrivingRoute(origin, destination, { signal: ctrl.signal });
+        if (!active) return;
+        if (result) {
+          setNavRoute(result.coords);
+          setNavMeta({ distanceM: result.distanceM, durationS: result.durationS });
+          setNavError(false);
+        } else {
+          setNavRoute([]);
+          setNavMeta(null);
+          setNavError(true);
+        }
+      } catch (err) {
+        if (!active) return;
+        if (err.name === 'AbortError') return;
+        setNavRoute([]);
+        setNavMeta(null);
+        setNavError(true);
+      }
+    };
+
+    loadRoute();
+    // Recalcular conforme el dispositivo avanza (cada 8s en modo seguimiento).
+    const interval = setInterval(loadRoute, 8000);
+    return () => {
+      active = false;
+      if (controller) controller.abort();
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFollowingRoute, userLocation?.position, selectedVehicle?.position]);
 
   // Default fallback center - Bogotá coordinates
   const defaultCenter = [4.6097, -74.0817];
@@ -744,8 +806,24 @@ const MapArea = ({
           />
         )}
 
-        {/* Ruta a seguir (modo seguimiento): línea brillante con dash animado */}
-        {isFollowingRoute && followRoute.length >= 2 && (
+        {/* Ruta a seguir (modo seguimiento): navegación por calles desde tu posición
+            hasta el dispositivo en movimiento, con dash animado. Si OSRM falla o aún
+            no hay ruta, se usa la ruta histórica/proyección del vehículo. */}
+        {isFollowingRoute && navRoute.length >= 2 && (
+          <>
+            <Polyline
+              positions={navRoute}
+              className="route-follow"
+              pathOptions={{ color: '#22d3ee', weight: 4.5, opacity: 0.95, dashArray: '8 12', lineCap: 'round', lineJoin: 'round' }}
+            />
+            <Polyline
+              positions={navRoute}
+              pathOptions={{ color: '#22d3ee', weight: 11, opacity: 0.18 }}
+            />
+          </>
+        )}
+
+        {isFollowingRoute && navRoute.length < 2 && followRoute.length >= 2 && (
           <>
             <Polyline
               positions={followRoute}
@@ -929,6 +1007,22 @@ const MapArea = ({
                 <Minus size={18} />
               </button>
             </div>
+          </div>
+        )}
+
+        {isFollowingRoute && navRoute.length >= 2 && (
+          <div className="absolute left-4 top-4 pointer-events-auto bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.25)] px-3 py-2 text-xs">
+            <div className="flex items-center gap-1.5 text-cyan-300 font-bold uppercase tracking-wide">
+              <Navigation size={13} />
+              Ruta de navegación
+            </div>
+            {navMeta && (
+              <div className="flex gap-3 mt-1 text-[11px] text-slate-200">
+                <span>{formatNavDistance(navMeta.distanceM)}</span>
+                <span>·</span>
+                <span>{formatNavDuration(navMeta.durationS)}</span>
+              </div>
+            )}
           </div>
         )}
 
