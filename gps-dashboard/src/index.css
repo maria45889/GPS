@@ -154,6 +154,11 @@
   transition: filter 0.5s ease;
 }
 
+/* Modo oscuro: convierte los tiles de OpenStreetMap a un mapa oscuro */
+.cyber-tiles.dark-mode .leaflet-tile {
+  filter: invert(1) hue-rotate(200deg) brightness(0.9) contrast(0.85) saturate(0.55) !important;
+}
+
 .header-status,
 .header-signal-actions {
   display: none;

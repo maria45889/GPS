@@ -681,7 +681,7 @@ const MapArea = ({
         center={currentPinPosition} 
         zoom={15} 
         zoomControl={false}
-        className="w-full h-full z-0 cyber-tiles"
+        className={baseLayer === 'dark' ? 'w-full h-full z-0 cyber-tiles dark-mode' : 'w-full h-full z-0 cyber-tiles'}
         style={{ height: '100%', width: '100%' }}
       >
         <MapController />
@@ -696,17 +696,17 @@ const MapArea = ({
           <MapFlyToHandler targetPosition={userLocation.position} flyToTrigger={locateUserTrigger} />
         )}
         
-        {/* Dark GIS Basemap */}
+{/* Dark GIS Basemap */}
         <TileLayer
           url={baseLayer === 'satellite'
             ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'}
+            : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'}
           attribution={baseLayer === 'satellite'
             ? '&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
-            : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'}
+            : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}
           maxZoom={19}
           maxNativeZoom={19}
-          subdomains="abcd"
+          subdomains="abc"
         />
 
 
