@@ -196,7 +196,7 @@ const CommandCenter = ({
 
       {/* Tarjeta manual de punto de partida */}
       <div
-        className={`pointer-events-none absolute inset-x-0 top-[150px] z-30 flex justify-center px-4 ${
+        className={`pointer-events-none absolute inset-x-0 top-[138px] sm:top-[146px] z-30 flex justify-center px-4 ${
           isPlacingOnMap ? 'hidden' : fleetOpen || detailOpen ? 'hidden xl:block' : ''
         }`}
       >

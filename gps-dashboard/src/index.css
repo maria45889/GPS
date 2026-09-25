@@ -154,11 +154,11 @@
   transition: filter 0.5s ease;
 }
 
-/* Modo oscuro: convierte los tiles de OpenStreetMap a un mapa oscuro.
-   El filtro se aplica al pane completo (una sola rasterización), NO a
-   cada tile, para no degradar la nitidez durante el zoom/pan. */
+/* Modo oscuro: convierte los tiles de OpenStreetMap a un mapa oscuro
+   limpio y moderno, con calles y etiquetas legibles. El filtro va sobre
+   el pane completo (una sola rasterización) para no degradar el zoom. */
 .cyber-tiles.dark-mode .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(200deg) brightness(0.9) contrast(0.85) saturate(0.55) !important;
+  filter: invert(0.95) hue-rotate(180deg) brightness(0.92) contrast(1.06) saturate(0.45) !important;
 }
 
 .header-status,
