@@ -10,6 +10,7 @@ export const normalizeEntity = (e) => ({
     : 0,
   accuracy: Number.isFinite(Number(e?.accuracy)) ? Math.max(0, Math.round(Number(e.accuracy))) : null,
   position: e?.position || null,
+  historicalPosition: e?.historicalPosition || e?.position || null,
   route: Array.isArray(e?.route) ? e.route : [],
   lastUpdate: e?.lastUpdate || e?.last_seen || '--',
   deviceId: e?.deviceId || e?.device_id || null,

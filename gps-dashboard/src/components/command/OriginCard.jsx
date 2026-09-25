@@ -43,7 +43,7 @@ const OriginCard = ({ origin, onSelectOrigin, onUseGps, hasGps, isFollowingRoute
   }
 
   return (
-    <div className="w-[304px] rounded-2xl border border-cyan-500/20 bg-slate-900/70 p-3.5 shadow-[0_0_25px_rgba(6,182,212,0.15)] backdrop-blur-md">
+    <div className="w-[min(304px,calc(100vw - 32px))] rounded-2xl border border-cyan-500/20 bg-slate-900/70 p-3.5 shadow-[0_0_25px_rgba(6,182,212,0.15)] backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
           <MapPin size={13} />

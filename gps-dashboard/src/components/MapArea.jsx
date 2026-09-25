@@ -892,24 +892,32 @@ const MapArea = ({
         )}
 
         {/* 3. Fleet Vehicle Pins */}
-        {vehicles.filter((v) => v.position).map((v) => {
+        {vehicles.filter((v) => v.position || v.historicalPosition).map((v) => {
+          const pos = v.position || v.historicalPosition;
           const isSelected = selectedVehicle?.id === v.id;
+          const isOffline = !v.position;
 
           return (
             <React.Fragment key={v.id}>
-              {v.bearing !== undefined && (
-                <Marker position={v.position} icon={createHeadingIcon(v.bearing)} interactive={false} />
+              {!isOffline && v.bearing !== undefined && (
+                <Marker position={pos} icon={createHeadingIcon(v.bearing)} interactive={false} />
               )}
               <Marker
-                position={v.position}
-                icon={isSelected ? createHeroPinIcon(v.name, v.id) : createFleetPinIcon(v.status)}
+                position={pos}
+                icon={isSelected ? createHeroPinIcon(v.name, v.id) : createFleetPinIcon(isOffline ? 'offline' : v.status)}
                 eventHandlers={{
                   click: () => onSelectVehicle && onSelectVehicle(v),
                 }}
               >
-              <Tooltip direction="top" offset={[0, -18]} opacity={0.95}>
-                <span>{v.speed || 0} km/h · precisión {sanitizeAccuracy(v.accuracy) !== null ? `${sanitizeAccuracy(v.accuracy)} m` : '--'} · {v.lastUpdate || 'sin reporte'}</span>
-              </Tooltip>
+                {isOffline ? (
+                  <Tooltip direction="top" offset={[0, -18]} opacity={0.95}>
+                    <span>Sin señal · última posición conocida · {v.lastUpdate || '--'}</span>
+                  </Tooltip>
+                ) : (
+                  <Tooltip direction="top" offset={[0, -18]} opacity={0.95}>
+                    <span>{v.speed || 0} km/h · precisión {sanitizeAccuracy(v.accuracy) !== null ? `${sanitizeAccuracy(v.accuracy)} m` : '--'} · {v.lastUpdate || 'sin reporte'}</span>
+                  </Tooltip>
+                )}
               <Popup className="dark-popup">
                 <div className="text-xs min-w-[170px]">
                   <div className="flex items-center justify-between mb-1.5 pb-1.5 border-b border-white/10">

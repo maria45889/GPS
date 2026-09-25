@@ -21,6 +21,7 @@ const toMapShape = (e, original = null) => ({
   accuracy: e.accuracy ?? null,
   lastUpdate: e.lastUpdate || '--',
   position: e.position || null,
+  historicalPosition: e.historicalPosition || e.position || null,
   route: e.route || [],
   controlState: original?.controlState,
 })
@@ -195,8 +196,8 @@ const CommandCenter = ({
 
       {/* Tarjeta manual de punto de partida */}
       <div
-        className={`pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-4 ${
-          isPlacingOnMap ? 'hidden' : detailOpen ? 'hidden xl:block' : ''
+        className={`pointer-events-none absolute inset-x-0 top-[150px] z-30 flex justify-center px-4 ${
+          isPlacingOnMap ? 'hidden' : fleetOpen || detailOpen ? 'hidden xl:block' : ''
         }`}
       >
         <div className="pointer-events-auto">
@@ -213,7 +214,7 @@ const CommandCenter = ({
       </div>
 
       {/* Panel izquierdo - Detalle (escritorio) */}
-      <div className="pointer-events-none absolute left-4 top-32 bottom-36 z-20 hidden xl:block">
+      <div className="pointer-events-none absolute left-4 top-[150px] bottom-36 z-20 hidden xl:block">
         <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
           <DetailPanel
             entity={active}
@@ -266,7 +267,7 @@ const CommandCenter = ({
       )}
 
       {/* Panel derecho - Flota (escritorio) */}
-      <div className="pointer-events-none absolute right-4 top-32 bottom-36 z-20 hidden lg:block">
+      <div className="pointer-events-none absolute right-4 top-[150px] bottom-36 z-20 hidden lg:block">
         <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
           <FleetPanel
             entities={combined}
@@ -308,7 +309,7 @@ const CommandCenter = ({
 
       {/* Aviso al colocar geocerca */}
       {isPlacingOnMap && (
-        <div className="absolute left-1/2 top-32 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#f59e0b] bg-[#23200f]/90 px-4 py-2 text-[11px] font-bold text-[#fbbf24] shadow-[0_4px_20px_rgba(245,158,11,0.35)] backdrop-blur-md">
+        <div className="absolute left-1/2 top-[150px] z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#f59e0b] bg-[#23200f]/90 px-4 py-2 text-[11px] font-bold text-[#fbbf24] shadow-[0_4px_20px_rgba(245,158,11,0.35)] backdrop-blur-md">
           Toca o haz clic en el mapa para ubicar la geocerca
           <button
             type="button"
