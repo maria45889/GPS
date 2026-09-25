@@ -700,12 +700,13 @@ const MapArea = ({
         <TileLayer
           url={baseLayer === 'satellite'
             ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            : 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'}
+            : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'}
           attribution={baseLayer === 'satellite'
             ? '&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
-            : '&copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'}
-          maxZoom={18}
-          maxNativeZoom={baseLayer === 'satellite' ? 19 : 16}
+            : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'}
+          maxZoom={19}
+          maxNativeZoom={19}
+          subdomains="abcd"
         />
 
 
