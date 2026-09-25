@@ -83,6 +83,21 @@ const AlertFocusHandler = ({ focusTrigger, markerRefs }) => {
   return null;
 };
 
+// Encuadra el mapa al recorrido del historial de una entidad seleccionada
+const RouteFocusHandler = ({ routeFocusTrigger }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!routeFocusTrigger?.route || routeFocusTrigger.route.length < 2) return;
+    const points = routeFocusTrigger.route.filter((p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
+    if (points.length < 2) return;
+    const bounds = L.latLngBounds(points.map(([lat, lng]) => [Number(lat), Number(lng)]));
+    map.fitBounds(bounds, { padding: [56, 56], maxZoom: 16 });
+  }, [routeFocusTrigger, map]);
+
+  return null;
+};
+
 // Component to handle map clicks and movement for placing geofences
 const MapClickHandler = ({ isPlacingOnMap, onMapClick, onMapHover }) => {
   const lastHoverRef = useRef(0);
@@ -120,6 +135,13 @@ const createUserLocationIcon = () => getCachedIcon('user-location', () => new L.
   html: '<div class="user-location-dot"><span></span></div>',
   iconSize: [24, 24],
   iconAnchor: [12, 12],
+}));
+
+const createOriginIcon = () => getCachedIcon('origin-pin', () => new L.DivIcon({
+  className: 'origin-pin',
+  html: '<div class="origin-flag"><span></span></div>',
+  iconSize: [26, 34],
+  iconAnchor: [13, 32],
 }));
 
 
@@ -530,10 +552,12 @@ const MapArea = ({
   userLocation = null,
   onLocationChange,
   locateUserTrigger,
+  origin = null,
   baseLayer: baseLayerProp,
   onBaseLayerChange,
   hideControls = false,
   hideSelectionBar = false,
+  routeFocusTrigger = null,
 }) => {
   const mapRef = useRef(null);
   const alertMarkerRefs = useRef({});
@@ -547,16 +571,17 @@ const MapArea = ({
     if (onBaseLayerChange) onBaseLayerChange(next);
   };
 
-  // Ruta de navegación por calles (OSRM) desde la posición actual del usuario
-  // hasta el dispositivo en movimiento, mientras dure el modo seguimiento.
+  // Ruta de navegación por calles (OSRM) desde el punto de partida
+  // (manual por tarjeta, o GPS si no hay manual) hasta el dispositivo.
   useEffect(() => {
+    const source = origin?.position || userLocation?.position
     if (!isFollowingRoute) {
       setNavRoute([]);
       setNavMeta(null);
       setNavError(false);
       return undefined;
     }
-    if (!userLocation?.position || !selectedVehicle?.position) {
+    if (!source || !selectedVehicle?.position) {
       setNavRoute([]);
       setNavMeta(null);
       setNavError(false);
@@ -567,14 +592,14 @@ const MapArea = ({
     let controller = null;
 
     const loadRoute = async () => {
-      const origin = userLocation.position;
+      const originPos = source;
       const destination = selectedVehicle.position;
-      if (!origin || !destination) return;
+      if (!originPos || !destination) return;
 
       const ctrl = new AbortController();
       controller = ctrl;
       try {
-        const result = await fetchDrivingRoute(origin, destination, { signal: ctrl.signal });
+        const result = await fetchDrivingRoute(originPos, destination, { signal: ctrl.signal });
         if (!active) return;
         if (result) {
           setNavRoute(result.coords);
@@ -603,7 +628,7 @@ const MapArea = ({
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFollowingRoute, userLocation?.position, selectedVehicle?.position]);
+  }, [isFollowingRoute, origin?.position, userLocation?.position, selectedVehicle?.position]);
 
   // Default fallback center - Bogotá coordinates
   const defaultCenter = [4.6097, -74.0817];
@@ -634,10 +659,11 @@ const MapArea = ({
   // Active route to render (sanitized for safe Leaflet rendering)
   const activeRoute = selectedVehicle?.route ? sanitizeRoute(selectedVehicle.route) : [];
 
-  // Ruta "por donde ir" al estar en modo seguimiento: si hay ruta grabada se recorre desde
-  // la posición actual; si no, se proyecta una hacia delante según el rumbo actual.
-  const guidanceLine = isFollowingRoute && selectedVehicle?.position && userLocation?.position
-    ? [selectedVehicle.position, userLocation.position]
+  // Ruta "por donde ir" al estar en modo seguimiento: se enruta desde el
+  // punto de partida (manual o GPS) hasta la posición actual del dispositivo.
+  const sourcePos = origin?.position || userLocation?.position;
+  const guidanceLine = isFollowingRoute && selectedVehicle?.position && sourcePos
+    ? [selectedVehicle.position, sourcePos]
     : null;
 
   const followRoute = isFollowingRoute && selectedVehicle?.position
@@ -664,6 +690,7 @@ const MapArea = ({
           flyToTrigger={flyToTrigger} 
         />
         <AlertFocusHandler focusTrigger={focusTrigger} markerRefs={alertMarkerRefs} />
+        <RouteFocusHandler routeFocusTrigger={routeFocusTrigger} />
         <UserLocationTracker locateUserTrigger={locateUserTrigger} onLocationChange={onLocationChange} />
         {locateUserTrigger && userLocation?.position && (
           <MapFlyToHandler targetPosition={userLocation.position} flyToTrigger={locateUserTrigger} />
@@ -695,6 +722,16 @@ const MapArea = ({
               <Popup>Tu ubicación actual</Popup>
             </Marker>
           </>
+        )}
+
+        {/* Punto de partida manual (tarjeta "desde dónde parto") */}
+        {origin?.position && !(userLocation && userLocation.position[0] === origin.position[0] && userLocation.position[1] === origin.position[1]) && (
+          <Marker position={origin.position} icon={createOriginIcon()}>
+            <Popup>
+              <div className="font-bold">Punto de partida</div>
+              <div className="text-[10px] text-slate-500">{origin.label}</div>
+            </Popup>
+          </Marker>
         )}
 
         {/* 1. Dynamic Geofences with Glass styling */}
@@ -894,6 +931,7 @@ const MapArea = ({
                     <button
                       type="button"
                       onClick={() => onSelectVehicle?.(v)}
+                      aria-label={`Seleccionar ${v.name || v.plate || v.id}`}
                       className="mt-3 w-full py-1.5 px-2 rounded-md bg-[#00E676]/20 hover:bg-[#00E676]/30 border border-[#00E676]/40 text-[#00E676] text-[10px] font-bold transition-colors"
                     >
                       Seleccionar {category === 'vehicles' ? 'moto' : 'dispositivo'}
@@ -903,6 +941,7 @@ const MapArea = ({
                       <button
                         type="button"
                         onClick={() => onToggleRouteFollow?.()}
+                        aria-label={isFollowingRoute ? 'Dejar de seguir la ruta' : 'Seguir la ruta del dispositivo'}
                         className="rounded-md border border-cyan-400/30 bg-cyan-400/10 px-2 py-1.5 text-[10px] font-bold text-cyan-200"
                       >
                         {isFollowingRoute ? 'Siguiendo' : 'Seguir ruta'}
@@ -910,6 +949,7 @@ const MapArea = ({
                       <button
                         type="button"
                         onClick={() => onShareRoute?.()}
+                        aria-label="Compartir ubicación y ruta"
                         className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-1.5 text-[10px] font-bold text-emerald-200"
                       >
                         Compartir
@@ -950,6 +990,7 @@ const MapArea = ({
                 </div>
                 <button
                   onClick={() => onSelectAlert && onSelectAlert(alert)}
+                  aria-label={`Ver alerta: ${alert.title}`}
                   className="w-full py-1.5 px-2 rounded-lg bg-[#00E676]/15 hover:bg-[#00E676]/25 border border-[#00E676]/40 text-[#00E676] text-[11px] font-bold transition-all shadow-[0_0_10px_rgba(0,240,255,0.2)]"
                 >
                   Ver alerta
@@ -974,13 +1015,14 @@ const MapArea = ({
               type="button"
               onClick={onToggleRouteFollow}
               disabled={!selectedVehicle?.position}
+              aria-label={isFollowingRoute && selectedVehicle?.position ? 'Dejar de seguir vehículo' : 'Seguir vehículo en el mapa'}
               title={!selectedVehicle?.position ? 'Sin posición GPS para seguir' : 'Seguir vehículo en el mapa'}
               className={`${isFollowingRoute && selectedVehicle?.position ? 'is-active' : ''} ${!selectedVehicle?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <Navigation size={15} />
               <span>{isFollowingRoute && selectedVehicle?.position ? 'Siguiendo' : 'Seguir'}</span>
             </button>
-            <button type="button" onClick={onShareRoute} title="Compartir ubicación y ruta">
+            <button type="button" onClick={onShareRoute} aria-label="Compartir ubicación y ruta" title="Compartir ubicación y ruta">
               <Share2 size={15} />
               <span>Compartir</span>
             </button>
@@ -996,12 +1038,14 @@ const MapArea = ({
             <div className="map-control-stack bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl flex flex-col">
               <button
                 onClick={handleZoomIn}
+                aria-label="Acercar mapa"
                 className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors border-b border-cyan-500/20"
               >
                 <Plus size={18} />
               </button>
               <button
                 onClick={handleZoomOut}
+                aria-label="Alejar mapa"
                 className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
               >
                 <Minus size={18} />
@@ -1010,12 +1054,17 @@ const MapArea = ({
           </div>
         )}
 
-        {isFollowingRoute && navRoute.length >= 2 && (
+        {isFollowingRoute && (navRoute.length >= 2 || navError) && (
           <div className="absolute left-4 top-4 pointer-events-auto bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.25)] px-3 py-2 text-xs">
             <div className="flex items-center gap-1.5 text-cyan-300 font-bold uppercase tracking-wide">
               <Navigation size={13} />
               Ruta de navegación
             </div>
+            {navError && navRoute.length < 2 && (
+              <div className="mt-1 text-[11px] text-red-300">
+                No se pudo trazar la ruta aquí. Intenta con otra ubicación de partida.
+              </div>
+            )}
             {navMeta && (
               <div className="flex gap-3 mt-1 text-[11px] text-slate-200">
                 <span>{formatNavDistance(navMeta.distanceM)}</span>
@@ -1028,9 +1077,9 @@ const MapArea = ({
 
         {!hideControls && (
           <div className="map-secondary-controls pointer-events-auto">
-            <button onClick={handleRecenter} title="Centrar vehículo activo"><Crosshair size={16} /></button>
-            <button onClick={handleFitFleet} title="Ver toda la flota"><Maximize size={16} /></button>
-            <button onClick={() => changeBaseLayer(baseLayer === 'dark' ? 'satellite' : 'dark')} title="Cambiar capa del mapa"><Layers size={16} /><span>{baseLayer === 'dark' ? 'Satélite' : 'Oscuro'}</span></button>
+            <button aria-label="Centrar vehículo activo" onClick={handleRecenter} title="Centrar vehículo activo"><Crosshair size={16} /></button>
+            <button aria-label="Ver toda la flota" onClick={handleFitFleet} title="Ver toda la flota"><Maximize size={16} /></button>
+            <button aria-label="Cambiar capa del mapa" onClick={() => changeBaseLayer(baseLayer === 'dark' ? 'satellite' : 'dark')} title="Cambiar capa del mapa"><Layers size={16} /><span>{baseLayer === 'dark' ? 'Satélite' : 'Oscuro'}</span></button>
           </div>
         )}
 

@@ -335,3 +335,31 @@ export const latestLocationsByDevice = (locations = []) => {
   }
   return [...latestByDevice.values()]
 }
+
+// Historial de ruta de un dispositivo desde gps_locations (para devices sin ruta embebida).
+// Devuelve [lat, lng][] en orden cronológico (más recientes primero en DB, se revierte).
+export const fetchDeviceRouteHistory = async (deviceId, limit = 250) => {
+  if (!supabase || !deviceId) return []
+  return withAuthRetry(async () => {
+    const { data, error } = await supabase
+      .from('gps_locations')
+      .select('latitude, longitude, timestamp')
+      .eq('device_id', deviceId)
+      .order('timestamp', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      const errMsg = `${error.code || ''} ${error.message || ''}`.toLowerCase()
+      const isRls = String(error.code).startsWith('PGRST') || errMsg.includes('policy') || errMsg.includes('permission') || errMsg.includes('row-level')
+      if (isRls) return [] // Sin permiso para ver historial de este dispositivo
+      throw error
+    }
+
+    const points = (data || [])
+      .reverse()
+      .map((r) => [Number(r.latitude), Number(r.longitude)])
+      .filter((pt) => isCoordinateValid(pt[0], pt[1]))
+
+    return points
+  })
+}

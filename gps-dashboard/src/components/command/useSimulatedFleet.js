@@ -8,6 +8,7 @@ const MOCK_ROUTES = [
 
 const STORAGE_KEY = 'rg_deleted_demos'
 const storage = () => (typeof window !== 'undefined' && window.localStorage ? window.localStorage : null)
+const ENABLE_DEMOS = Boolean(import.meta.env.DEV)
 
 export const getDeletedDemos = () => {
   try {
@@ -59,13 +60,15 @@ const seedUnit = (route) => ({
 })
 
 export const useSimulatedFleet = (realCount) => {
-  const [deleted, setDeleted] = useState(getDeletedDemos)
+  const [deleted, setDeleted] = useState(() => (ENABLE_DEMOS ? getDeletedDemos() : new Set()))
   const [units, setUnits] = useState(() =>
-    MOCK_ROUTES.filter((r) => !getDeletedDemos().has(r.id)).map((r) => seedUnit({ ...r, route: buildRoute(r.base, r.radius) })),
+    ENABLE_DEMOS && realCount < 3
+      ? MOCK_ROUTES.filter((r) => !getDeletedDemos().has(r.id)).map((r) => seedUnit({ ...r, route: buildRoute(r.base, r.radius) }))
+      : [],
   )
 
   useEffect(() => {
-    if (realCount >= 3) return undefined
+    if (!ENABLE_DEMOS || realCount >= 3) return undefined
 
     let step = 0
     const timer = setInterval(() => {
@@ -89,6 +92,7 @@ export const useSimulatedFleet = (realCount) => {
   }, [realCount])
 
   const removeUnit = (unitId) => {
+    if (!ENABLE_DEMOS) return
     setUnits((prev) => prev.filter((u) => u.id !== unitId))
     setDeleted((prevIds) => {
       const next = new Set(prevIds)
@@ -106,7 +110,7 @@ export const useSimulatedFleet = (realCount) => {
 
   return useMemo(
     () => ({
-      units: realCount >= 3 ? [] : units,
+      units: ENABLE_DEMOS && realCount < 3 ? units : [],
       removeUnit,
       resetDemos,
     }),

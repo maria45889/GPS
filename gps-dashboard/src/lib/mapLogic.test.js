@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deviceStatusFromLastSeen, fleetPositions, isVehicleInsideCircle, isVehicleInsidePolygon, routeColorForSpeed } from './mapLogic'
+import { deviceStatusFromLastSeen, fleetPositions, isVehicleInsideCircle, isVehicleInsidePolygon, routeColorForSpeed, routeDistanceKm } from './mapLogic'
 
 describe('mapLogic', () => {
   it('clasifica el color de ruta según velocidad', () => {
@@ -79,5 +79,20 @@ describe('mapLogic', () => {
     expect(deviceStatusFromLastSeen('2026-01-01T00:10:00.000Z', now)).toBe('offline')
     // Timestamp en el futuro cercano (<= 5 min) por desvío de reloj se acepta
     expect(deviceStatusFromLastSeen('2026-01-01T00:04:30.000Z', now)).toBe('active')
+  })
+
+  it('suma la distancia del recorrido en km', () => {
+    // 0.01° de latitud ≈ 1.11 km; 0.02° de latitud ≈ 2.22 km
+    expect(routeDistanceKm([[4.60, -74.08], [4.61, -74.08]])).toBeGreaterThan(1.1)
+    expect(routeDistanceKm([[4.60, -74.08], [4.61, -74.08]])).toBeLessThan(1.12)
+    // Un tramo doble devuelve aproximadamente el doble
+    expect(routeDistanceKm([
+      [4.60, -74.08],
+      [4.61, -74.08],
+      [4.62, -74.08],
+    ])).toBeCloseTo(routeDistanceKm([[4.60, -74.08], [4.61, -74.08]]) * 2, 1)
+    // Lista vacía o de un solo punto no acumula distancia
+    expect(routeDistanceKm([])).toBe(0)
+    expect(routeDistanceKm([[4.60, -74.08]])).toBe(0)
   })
 })

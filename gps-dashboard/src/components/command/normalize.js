@@ -38,20 +38,21 @@ export const statusColor = (entity) => {
 
 export const signalFor = (entity) => {
   if (!entity || !isOnline(entity)) return 0
-  const seed = (String(entity.id).split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 12)
-  return Math.max(82, Math.min(99, 96 - seed))
-}
-
-export const gForceFor = (entity, tick = Date.now()) => {
-  const seed = String(entity?.id || 'x').split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
-  const wave = Math.sin(tick / 1100 + seed) * 0.12
-  const speedPull = (Number(entity?.speed) || 0) / 180
-  return (0.92 + wave + speedPull).toFixed(2)
-}
-
-export const altitudeFor = (tick = Date.now(), seed = 0) => {
-  const wave = Math.sin(tick / 1400 + seed) * 6
-  return Math.round(2574 + wave)
+  const accuracy = Number(entity?.accuracy)
+  if (Number.isFinite(accuracy) && accuracy > 0) {
+    if (accuracy <= 10) return 96
+    if (accuracy <= 25) return 90
+    if (accuracy <= 50) return 82
+    if (accuracy <= 100) return 72
+    return 58
+  }
+  const battery = Number(entity?.battery)
+  if (Number.isFinite(battery) && battery > 0) {
+    if (battery >= 60) return 88
+    if (battery >= 25) return 74
+    return 55
+  }
+  return 70
 }
 
 export const hashSpark = (seedValue, max = 18) => {

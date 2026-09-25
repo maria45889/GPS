@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { RightSidebarPanel } from '../components/RightSidebarPanel';
+import FleetPanel from '../components/command/FleetPanel';
 
-describe('RightSidebarPanel con dispositivos offline sin ubicación', () => {
+describe('FleetPanel con dispositivos offline sin ubicación', () => {
   it('muestra dispositivos offline sin posición y permite seleccionarlos', async () => {
     const user = userEvent.setup();
     const handleSelect = vi.fn();
@@ -31,8 +31,7 @@ describe('RightSidebarPanel con dispositivos offline sin ubicación', () => {
     ];
 
     render(
-      <RightSidebarPanel
-        category="devices"
+      <FleetPanel
         entities={mockDevices}
         onSelectEntity={handleSelect}
       />

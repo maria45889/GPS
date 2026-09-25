@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  fetchDeviceRouteHistory,
   isLocationValidForMap,
   latestLocationsByDevice,
   normalizeBattery,
@@ -136,6 +137,13 @@ describe('latestLocationsByDevice', () => {
       { device_id: 'moto-1', timestamp: '2026-01-02' },
       { device_id: 'moto-2', timestamp: '2026-01-03' },
     ])
+  })
+})
+
+describe('fetchDeviceRouteHistory', () => {
+  it('resuelve lista vacía sin configuración de Supabase o sin device_id', async () => {
+    await expect(fetchDeviceRouteHistory(null)).resolves.toEqual([])
+    await expect(fetchDeviceRouteHistory('')).resolves.toEqual([])
   })
 })
 

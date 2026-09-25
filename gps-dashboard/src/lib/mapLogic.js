@@ -134,3 +134,19 @@ export const deviceStatusFromLastSeen = (timestamp, now = Date.now(), timeoutMs 
   if (diff > timeoutMs) return 'offline'
   return 'active'
 }
+
+// Distancia total en km de un recorrido [[lat,lng], ...] (fórmula haversine por segmentos)
+export const routeDistanceKm = (points = []) => {
+  let total = 0
+  for (let i = 1; i < points.length; i++) {
+    const [lat1, lng1] = points[i - 1]
+    const [lat2, lng2] = points[i]
+    const dLat = ((lat2 - lat1) * Math.PI) / 180
+    const dLng = ((lng2 - lng1) * Math.PI) / 180
+    const a =
+      Math.sin(dLat / 2) ** 2
+      + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
+    total += 2 * 6371000 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  }
+  return total / 1000
+}

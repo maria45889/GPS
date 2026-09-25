@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Search, Crosshair, MapPin, Plus, AlertTriangle, Trash2, RotateCcw } from 'lucide-react'
 import { isOnline, statusColor, signalFor, hashSpark } from './normalize'
 
-const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onResetDemos, userLocation, onLocateUser, onSetGeofence, alerts, onSelectAlert }) => {
+const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onResetDemos, userLocation, onLocateUser, onSetGeofence, alerts, onSelectAlert, isLoading = false }) => {
   const [query, setQuery] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(null)
 
@@ -17,7 +17,7 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
   const activeAlerts = (alerts || []).filter((a) => a.status !== 'resolved')
 
   return (
-    <div className="flex w-[304px] flex-col rounded-2xl border border-cyan-500/20 bg-slate-900/60 p-4 shadow-[0_0_25px_rgba(6,182,212,0.12)] backdrop-blur-md">
+    <div className="flex w-[min(304px,calc(100vw - 24px))] flex-col rounded-2xl border border-cyan-500/20 bg-slate-900/60 p-4 shadow-[0_0_25px_rgba(6,182,212,0.12)] backdrop-blur-md">
       {/* Ubicación del operador */}
       <div className="flex items-center justify-between gap-2 rounded-xl border border-cyan-500/15 bg-[#0a1220]/70 p-3">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -52,6 +52,7 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar dispositivo..."
+          aria-label="Buscar dispositivo"
           className="w-full bg-transparent text-[11px] text-slate-200 placeholder-slate-600 outline-none"
         />
       </div>
@@ -60,7 +61,7 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
       <div className="cmd-scroll mt-3 -mr-1 max-h-[36vh] min-h-[120px] flex-1 space-y-1.5 overflow-y-auto pr-1">
         {filtered.length === 0 && (
           <div className="py-6 text-center text-[10px] uppercase tracking-widest text-slate-600">
-            Sin dispositivos
+            {isLoading ? 'Cargando flota...' : 'Sin dispositivos'}
             {onResetDemos && (
               <button
                 type="button"
@@ -80,82 +81,74 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
           const sparkPts = spark.map((v, i) => `${(i / (spark.length - 1)) * 52},${(v / 110) * 14}`).join(' ')
           const signal = signalFor(entity)
           return (
-            <button
+            <div
               key={entity.id}
-              type="button"
-              onClick={() => onSelectEntity(entity)}
-              className={`w-full rounded-xl border p-2.5 text-left transition-all ${
+              className={`relative w-full rounded-xl border p-2.5 text-left transition-all ${
                 isSel
                   ? 'border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_16px_rgba(6,182,212,0.25)]'
                   : 'border-cyan-500/10 bg-[#0a1220]/50 hover:border-cyan-500/30 hover:bg-cyan-500/5'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className={`absolute h-full w-full rounded-full opacity-50 ${online ? 'animate-ping' : ''}`} style={{ backgroundColor: color }} />
-                  <span className="relative h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate font-mono text-[11px] font-bold text-slate-200">{entity.name || entity.id}</span>
-                    {entity._mock && (
-                      <span className="rounded bg-amber-500/15 px-1 py-px text-[7px] font-extrabold uppercase tracking-wider text-amber-400">Sim</span>
-                    )}
-                  </div>
-                  <div className="truncate text-[9px] text-slate-600">{entity.id}</div>
-                </div>
-              </div>
-              <div className="mt-1.5 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => onSelectEntity(entity)}
+                className="w-full pr-7 text-left"
+              >
                 <div className="flex items-center gap-2">
-                  <span className={`font-mono text-[11px] font-bold ${online ? 'text-[#06b6d4]' : 'text-slate-600'}`}>
-                    {Math.round(entity.speed ?? 0)}<span className="ml-0.5 text-[7px] text-slate-600">km/h</span>
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className={`absolute h-full w-full rounded-full opacity-50 ${online ? 'animate-ping' : ''}`} style={{ backgroundColor: color }} />
+                    <span className="relative h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
                   </span>
-                  <span className="font-mono text-[10px] text-slate-500">{entity.battery ?? '—'}%</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-mono text-[11px] font-bold text-slate-200">{entity.name || entity.id}</span>
+                      {entity._mock && (
+                        <span className="rounded bg-amber-500/15 px-1 py-px text-[9px] font-extrabold uppercase tracking-wider text-amber-400">Sim</span>
+                      )}
+                    </div>
+                    <div className="truncate text-[10px] text-slate-500">{entity.id}</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className={`font-mono text-[8px] font-bold ${signal > 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>{signal}%</span>
-                  <svg viewBox="0 0 52 16" className="h-3.5 w-14">
-                    <polyline points={sparkPts} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" opacity="0.9" style={{ filter: `drop-shadow(0 0 2px ${color})` }} />
-                  </svg>
-                  {onDeleteEntity && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        if (confirmingDelete === entity.id) {
-                          setConfirmingDelete(null)
-                          onDeleteEntity(entity)
-                        } else {
-                          setConfirmingDelete(entity.id)
-                          window.setTimeout(() => setConfirmingDelete((cur) => (cur === entity.id ? null : cur)), 2500)
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.stopPropagation()
-                          e.preventDefault()
-                          onDeleteEntity(entity)
-                        }
-                      }}
-                      title="Eliminar dispositivo"
-                      aria-label={`Eliminar ${entity.name || entity.id}`}
-                      className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-md border transition-all ${
-                        confirmingDelete === entity.id
-                          ? 'border-red-400/70 bg-red-500/20 text-[#f87171]'
-                          : 'border-red-500/20 bg-red-500/5 text-red-400/60 hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-300'
-                      }`}
-                    >
-                      <Trash2 size={10} />
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-mono text-[11px] font-bold ${online ? 'text-[#06b6d4]' : 'text-slate-600'}`}>
+                      {Math.round(entity.speed ?? 0)}<span className="ml-0.5 text-[9px] text-slate-500">km/h</span>
                     </span>
-                  )}
-                  {confirmingDelete === entity.id && (
-                    <span className="font-mono text-[7px] font-bold uppercase tracking-wider text-red-400">¿Borrar?</span>
-                  )}
+                    <span className="font-mono text-[10px] text-slate-400">{entity.battery ?? '—'}%</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`font-mono text-[10px] font-bold ${signal > 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>{signal}%</span>
+                    <svg viewBox="0 0 52 16" className="h-3.5 w-14" aria-hidden="true">
+                      <polyline points={sparkPts} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" opacity="0.9" style={{ filter: `drop-shadow(0 0 2px ${color})` }} />
+                    </svg>
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              {onDeleteEntity && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (confirmingDelete === entity.id) {
+                      setConfirmingDelete(null)
+                      onDeleteEntity(entity)
+                    } else {
+                      setConfirmingDelete(entity.id)
+                      window.setTimeout(() => setConfirmingDelete((cur) => (cur === entity.id ? null : cur)), 2500)
+                    }
+                  }}
+                  title="Eliminar dispositivo"
+                  aria-label={`Eliminar ${entity.name || entity.id}`}
+                  className={`absolute right-2 top-2 flex items-center gap-1 rounded-md border px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider transition-all ${
+                    confirmingDelete === entity.id
+                      ? 'border-red-400/70 bg-red-500/20 text-[#f87171] shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+                      : 'border-red-500/20 bg-red-500/5 text-red-400/60 hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-300'
+                  }`}
+                >
+                  {confirmingDelete === entity.id ? '¿Borrar?' : <Trash2 size={11} />}
+                </button>
+              )}
+            </div>
           )
         })}
       </div>
@@ -163,8 +156,8 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
       {/* Alertas */}
       {activeAlerts.length > 0 && (
         <div className="mt-3 border-t border-cyan-500/10 pt-2.5">
-          <div className="mb-1.5 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-[0.2em] text-amber-400">
-            <AlertTriangle size={11} /> Alertas activas
+          <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400">
+            <AlertTriangle size={12} /> Alertas activas
           </div>
           <div className="cmd-scroll max-h-[16vh] space-y-1 overflow-y-auto pr-1">
             {activeAlerts.slice(0, 5).map((alert) => (
@@ -177,7 +170,7 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
                 <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-amber-400" />
                 <span className="min-w-0">
                   <span className="block truncate text-[10px] font-bold text-amber-200">{alert.title.split(' - ')[0]}</span>
-                  <span className="block truncate text-[8px] text-slate-500">{alert.timestamp} · {alert.locationName}</span>
+                  <span className="block truncate text-[9px] text-slate-400">{alert.timestamp} · {alert.locationName}</span>
                 </span>
               </button>
             ))}
@@ -189,7 +182,7 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
       <button
         type="button"
         onClick={onSetGeofence}
-        className="mt-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-cyan-500/30 px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-cyan-400 transition-all hover:border-cyan-400/60 hover:bg-cyan-500/10"
+        className="mt-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-cyan-500/30 px-2 py-2 text-[11px] font-bold uppercase tracking-wider text-cyan-400 transition-all hover:border-cyan-400/60 hover:bg-cyan-500/10"
       >
         <Plus size={12} /> Nueva Geocerca
       </button>

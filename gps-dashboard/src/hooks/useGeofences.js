@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { fetchGeofences } from '../lib/queries'
 import { supabase } from '../lib/supabase'
 
@@ -6,6 +6,9 @@ export const useGeofences = () => {
   const [geofences, setGeofences] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const refetchGeofences = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   useEffect(() => {
     let cancelled = false
@@ -56,7 +59,7 @@ export const useGeofences = () => {
       cancelled = true
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [refreshKey])
 
-  return { geofences, isLoading, error }
+  return { geofences, isLoading, error, refetchGeofences }
 }

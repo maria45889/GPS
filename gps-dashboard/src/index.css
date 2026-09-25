@@ -117,6 +117,36 @@
   background: #ffffff;
 }
 
+/* Marcador visual del punto de partida manual */
+.origin-pin { background: transparent !important; border: 0 !important; }
+.origin-flag {
+  position: relative;
+  width: 26px;
+  height: 34px;
+}
+.origin-flag::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 0;
+  width: 16px;
+  height: 18px;
+  background: linear-gradient(180deg, rgba(34,211,238,0.5) 0%, rgba(6,182,212,0.5) 100%);
+  border: 1px solid rgba(165,243,252,0.55);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%);
+  filter: drop-shadow(0 0 6px rgba(34,211,238,0.7));
+}
+.origin-flag::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 16px;
+  width: 2px;
+  height: 18px;
+  background: rgba(165,243,252,0.9);
+  box-shadow: 0 0 6px rgba(34,211,238,0.8);
+}
+
 /* Midnight green GIS filter for map tiles */
 .cyber-tiles .leaflet-tile {
   opacity: 1 !important;
@@ -1325,6 +1355,16 @@
 
 /* Toast reutilizado por el dashboard (arriba de la barra inferior) */
 .dashboard-toast {
-  bottom: 112px !important;
+  bottom: 136px;
   z-index: 90;
+}
+
+@media (max-width: 1023px) {
+  .dashboard-toast {
+    right: 12px;
+    left: 12px;
+    max-width: none;
+    bottom: 148px;
+    z-index: 99;
+  }
 }

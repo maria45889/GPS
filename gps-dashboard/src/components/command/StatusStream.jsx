@@ -1,6 +1,8 @@
-import React from 'react'
+import React, { useId } from 'react'
 
 const StatusStream = ({ samples = [], height = 60, color = '#06b6d4', label = 'Status Stream', unit = 'km/h' }) => {
+  const gradId = useId()
+
   const width = 260
   const points = samples.length
   const values = points > 1 ? samples : [0, 1]
@@ -15,7 +17,7 @@ const StatusStream = ({ samples = [], height = 60, color = '#06b6d4', label = 'S
 
   const last = samples.length ? Number(samples[samples.length - 1]) || 0 : 0
   const area = `0,${height} ${poly} ${width},${height}`
-  const gradId = `ss-grad-${color.replace('#', '')}`
+  const url = `url(#${gradId})`
 
   return (
     <div className="flex flex-col rounded-lg border border-cyan-500/15 bg-[#0a1220]/70 px-3 py-2">
@@ -33,7 +35,7 @@ const StatusStream = ({ samples = [], height = 60, color = '#06b6d4', label = 'S
               <stop offset="100%" stopColor={color} stopOpacity="0" />
             </linearGradient>
           </defs>
-          <polygon points={area} fill={`url(#${gradId})`} />
+          <polygon points={area} fill={url} />
           <polyline points={poly} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
           <circle cx={width} cy={height - ((values[values.length - 1] / max) * (height - 10) + 4)} r="2.4" fill={color}>
             <animate attributeName="opacity" values="1;0.4;1" dur="1.2s" repeatCount="indefinite" />

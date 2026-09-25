@@ -4,7 +4,9 @@ import TopBar from './TopBar'
 import DetailPanel from './DetailPanel'
 import FleetPanel from './FleetPanel'
 import BottomBar from './BottomBar'
+import OriginCard from './OriginCard'
 import { useSimulatedFleet } from './useSimulatedFleet'
+import { useRouteHistory } from '../../hooks'
 import { normalizeEntity } from './normalize'
 
 const toMapShape = (e, original = null) => ({
@@ -44,6 +46,8 @@ const CommandCenter = ({
   onShareRoute,
   userLocation,
   onLocateUser,
+  origin,
+  onSelectOrigin,
   onLocationChange,
   locateUserTrigger,
   flyToTrigger,
@@ -55,9 +59,13 @@ const CommandCenter = ({
   onEditVehicle,
   onLogout,
   lastSyncLabel,
+  onFocusRoute,
+  routeFocusTrigger = null,
+  fleetLoading = false,
 }) => {
   const [baseLayer, setBaseLayer] = useState('dark')
   const [fleetOpen, setFleetOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
   const onSelectRef = useRef(onSelectVehicle)
   useEffect(() => {
     onSelectRef.current = onSelectVehicle
@@ -94,6 +102,9 @@ const CommandCenter = ({
 
   const activeOriginal = selectedEntity || null
 
+  // Historial de ruta de la entidad activa (embebida o telemetría de gps_locations)
+  const { route: historyRoute, loading: historyLoading } = useRouteHistory(active)
+
   // Auto-seleccionar la primera entidad cuando no hay ninguna
   useEffect(() => {
     if (active || combined.length === 0) return undefined
@@ -113,6 +124,7 @@ const CommandCenter = ({
   const handleSelectFromFleet = (entity) => {
     onSelectRef.current(entity)
     setFleetOpen(false)
+    setDetailOpen(true)
   }
 
   const handleToggleRouteFollow = () => {
@@ -130,7 +142,8 @@ const CommandCenter = ({
       onDeleteEphemeral?.(entity.id)
       return
     }
-    onDeleteVehicle?.(entity.id)
+    const kind = entity?._kind === 'vehicle' ? 'vehicle' : 'device'
+    onDeleteVehicle?.(entity.id, kind)
   }
 
   return (
@@ -153,10 +166,12 @@ const CommandCenter = ({
           onToggleRouteFollow={onToggleRouteFollow}
           onShareRoute={onShareRoute}
           userLocation={userLocation}
+          origin={origin}
           onLocationChange={onLocationChange}
           locateUserTrigger={locateUserTrigger}
           flyToTrigger={flyToTrigger}
           focusTrigger={focusTrigger}
+          routeFocusTrigger={routeFocusTrigger}
           baseLayer={baseLayer}
           onBaseLayerChange={setBaseLayer}
           hideControls
@@ -178,8 +193,27 @@ const CommandCenter = ({
         lastSyncLabel={lastSyncLabel}
       />
 
-      {/* Panel izquierdo - Detalle */}
-      <div className="pointer-events-none absolute left-4 top-[5.5rem] bottom-28 z-20 hidden xl:block">
+      {/* Tarjeta manual de punto de partida */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-32 z-30 flex justify-center px-4 ${
+          isPlacingOnMap ? 'hidden' : detailOpen ? 'hidden xl:block' : ''
+        }`}
+      >
+        <div className="pointer-events-auto">
+          <OriginCard
+            origin={origin}
+            onSelectOrigin={onSelectOrigin}
+            onUseGps={onLocateUser}
+            hasGps={Boolean(userLocation?.position)}
+            isFollowingRoute={isFollowingRoute}
+            onToggleFollow={handleToggleRouteFollow}
+            hasTarget={Boolean(active?.position)}
+          />
+        </div>
+      </div>
+
+      {/* Panel izquierdo - Detalle (escritorio) */}
+      <div className="pointer-events-none absolute left-4 top-32 bottom-36 z-20 hidden xl:block">
         <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
           <DetailPanel
             entity={active}
@@ -191,12 +225,48 @@ const CommandCenter = ({
             isControlBusy={isControlBusy}
             onDeleteEntity={handleDeleteEntity}
             onEditVehicle={onEditVehicle}
+            historyRoute={historyRoute}
+            historyLoading={historyLoading}
+            onFocusRoute={() => onFocusRoute?.(active, historyRoute)}
           />
         </div>
       </div>
 
+      {/* Hoja de detalle móvil */}
+      {detailOpen && active && (
+        <div className="absolute inset-x-0 bottom-36 z-40 mx-auto w-[94%] max-w-md xl:hidden">
+          <div className="relative rounded-2xl border border-cyan-500/25 bg-slate-900/90 p-3 shadow-[0_0_30px_rgba(6,182,212,0.25)] backdrop-blur-md">
+            <button
+              type="button"
+              onClick={() => setDetailOpen(false)}
+              className="absolute -top-2.5 right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-cyan-500/30 bg-slate-900 text-cyan-300 shadow-lg transition-all hover:bg-cyan-500/10"
+              title="Cerrar ficha"
+              aria-label="Cerrar ficha del dispositivo"
+            >
+              <span className="text-[13px] font-bold leading-none">×</span>
+            </button>
+            <div className="max-h-[42vh] overflow-y-auto cmd-scroll">
+              <DetailPanel
+                entity={active}
+                category={category}
+                onToggleRouteFollow={handleToggleRouteFollow}
+                isFollowingRoute={isFollowingRoute}
+                onShareRoute={onShareRoute}
+                onControlVehicle={category === 'vehicles' ? onControlVehicle : undefined}
+                isControlBusy={isControlBusy}
+                onDeleteEntity={handleDeleteEntity}
+                onEditVehicle={onEditVehicle}
+                historyRoute={historyRoute}
+                historyLoading={historyLoading}
+                onFocusRoute={() => onFocusRoute?.(active, historyRoute)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Panel derecho - Flota (escritorio) */}
-      <div className="pointer-events-none absolute right-4 top-[5.5rem] bottom-28 z-20 hidden lg:block">
+      <div className="pointer-events-none absolute right-4 top-32 bottom-36 z-20 hidden lg:block">
         <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
           <FleetPanel
             entities={combined}
@@ -209,6 +279,7 @@ const CommandCenter = ({
             onSetGeofence={onSetGeofence}
             alerts={alerts}
             onSelectAlert={onSelectAlert}
+            isLoading={fleetLoading}
           />
         </div>
       </div>
@@ -229,6 +300,7 @@ const CommandCenter = ({
               onSetGeofence={onSetGeofence}
               alerts={alerts}
               onSelectAlert={onSelectAlert}
+              isLoading={fleetLoading}
             />
           </div>
         </div>
@@ -236,7 +308,7 @@ const CommandCenter = ({
 
       {/* Aviso al colocar geocerca */}
       {isPlacingOnMap && (
-        <div className="absolute left-1/2 top-20 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#f59e0b] bg-[#23200f]/90 px-4 py-2 text-[11px] font-bold text-[#fbbf24] shadow-[0_4px_20px_rgba(245,158,11,0.35)] backdrop-blur-md">
+        <div className="absolute left-1/2 top-32 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#f59e0b] bg-[#23200f]/90 px-4 py-2 text-[11px] font-bold text-[#fbbf24] shadow-[0_4px_20px_rgba(245,158,11,0.35)] backdrop-blur-md">
           Toca o haz clic en el mapa para ubicar la geocerca
           <button
             type="button"
@@ -255,6 +327,7 @@ const CommandCenter = ({
         isFollowingRoute={isFollowingRoute}
         baseLayer={baseLayer}
         onBaseLayerChange={setBaseLayer}
+        onShowDetail={() => setDetailOpen(true)}
       />
     </div>
   )

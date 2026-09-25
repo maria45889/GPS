@@ -19,8 +19,7 @@ export const useTelemetryStream = (entity, maxPoints = 28) => {
 
     const timer = setInterval(() => {
       setSamples((prev) => {
-        const noise = Math.round(Math.sin(Date.now() / 520) * 3 + (Math.random() * 3))
-        const next = Math.max(0, Math.min(130, speedRef.current + noise))
+        const next = Math.max(0, Math.min(130, speedRef.current))
         return [...prev.slice(1), next]
       })
     }, 900)

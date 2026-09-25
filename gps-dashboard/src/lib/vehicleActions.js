@@ -58,7 +58,7 @@ export const sendVehicleCommand = async (vehicleId, command, deviceId = null) =>
   });
 };
 
-export const deleteVehicle = async (entityId, category = 'vehicles') => {
+export const deleteVehicle = async (entityId, kind = 'vehicle') => {
   if (!supabase) return { remote: false };
 
   return withAuthRetry(async () => {
@@ -72,13 +72,14 @@ export const deleteVehicle = async (entityId, category = 'vehicles') => {
       if (!supabaseUrl) {
         throw new Error('Configuración de Supabase URL no encontrada');
       }
+      const isDevice = kind === 'device';
       const response = await fetch(`${supabaseUrl}/functions/v1/delete-device-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${sessionData.session.access_token}`
         },
-        body: JSON.stringify(category === 'vehicles' ? { vehicle_id: entityId } : { device_id: entityId })
+        body: JSON.stringify(isDevice ? { device_id: entityId } : { vehicle_id: entityId })
       });
 
       const responseData = await response.json().catch(() => ({}));

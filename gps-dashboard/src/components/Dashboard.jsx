@@ -8,10 +8,10 @@ import { createGeofence } from '../lib/queries';
 import { EditEntityModal } from './EditEntityModal';
 
 const Dashboard = () => {
-  const { vehicles: supabaseVehicles, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles()
-  const { devices: supabaseDevices, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime, hideEphemeral } = useDevices()
+  const { vehicles: supabaseVehicles, isLoading: vehiclesLoading, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles()
+  const { devices: supabaseDevices, isLoading: devicesLoading, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime, hideEphemeral } = useDevices()
   const { alerts: supabaseAlerts, error: alertsError } = useAlerts()
-  const { geofences: supabaseGeofences, error: geofencesError } = useGeofences()
+  const { geofences: supabaseGeofences, refetchGeofences, error: geofencesError } = useGeofences()
 
   const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle')
 
@@ -24,6 +24,7 @@ const Dashboard = () => {
   })
 
   const activeNetworkError = (category === 'devices' ? devicesError : vehiclesError) || alertsError || geofencesError
+  const fleetLoading = category === 'devices' ? devicesLoading : category === 'vehicles' ? vehiclesLoading : (devicesLoading || vehiclesLoading)
 
   const handleCategoryChange = (next) => {
     setCategory(next)
@@ -63,10 +64,13 @@ const Dashboard = () => {
   const [isFollowingRoute, setIsFollowingRoute] = useState(
     () => new URLSearchParams(window.location.search).get('follow') === '1',
   )
+  const [origin, setOrigin] = useState(null)
   const [pendingGeofenceConfirm, setPendingGeofenceConfirm] = useState(null)
+  const [geofenceRadius, setGeofenceRadius] = useState(300) // m
   const [entityToEdit, setEntityToEdit] = useState(null)
   const [operationMessage, setOperationMessage] = useState('')
   const [alertFocusTrigger, setAlertFocusTrigger] = useState(null)
+  const [routeFocusTrigger, setRouteFocusTrigger] = useState(null)
   const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false)
   const commandPollTimeoutRef = useRef(null)
 
@@ -109,6 +113,17 @@ const Dashboard = () => {
     if (entity.position) {
       setFlyToTrigger({ coords: entity.position, zoom: 16, timestamp: Date.now() })
     }
+  }
+
+  // Encuadra el mapa al recorrido histórico de la entidad indicada
+  const handleFocusRoute = (entity, route) => {
+    if (!entity) return
+    if (entity !== selectedEntity) setSelectedEntity({ ...entity, controlState: undefined })
+    const points = Array.isArray(route) ? route.filter(
+      (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])),
+    ) : []
+    if (points.length < 2) return
+    setRouteFocusTrigger({ route: points, timestamp: Date.now() })
   }
 
   // --- Compartir ---
@@ -173,22 +188,22 @@ const Dashboard = () => {
   const handleMapClickForGeofence = (latlng) => {
     setIsPlacingOnMap(false)
     setPendingCenter(null)
+    setGeofenceRadius(300)
     setPendingGeofenceConfirm({
       center: latlng,
       name: 'Nueva geocerca',
-      radius: 300,
     })
   }
 
   const handleConfirmGeofence = async () => {
     if (!pendingGeofenceConfirm) return
-    const { center, radius, name } = pendingGeofenceConfirm
+    const { center, name } = pendingGeofenceConfirm
     const newGeo = {
       name,
       type: 'circle',
       center,
       positions: [center],
-      radius: radius || 300,
+      radius: geofenceRadius,
       color: '#168ca4',
       rule: 'outside',
       active: true,
@@ -197,7 +212,7 @@ const Dashboard = () => {
       try {
         const saved = await createGeofence(newGeo)
         if (saved) {
-          setLocalGeofences((prev) => [saved, ...prev])
+          if (refetchGeofences) await refetchGeofences()
           setOperationMessage('Geocerca guardada con éxito')
           setPendingGeofenceConfirm(null)
           setPendingCenter(null)
@@ -329,28 +344,27 @@ const Dashboard = () => {
     }
   }
 
-  const handleDeleteVehicle = async (entityId) => {
+  const handleDeleteVehicle = async (entityId, kindParam) => {
     if (isVehicleControlBusy) return
+    const kind = kindParam || (category === 'vehicles' ? 'vehicle' : 'device')
     setIsVehicleControlBusy(true)
-    const result = await deleteVehicle(entityId, category)
+    const result = await deleteVehicle(entityId, kind)
     if (result.error) {
       setOperationMessage(`No se pudo eliminar: ${result.error.message || 'Error desconocido'}`)
       setIsVehicleControlBusy(false)
       return
     }
 
-    if (category === 'vehicles') {
+    setSelectedEntity(null)
+
+    if (kind === 'vehicle') {
       if (result.remote && refetchVehicles) await refetchVehicles();
-      setLocalVehicles((prev) => {
-        const remaining = prev.filter((v) => v.id !== entityId)
-        setSelectedEntity(remaining[0] || null)
-        return remaining
-      });
+      setLocalVehicles((prev) => prev.filter((v) => v.id !== entityId))
     } else {
-      setSelectedEntity(null);
+      hideEphemeral(entityId)
     }
 
-    setOperationMessage(result.remote ? (category === 'vehicles' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local')
+    setOperationMessage(result.remote ? (kind === 'vehicle' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local')
     setIsVehicleControlBusy(false)
   }
 
@@ -380,9 +394,16 @@ const Dashboard = () => {
     if (entity?.position && entity !== selectedEntity) selectEntity(entity)
     const next = !isFollowingRoute
     setIsFollowingRoute(next)
-    if (next && !userLocation?.position) {
+    if (next && !origin && !userLocation?.position) {
       handleLocateUser()
-      setOperationMessage('Activando seguimiento... solicitud de ubicación')
+      setOperationMessage('Punto de partida no definido: escribe tu calle o actívalo con tu ubicación GPS')
+    }
+  }
+
+  const handleSelectOrigin = (selected) => {
+    setOrigin(selected)
+    if (selected) {
+      setOperationMessage('Punto de partida fijado')
     }
   }
 
@@ -457,6 +478,8 @@ const Dashboard = () => {
         onMapHover={(latlng) => setPendingCenter(latlng)}
         isFollowingRoute={isFollowingRoute}
         onToggleRouteFollow={handleToggleRouteFollow}
+        origin={origin}
+        onSelectOrigin={handleSelectOrigin}
         onShareRoute={handleShareRoute}
         userLocation={userLocation}
         onLocateUser={handleLocateUser}
@@ -471,6 +494,9 @@ const Dashboard = () => {
         onEditVehicle={handleEditVehicle}
         onLogout={handleLogout}
         lastSyncLabel={lastSyncLabel}
+        onFocusRoute={handleFocusRoute}
+        routeFocusTrigger={routeFocusTrigger}
+        fleetLoading={fleetLoading}
       />
 
       {operationMessage && (
@@ -490,8 +516,28 @@ const Dashboard = () => {
           <div className="w-full max-w-sm rounded-xl border border-[#28566a] bg-[#081825] p-5 shadow-2xl">
             <h3 className="text-[15px] font-bold text-[#effcff]">Confirmar Nueva Geocerca</h3>
             <p className="mt-2 text-[12px] text-[#89a9b5]">
-              ¿Deseas crear una geocerca circular de <strong>300 metros</strong> en las coordenadas seleccionadas?
+              Crea una geocerca circular en las coordenadas seleccionadas. Usa el radio para que el dispositivo se detecte como «fuera de zona».
             </p>
+            <fieldset className="mt-4">
+              <legend className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#89a9b5]">Radio de la zona</legend>
+              <div className="flex flex-wrap gap-1.5">
+                {[100, 200, 300, 600, 1000].map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setGeofenceRadius(r)}
+                    aria-pressed={geofenceRadius === r}
+                    className={`rounded-md border px-2.5 py-1.5 font-mono text-[11px] font-bold transition-all ${
+                      geofenceRadius === r
+                        ? 'border-[#b8f36b]/70 bg-[#b8f36b]/15 text-[#effcff] shadow-[0_0_10px_rgba(184,243,107,0.15)]'
+                        : 'border-[#28566a] text-[#89a9b5] hover:border-[#3f7c94] hover:text-[#effcff]'
+                    }`}
+                  >
+                    {r} m
+                  </button>
+                ))}
+              </div>
+            </fieldset>
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 type="button"

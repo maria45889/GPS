@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { Gauge, Mountain, Compass, Navigation, Satellite, Flame, Users } from 'lucide-react'
-import { useNow } from './useTelemetryStream'
-import { gForceFor, altitudeFor } from './normalize'
+import { Gauge, Compass, Navigation, Satellite, Flame, Users, Battery, CircleDot, FileText } from 'lucide-react'
+import { signalFor } from './normalize'
 
 const LAYERS = [
   { id: 'traffic', label: 'Tráfico', icon: Flame },
@@ -9,8 +8,7 @@ const LAYERS = [
   { id: 'satellite', label: 'Satélite', icon: Satellite },
 ]
 
-const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, onBaseLayerChange }) => {
-  const now = useNow(900)
+const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, onBaseLayerChange, onShowDetail }) => {
   const [extraLayers, setExtraLayers] = useState([])
 
   const toggleLayer = (layerId) => {
@@ -24,10 +22,13 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
   const isLayerActive = (layerId) =>
     layerId === 'satellite' ? baseLayer === 'satellite' : extraLayers.includes(layerId)
 
-  const gForce = gForceFor(entity, now)
-  const altitude = altitudeFor(now, entity ? (String(entity.id).charCodeAt(0) || 0) : 0)
+  const hasPosition = Boolean(entity?.position)
   const heading = Math.round(entity?.bearing ?? 0)
   const speed = Math.round(entity?.speed ?? 0)
+  const battery = entity?.battery ?? null
+  const batteryTone = battery > 60 ? '#10b981' : battery > 25 ? '#f59e0b' : '#ef4444'
+  const accuracy = entity?.accuracy ?? null
+  const signal = signalFor(entity)
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-4 z-40 flex flex-col items-center gap-3 px-3">
@@ -41,7 +42,9 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
               key={layer.id}
               type="button"
               onClick={() => toggleLayer(layer.id)}
-              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] transition-all sm:px-3 ${
+              aria-label={`Activar capa ${layer.label}`}
+              aria-pressed={active}
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition-all sm:px-3 ${
                 active
                   ? 'bg-[#06b6d4]/20 text-[#22d3ee] shadow-[0_0_12px_rgba(6,182,212,0.4)]'
                   : 'text-slate-500 hover:text-slate-300'
@@ -55,28 +58,57 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
 
       {/* Barra principal */}
       <div className="pointer-events-auto flex w-full max-w-3xl items-center gap-3 overflow-x-auto rounded-2xl border border-cyan-500/40 bg-slate-900/70 px-4 py-3 shadow-[0_0_30px_rgba(6,182,212,0.2)] backdrop-blur-md cmd-scroll">
-        <MetricCell icon={<Gauge size={13} />} label="G-Force" value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{gForce}<span className="text-[9px] text-[#06b6d4]"> G</span></span>} className="hidden md:flex" />
+        <MetricCell
+          icon={<Gauge size={13} />}
+          label="Señal"
+          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{entity ? `${signal}%` : '—'}</span>}
+          className="hidden md:flex"
+        />
         <Divider className="hidden md:block" />
-        <MetricCell icon={<Mountain size={13} />} label="Altitud" value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{altitude}<span className="text-[9px] text-slate-500"> m</span></span>} className="hidden md:flex" />
+        <MetricCell
+          icon={<Battery size={13} />}
+          label="Batería"
+          value={<span className="font-mono text-[16px] font-extrabold" style={{ color: entity ? batteryTone : '#64748b' }}>{battery ?? '—'}<span className="text-[9px] text-slate-500">%</span></span>}
+          className="hidden md:flex"
+        />
+        <Divider className="hidden md:block" />
+        <MetricCell
+          icon={<CircleDot size={13} />}
+          label="Precisión"
+          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{accuracy ?? '—'}<span className="text-[9px] text-slate-500"> m</span></span>}
+          className="hidden md:flex"
+        />
         <Divider className="hidden md:block" />
         <MetricCell
           icon={<Compass size={13} />}
           label="Dirección"
-          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{heading}<span className="text-[9px] text-[#06b6d4]">°</span></span>}
+          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{hasPosition ? heading : '—'}<span className="text-[9px] text-[#06b6d4]">°</span></span>}
           className="hidden md:flex"
         />
 
         <Divider className="hidden md:block" />
 
         <div className="flex min-w-0 max-w-[170px] flex-1 flex-col items-center px-1">
-          <span className="text-[8px] tracking-[0.2em] text-slate-500 uppercase">Dispositivo</span>
+          <span className="text-[9px] tracking-[0.2em] text-slate-500 uppercase">Dispositivo</span>
           <span className="w-full truncate text-center font-mono text-[13px] font-bold text-[#22d3ee]">
             {entity?.name || entity?.id || 'Sin selección'}
           </span>
-          <span className="text-[8px] text-slate-600">{speed} km/h · {entity?.plate}</span>
+          <span className="text-[9px] text-slate-600">{speed} km/h · {entity?.plate}</span>
         </div>
 
         <Divider className="hidden md:block" />
+
+        {onShowDetail && (
+          <button
+            type="button"
+            onClick={onShowDetail}
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-cyan-500/25 bg-slate-800/60 px-3 py-3 text-[11px] font-extrabold uppercase tracking-wider text-cyan-300 transition-all hover:bg-cyan-500/10 xl:hidden"
+            title="Ver ficha del dispositivo"
+            aria-label="Abrir ficha del dispositivo"
+          >
+            <FileText size={14} /> Ficha
+          </button>
+        )}
 
         <button
           type="button"

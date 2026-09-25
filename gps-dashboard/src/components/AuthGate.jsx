@@ -1,14 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LogIn, UserPlus, LogOut, AlertCircle } from 'lucide-react';
+import { LogIn, LogOut, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export const AuthGate = ({ children }) => {
   const [session, setSession] = useState(null);
-  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
   const [hasProfile, setHasProfile] = useState(true);
@@ -141,7 +139,6 @@ export const AuthGate = ({ children }) => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
-    setMessage('');
     setIsBusy(true);
 
     try {

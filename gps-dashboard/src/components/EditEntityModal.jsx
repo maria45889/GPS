@@ -33,7 +33,7 @@ export const EditEntityModal = ({ entity, category, onClose, onSave }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Editar ${category === 'vehicles' ? 'vehículo' : 'dispositivo'}`}>
       <div className="w-full max-w-sm rounded-xl border border-[#2b4c59] bg-[#0c1a20] p-6 shadow-2xl relative">
         <button onClick={onClose} className="absolute right-4 top-4 text-[#8b9ba1] hover:text-white transition-colors" disabled={isSaving}>
           <X size={20} />
