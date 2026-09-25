@@ -705,6 +705,7 @@ const MapArea = ({
             ? '&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
             : '&copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'}
           maxZoom={18}
+          maxNativeZoom={baseLayer === 'satellite' ? 19 : 16}
         />
 
 
