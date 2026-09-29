@@ -23,6 +23,18 @@ jobs:
         working-directory: gps-dashboard
         run: npm ci
         
+      - name: Run Linter
+        working-directory: gps-dashboard
+        run: npm run lint
+        
+      - name: Run Build
+        working-directory: gps-dashboard
+        run: npm run build
+        
       - name: Run Tests
         working-directory: gps-dashboard
         run: npm test
+
+      - name: Verify Android Build
+        working-directory: gps-dashboard/android
+        run: ./gradlew compileDebugJavaWithJavac

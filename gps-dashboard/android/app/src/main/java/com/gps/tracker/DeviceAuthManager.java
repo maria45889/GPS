@@ -185,7 +185,7 @@ public class DeviceAuthManager {
         try {
             String activationCode = getActivationCode();
             if (activationCode == null || activationCode.trim().isEmpty()) {
-                activationCode = context.getString(R.string.provision_secret);
+                return false;
             }
 
             JSONObject body = new JSONObject();

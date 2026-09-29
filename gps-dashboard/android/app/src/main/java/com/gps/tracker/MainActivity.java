@@ -38,6 +38,32 @@ public class MainActivity extends BridgeActivity {
     private void setupWebviewBridge() {
         if (bridge != null && bridge.getWebView() != null) {
             bridge.getWebView().addJavascriptInterface(new DeviceAuthJavascriptInterface(), "CapacitorDeviceAuth");
+            bridge.getWebView().addJavascriptInterface(new TrackingBridge(), "CapacitorTracking");
+        }
+    }
+
+    /**
+     * Puente que mantiene vivo el watchdog de seguimiento.
+     *
+     * El servicio de foreground del plugin corre en el proceso de la app y no se
+     * reinicia solo si Android lo mata. El webview avisa cuándo registra el watcher
+     * y con cada posición recibida, de modo que el watchdog nativo sabe distinguir
+     * "el servicio está vivo" de "el proceso murió y hay que relanzar".
+     */
+    public class TrackingBridge {
+        @android.webkit.JavascriptInterface
+        public void setTrackingEnabled(boolean enabled) {
+            TrackingWatchdog.setTrackingEnabled(MainActivity.this, enabled);
+        }
+
+        @android.webkit.JavascriptInterface
+        public void heartbeat() {
+            TrackingWatchdog.heartbeat(MainActivity.this);
+        }
+
+        @android.webkit.JavascriptInterface
+        public boolean isTrackingEnabled() {
+            return TrackingWatchdog.isTrackingEnabled(MainActivity.this);
         }
     }
 
@@ -70,7 +96,7 @@ public class MainActivity extends BridgeActivity {
         boolean locationGranted = PermissionUtils.hasAnyLocationPermission(this);
         boolean notificationGranted = PermissionUtils.hasNotificationPermission(this);
 
-        if (!LocationService.isServiceActuallyRunning(this) || pendingPermPrompt) {
+        if (pendingPermPrompt) {
             if (locationGranted && notificationGranted) {
                 startOnboardingSequence();
             }
@@ -264,7 +290,6 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         }
-        startLocationService();
     }
 
     @Override
@@ -286,18 +311,6 @@ public class MainActivity extends BridgeActivity {
                 Toast.makeText(this, "Seguimiento en segundo plano limitado. Abrir Ajustes si requieres rastreo continuo.", Toast.LENGTH_LONG).show();
             }
             startOnboardingSequence();
-        }
-    }
-
-    private void startLocationService() {
-        if (LocationService.isServiceActuallyRunning(this)) {
-            Log.d(TAG, "Servicio de ubicación ya activo. Omitiendo reinicio en startLocationService.");
-            return;
-        }
-        try {
-            ContextCompat.startForegroundService(this, new Intent(this, LocationService.class));
-        } catch (Exception e) {
-            Log.e(TAG, "Error al iniciar servicio de ubicación", e);
         }
     }
 

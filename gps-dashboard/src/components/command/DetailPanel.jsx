@@ -1,25 +1,19 @@
 import React, { useEffect, useState } from 'react'
-import { Navigation, Wifi, Battery, Activity, MapPin, Share2, ShieldCheck, Power, OctagonX, Pencil } from 'lucide-react'
+import { Navigation, Wifi, Battery, Activity, MapPin, Share2, Pencil } from 'lucide-react'
 import StatusStream from './StatusStream'
 import RouteHistoryCard from './RouteHistoryCard'
 import { useTelemetryStream } from './useTelemetryStream'
 import { isOnline, statusLabel, statusColor, signalFor } from './normalize'
 
-const CMD_ACTIONS = [
-  { id: 'activate', label: 'Activar', icon: Power },
-  { id: 'stop', label: 'Detener', icon: OctagonX },
-  { id: 'immobilize', label: 'Inmovilizar', icon: ShieldCheck },
-]
+
 
 const DetailPanel = ({
   entity,
   samples,
-  category,
+
   onToggleRouteFollow,
   isFollowingRoute,
   onShareRoute,
-  onControlVehicle,
-  isControlBusy,
   onDeleteEntity,
   onEditVehicle,
   historyRoute,
@@ -141,26 +135,7 @@ const DetailPanel = ({
         </button>
       </div>
 
-      {/* Control vehicular */}
-      {category === 'vehicles' && onControlVehicle && (
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
-          {CMD_ACTIONS.map((action) => {
-            const Icon = action.icon
-            return (
-              <button
-                key={action.id}
-                type="button"
-                disabled={isControlBusy}
-                onClick={() => onControlVehicle(action.id)}
-                className="flex flex-col items-center gap-1 rounded-lg border border-cyan-500/15 bg-[#0a1220]/70 px-1 py-2 text-[8px] font-bold uppercase tracking-wider text-slate-400 transition-all hover:border-cyan-400/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Icon size={12} />
-                <span>{action.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
+
 
       {/* Pie con ubicación */}
       <div className="mt-auto flex items-center gap-2 border-t border-cyan-500/10 pt-2.5">

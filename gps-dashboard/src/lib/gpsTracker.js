@@ -251,8 +251,11 @@ class GPSTracker {
   }
 
   async start(intervalMs = 30000) {
-    this.intervalMs = intervalMs;
+    // El guard va DESPUÉS de stop(): stop() limpia watcherId, así que comprobarlo
+    // antes solo detectaba watchers de otra instancia/vista, no de esta.
     this.stop();
+
+    this.intervalMs = intervalMs;
     this.currentRunId++;
     const runId = this.currentRunId;
 
@@ -274,6 +277,7 @@ class GPSTracker {
               return console.error('Background Geolocation Error:', error);
             }
             if (location) {
+              this.nativeHeartbeat();
               const pos = {
                 coords: {
                   latitude: location.latitude,
@@ -287,6 +291,7 @@ class GPSTracker {
             }
           }
         );
+        this.nativeSetTrackingEnabled(true);
       } catch (err) {
         console.error('Error starting BackgroundGeolocation:', err);
       }
@@ -294,6 +299,22 @@ class GPSTracker {
       this.requestWakeLock();
       this.tick(runId);
       this.intervalId = setInterval(() => this.tick(runId), this.intervalMs);
+    }
+  }
+
+  nativeSetTrackingEnabled(enabled) {
+    try {
+      window.CapacitorTracking?.setTrackingEnabled?.(enabled);
+    } catch (err) {
+      console.warn('[GPS] No se pudo notificar el estado de seguimiento al watchdog nativo:', err);
+    }
+  }
+
+  nativeHeartbeat() {
+    try {
+      window.CapacitorTracking?.heartbeat?.();
+    } catch (err) {
+      console.warn('[GPS] No se pudo enviar heartbeat al watchdog nativo:', err);
     }
   }
 
@@ -309,6 +330,7 @@ class GPSTracker {
     this.releaseWakeLock();
     this.currentRunId++;
     this.isRunning = false;
+    this.nativeSetTrackingEnabled(false);
   }
 }
 

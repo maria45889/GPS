@@ -100,6 +100,16 @@ as $$
       or current_role = 'service_role';
 $$;
 
+-- Sin esta policy, organizations queda con RLS habilitado y 0 policies: deny-all.
+-- Cada operador necesita leer el nombre de SU organización para operar el panel.
+-- Se declara aquí (y no junto al CREATE TABLE) porque depende de
+-- current_user_org_id(), definida más arriba en este mismo script.
+drop policy if exists "organizations_member_read" on public.organizations;
+create policy "organizations_member_read"
+  on public.organizations for select
+  to authenticated
+  using (id = public.current_user_org_id());
+
 create or replace function public.protect_profile_fields()
 returns trigger
 language plpgsql
@@ -219,123 +229,6 @@ order by device_id, timestamp desc;
 grant select on public.latest_gps_locations to authenticated;
 
 -- =====================================================================
--- Códigos de activación de dispositivos
--- =====================================================================
-create table if not exists public.device_activation_codes (
-  id uuid primary key default gen_random_uuid(),
-  code text not null unique,
-  organization_id uuid not null references public.organizations(id) on delete cascade,
-  vehicle_id text,
-  label text,
-  used boolean not null default false,
-  used_at timestamptz,
-  expires_at timestamptz default (now() + interval '24 hours'),
-  created_at timestamptz not null default now()
-);
-
-alter table public.device_activation_codes enable row level security;
-
-drop policy if exists "device_activation_codes_admin_all" on public.device_activation_codes;
-create policy "device_activation_codes_admin_all"
-  on public.device_activation_codes for all
-  to authenticated
-  -- A7: Filtrar por organization_id para que un admin de la org A no toque códigos de la org B.
-  using (public.is_admin() and organization_id = public.current_user_org_id())
-  with check (public.is_admin() and organization_id = public.current_user_org_id());
-
--- =====================================================================
--- Procedimiento atómico de aprovisionamiento de dispositivos (Restringido a service_role)
--- =====================================================================
-create or replace function public.provision_device_atomic(
-  p_device_id text,
-  p_activation_code text,
-  p_auth_user_id uuid
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  code_rec record;
-  user_exists boolean;
-  device_bound text;
-  current_org uuid;
-begin
-  select exists (
-    select 1 from auth.users where id = p_auth_user_id
-  ) into user_exists;
-
-  if not user_exists then
-    return jsonb_build_object('success', false, 'error', 'Usuario Auth especificado no existe');
-  end if;
-
-  select id into device_bound
-  from public.devices
-  where auth_user_id = p_auth_user_id and id <> p_device_id;
-
-  if device_bound is not null then
-    return jsonb_build_object('success', false, 'error', 'El usuario Auth ya se encuentra vinculado a otro dispositivo');
-  end if;
-
-  select * into code_rec
-  from public.device_activation_codes
-  where code = p_activation_code 
-    and used = false 
-    and (expires_at is null or expires_at > now())
-  for update;
-
-  if not found then
-    return jsonb_build_object('success', false, 'error', 'Código de activación inválido, expirado o ya utilizado');
-  end if;
-
-  -- A9: Validación para evitar re-aprovisionamiento cruzado (secuestro de dispositivos)
-  select organization_id into current_org from public.devices where id = p_device_id;
-  if current_org is not null and current_org is distinct from code_rec.organization_id then
-    return jsonb_build_object('success', false, 'error', 'El dispositivo ya está aprovisionado en otra organización');
-  end if;
-
-  update public.device_activation_codes
-  set used = true, used_at = now()
-  where id = code_rec.id;
-
-  insert into public.devices (id, auth_user_id, organization_id, label, status, updated_at)
-  values (p_device_id, p_auth_user_id, code_rec.organization_id, coalesce(code_rec.label, p_device_id), 'active', now())
-  on conflict (id) do update set
-    auth_user_id = excluded.auth_user_id,
-    organization_id = excluded.organization_id,
-    label = coalesce(excluded.label, devices.label),
-    status = 'active',
-    updated_at = now();
-
-  insert into public.device_registry (device_id, organization_id, vehicle_id, label, status, last_seen)
-  values (p_device_id, code_rec.organization_id, code_rec.vehicle_id, coalesce(code_rec.label, p_device_id), 'active', now())
-  on conflict (device_id) do update set
-    organization_id = excluded.organization_id,
-    vehicle_id = coalesce(excluded.vehicle_id, device_registry.vehicle_id),
-    status = 'active',
-    last_seen = now();
-
-  if code_rec.vehicle_id is not null then
-    update public.vehicles
-    set device_id = p_device_id,
-        last_update = now()
-    where id = code_rec.vehicle_id
-      and (organization_id = code_rec.organization_id or organization_id is null);
-  end if;
-
-  return jsonb_build_object(
-    'success', true,
-    'organization_id', code_rec.organization_id,
-    'vehicle_id', code_rec.vehicle_id
-  );
-end;
-$$;
-
-revoke execute on function public.provision_device_atomic(text, text, uuid) from public, anon, authenticated;
-grant execute on function public.provision_device_atomic(text, text, uuid) to service_role;
-
--- =====================================================================
 -- Tabla y función atómica para Rate Limiter persistente en Edge Function
 -- =====================================================================
 create table if not exists public.provision_rate_limits (
@@ -448,230 +341,7 @@ create trigger gps_locations_set_org
   before insert on public.gps_locations
   for each row execute function public.set_gps_location_org_id();
 
-create table if not exists public.vehicle_commands (
-  id bigint generated by default as identity primary key,
-  vehicle_id text not null,
-  command text not null check (command in ('activate', 'stop', 'immobilize')),
-  status text not null default 'pending',
-  created_at timestamptz not null default now()
-);
 
-alter table public.vehicle_commands add column if not exists device_id text;
-alter table public.vehicle_commands add column if not exists acknowledged_at timestamptz;
-alter table public.vehicle_commands add column if not exists organization_id uuid references public.organizations(id) on delete cascade;
-
-create or replace function public.set_vehicle_command_org_id()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if new.organization_id is null then
-    select organization_id into new.organization_id
-    from public.devices
-    where id = new.device_id;
-
-    if new.organization_id is null then
-      select organization_id into new.organization_id
-      from public.profiles
-      where user_id = auth.uid();
-    end if;
-  end if;
-
-  if new.organization_id is null then
-    raise exception 'No se pudo inferir la organizacion para el comando';
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists vehicle_commands_set_org on public.vehicle_commands;
-create trigger vehicle_commands_set_org
-  before insert on public.vehicle_commands
-  for each row execute function public.set_vehicle_command_org_id();
-
--- Trigger para sincronizar automáticamente el estado del vehículo cuando un comando pase a 'done'
-create or replace function public.sync_vehicle_status_on_command_done()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  updated_count int;
-begin
-  if NEW.status = 'done' and (OLD.status is null or OLD.status <> 'done') then
-    update public.vehicles
-    set status = case
-          when NEW.command = 'activate' then 'active'
-          when NEW.command = 'immobilize' then 'immobilized'
-          when NEW.command = 'stop' then 'stopped'
-          else status
-        end,
-        last_update = now()
-    where id = NEW.vehicle_id
-      and organization_id = NEW.organization_id;
-
-    get diagnostics updated_count = row_count;
-    if updated_count = 0 then
-      raise exception 'No se pudo actualizar el estado del vehiculo % asociado al comando', NEW.vehicle_id;
-    end if;
-  end if;
-  return NEW;
-end;
-$$;
-
-drop trigger if exists trg_sync_vehicle_status_on_command_done on public.vehicle_commands;
-create trigger trg_sync_vehicle_status_on_command_done
-  after update on public.vehicle_commands
-  for each row execute function public.sync_vehicle_status_on_command_done();
-
-create index if not exists vehicle_commands_device_status_idx
-  on public.vehicle_commands (device_id, status);
-
-alter table public.vehicle_commands enable row level security;
-
--- C2: Las policies que referencian public.vehicles (definida en ~l.759) y
--- current_device_id() (definida en ~l.995) se crean DESPUÉS de esas definiciones.
--- Aquí solo se borran si existían de una ejecución anterior, para que el script
--- sea ejecutable desde cero sin errores de dependencia.
-drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
-drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
--- Las policies se recrean después de que vehicles y current_device_id() están definidos.
-
-alter table public.vehicle_commands replica identity full;
-
-do $$
-begin
-  if not exists (
-    select 1 from pg_publication_tables
-    where pubname = 'supabase_realtime'
-      and schemaname = 'public'
-      and tablename = 'vehicle_commands'
-  ) then
-    alter publication supabase_realtime add table public.vehicle_commands;
-  end if;
-end $$;
-
--- RPC para acuse de recibo de comandos exclusivo del dispositivo
-create or replace function public.ack_vehicle_command(
-  p_command_id bigint,
-  p_status text,
-  p_acknowledged_at timestamptz default now()
-)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  updated_count int;
-begin
-  if p_status not in ('received', 'done', 'failed') then
-    raise exception 'Estado de acuse invalido: %', p_status;
-  end if;
-
-  if public.current_device_id() is null then
-    raise exception 'Dispositivo no identificado';
-  end if;
-
-  if not exists (
-    select 1 from public.devices
-    where id = public.current_device_id()
-      and auth_user_id = auth.uid()
-      and status = 'active'
-  ) then
-    raise exception 'Dispositivo inactivo o no autorizado';
-  end if;
-
-  update public.vehicle_commands
-  set status = p_status,
-      acknowledged_at = coalesce(p_acknowledged_at, now())
-  where id = p_command_id
-    and device_id = public.current_device_id()
-    and (
-      (p_status = 'received' and status = 'pending')
-      or (p_status in ('done', 'failed') and status in ('pending', 'received'))
-    );
-
-  get diagnostics updated_count = row_count;
-  return updated_count > 0;
-end;
-$$;
-
-revoke execute on function public.ack_vehicle_command(bigint, text, timestamptz) from public, anon, authenticated;
-grant execute on function public.ack_vehicle_command(bigint, text, timestamptz) to authenticated, service_role;
-
--- RPC para cancelación manual de comandos por operadores de la misma organización
-create or replace function public.admin_cancel_vehicle_command(
-  p_command_id bigint,
-  p_status text default 'failed'
-)
-returns boolean
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  updated_count int;
-begin
-  if not public.is_operator() then
-    raise exception 'No autorizado';
-  end if;
-
-  if p_status not in ('failed', 'done') then
-    raise exception 'Estado de cancelacion invalido: %', p_status;
-  end if;
-
-  update public.vehicle_commands
-  set status = p_status,
-      acknowledged_at = now()
-  where id = p_command_id
-    and organization_id = public.current_user_org_id()
-    and status in ('pending', 'received');
-
-  get diagnostics updated_count = row_count;
-  return updated_count > 0;
-end;
-$$;
-
-revoke execute on function public.admin_cancel_vehicle_command(bigint, text) from public, anon;
-grant execute on function public.admin_cancel_vehicle_command(bigint, text) to authenticated, service_role;
-
--- RPC para limpiar comandos estancados (mantenimiento administrativo exclusivo de jobs backend con service_role; no invocar desde clientes)
-create or replace function public.clean_stale_vehicle_commands(
-  p_timeout_minutes int default 15
-)
-returns int
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  affected_count int;
-begin
-  if p_timeout_minutes is null or p_timeout_minutes <= 0 then
-    raise exception 'El timeout p_timeout_minutes debe ser un entero positivo mayor a cero';
-  end if;
-
-  update public.vehicle_commands
-  set status = 'failed',
-      acknowledged_at = now()
-  where (
-    (status = 'pending' and created_at < (now() - (p_timeout_minutes || ' minutes')::interval))
-    or
-    (status = 'received' and coalesce(acknowledged_at, created_at) < (now() - (p_timeout_minutes || ' minutes')::interval))
-  );
-
-  get diagnostics affected_count = row_count;
-  return affected_count;
-end;
-$$;
-
-revoke execute on function public.clean_stale_vehicle_commands(int) from public, anon, authenticated;
-grant execute on function public.clean_stale_vehicle_commands(int) to service_role;
 
 -- RPC para actualización de telemetría de dispositivos (batería, modelo, plataforma, versión, last_seen, location_status)
 create or replace function public.update_device_telemetry(
@@ -740,6 +410,16 @@ alter table public.devices enable row level security;
 
 -- C7: FORCE ROW LEVEL SECURITY para Realtime.
 alter table public.devices force row level security;
+
+-- Add business FKs and Check constraints
+alter table public.gps_locations drop constraint if exists gps_locations_device_id_fkey;
+alter table public.gps_locations add constraint gps_locations_device_id_fkey foreign key (device_id) references public.devices(id) on delete cascade;
+
+alter table public.devices drop constraint if exists devices_status_check;
+alter table public.devices add constraint devices_status_check check (status in ('active', 'inactive', 'online', 'offline', 'revoked'));
+
+alter table public.device_registry drop constraint if exists device_registry_status_check;
+alter table public.device_registry add constraint device_registry_status_check check (status in ('active', 'inactive', 'online', 'offline', 'revoked'));
 
 alter table public.devices replica identity full;
 
@@ -830,39 +510,12 @@ create policy "vehicles_operator_update"
   using (public.is_operator() and organization_id = public.current_user_org_id())
   with check (public.is_operator() and organization_id = public.current_user_org_id());
 
--- RPC para actualizar el estado del vehículo con validación de estado y pertenencia
-create or replace function public.update_vehicle_status(
-  p_vehicle_id text,
-  p_status text
-)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  updated_count int;
-begin
-  if not public.is_operator() then
-    raise exception 'No autorizado';
-  end if;
-
-  if p_status not in ('active', 'online', 'offline', 'stopped', 'immobilized') then
-    raise exception 'Estado de vehiculo invalido: %', p_status;
-  end if;
-
-  update public.vehicles
-  set status = p_status,
-      last_update = now()
-  where id = p_vehicle_id
-    and organization_id = public.current_user_org_id();
-
-  get diagnostics updated_count = row_count;
-  if updated_count = 0 then
-    raise exception 'Vehiculo no encontrado o no pertenece a la organizacion del usuario';
-  end if;
-end;
-$$;
+-- La validación de status vive aquí y no en una RPC: un CHECK protege a todos los
+-- escritores (Edge Function, service_role, dashboard vía vehicles_operator_update),
+-- mientras que una RPC solo protege a quien la invoca.
+alter table public.vehicles drop constraint if exists vehicles_status_check;
+alter table public.vehicles add constraint vehicles_status_check
+  check (status in ('active', 'online', 'offline', 'stopped', 'immobilized'));
 
 alter table public.vehicles replica identity full;
 
@@ -1089,34 +742,7 @@ create policy "devices_device_insert"
   to authenticated
   with check (id = public.current_device_id() and auth_user_id = auth.uid());
 
--- C2 (deferred): Recrear las policies de vehicle_commands que referencian public.vehicles
--- y current_device_id() — ambas ya definidas en este punto del script.
-drop policy if exists "vehicle_commands_authenticated_insert" on public.vehicle_commands;
-create policy "vehicle_commands_authenticated_insert"
-  on public.vehicle_commands for insert
-  to authenticated
-  with check (
-    public.is_operator()
-    and (organization_id = public.current_user_org_id())
-    and exists (
-      select 1 from public.vehicles v
-      where v.id = vehicle_commands.vehicle_id
-        and v.device_id = vehicle_commands.device_id
-        and v.organization_id = public.current_user_org_id()
-    )
-  );
 
-drop policy if exists "vehicle_commands_authenticated_read" on public.vehicle_commands;
-create policy "vehicle_commands_authenticated_read"
-  on public.vehicle_commands for select
-  to authenticated
-  using (
-    (public.has_profile() and organization_id = public.current_user_org_id())
-    or device_id = public.current_device_id()
-  );
-
--- C7: FORCE ROW LEVEL SECURITY para vehicle_commands (Realtime).
-alter table public.vehicle_commands force row level security;
 
 
 create or replace function public.protect_device_structural_fields()
@@ -1190,42 +816,7 @@ create policy "gps_locations_authenticated_read"
     or device_id = public.current_device_id()
   );
 
-drop policy if exists "vehicle_commands_device_ack" on public.vehicle_commands;
 
-
--- Trigger para proteger inmutabilidad de comandos desde el dispositivo
-create or replace function public.protect_vehicle_commands_device_update()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if public.current_device_id() is not null then
-    if NEW.vehicle_id is distinct from OLD.vehicle_id
-       or NEW.command is distinct from OLD.command
-       or NEW.organization_id is distinct from OLD.organization_id
-       or NEW.device_id is distinct from OLD.device_id then
-      raise exception 'No esta permitido modificar campos inmutables del comando desde el dispositivo';
-    end if;
-    
-    if NEW.status is distinct from OLD.status then
-      if not (
-        (NEW.status = 'received' and OLD.status = 'pending') or
-        (NEW.status in ('done', 'failed') and OLD.status in ('pending', 'received'))
-      ) then
-        raise exception 'Transicion de estado de comando no permitida desde el dispositivo';
-      end if;
-    end if;
-  end if;
-  return NEW;
-end;
-$$;
-
-drop trigger if exists trg_protect_vehicle_commands_device_update on public.vehicle_commands;
-create trigger trg_protect_vehicle_commands_device_update
-  before update on public.vehicle_commands
-  for each row execute function public.protect_vehicle_commands_device_update();
 
 -- =====================================================================
 -- Trigger de creación de perfil para nuevos registros de Auth (Excluye dispositivos GPS)
@@ -1320,9 +911,6 @@ begin
     set vehicle_id = null, status = 'inactive', last_seen = now()
     where device_id = v_device_id;
 
-    update public.vehicle_commands
-    set status = 'failed'
-    where device_id = v_device_id and status in ('pending', 'received');
   end if;
 
   delete from public.vehicles
@@ -1338,9 +926,21 @@ grant execute on function public.delete_vehicle_cascade(text) to authenticated;
 -- =====================================================================
 -- Migración de Backfill AL FINAL (después de crear todas las tablas, columnas e índices) (Punto 1)
 -- =====================================================================
+-- Backfill de organization_id en filas heredadas
+-- ---------------------------------------------------------------------
+-- Solo tiene sentido al adoptar un esquema previo que carecía de
+-- organization_id. En una base nueva no hay nada que rellenar.
+--
+-- public.profiles queda EXCLUIDO a propósito: un perfil sin organización debe
+-- seguir sin organización. Asignarle la primera org convertiría C6 (nadie ve la
+-- flota ajena) en un IDOR, porque el archivo es idempotente y se puede volver a
+-- aplicar: cada re-ejecución devolvería al primer org todo perfil huérfano.
+-- El alta de un operador es siempre manual y explícita.
+-- =====================================================================
 do $$
 declare
   default_org_id uuid;
+  legacy_rows bigint;
 begin
   -- Limpieza de perfiles residuales pertenecientes a cuentas de dispositivo
   delete from public.profiles
@@ -1350,20 +950,32 @@ begin
        or email like 'device-%@local.rideguard'
   );
 
+  select count(*) into legacy_rows from (
+    select 1 from public.vehicles where organization_id is null
+    union all select 1 from public.devices  where organization_id is null
+    union all select 1 from public.geofences where organization_id is null
+    union all select 1 from public.alerts   where organization_id is null
+    union all select 1 from public.gps_locations where organization_id is null
+  ) pending;
+
+  if legacy_rows = 0 then
+    raise notice 'Sin filas heredadas sin organization_id: no se crea ni reasigna ninguna organización.';
+    return;
+  end if;
+
   select id into default_org_id from public.organizations order by created_at limit 1;
   if default_org_id is null then
     insert into public.organizations (name) values ('Organización Principal') returning id into default_org_id;
+    raise notice 'Backfill: % filas heredadas asignadas a la organización %', legacy_rows, default_org_id;
+  else
+    raise notice 'Backfill: % filas heredadas asignadas a la organización existente %', legacy_rows, default_org_id;
   end if;
 
-  if default_org_id is not null then
-    update public.vehicles set organization_id = default_org_id where organization_id is null;
-    update public.devices set organization_id = default_org_id where organization_id is null;
-    update public.geofences set organization_id = default_org_id where organization_id is null;
-    update public.alerts set organization_id = default_org_id where organization_id is null;
-    update public.profiles set organization_id = default_org_id where organization_id is null;
-    update public.gps_locations set organization_id = default_org_id where organization_id is null;
-    update public.vehicle_commands set organization_id = default_org_id where organization_id is null;
-  end if;
+  update public.vehicles      set organization_id = default_org_id where organization_id is null;
+  update public.devices       set organization_id = default_org_id where organization_id is null;
+  update public.geofences     set organization_id = default_org_id where organization_id is null;
+  update public.alerts        set organization_id = default_org_id where organization_id is null;
+  update public.gps_locations set organization_id = default_org_id where organization_id is null;
 end $$;
 
 -- =====================================================================
@@ -1442,11 +1054,73 @@ begin
     '*/15 * * * *',
     $cmd$select public.reconcile_pending_deletions()$cmd$
   );
+
+  -- Retention policy: delete gps_locations older than 90 days (runs daily at midnight)
+  begin
+    perform cron.unschedule('purge-old-gps-locations');
+  exception when others then
+    null;
+  end;
+
+  perform cron.schedule(
+    'purge-old-gps-locations',
+    '0 0 * * *',
+    $cmd$delete from public.gps_locations where timestamp < now() - interval '90 days'$cmd$
+  );
 exception when others then
-  raise notice 'pg_cron no disponible o no instalado: %. La reconciliación debe invocarse manualmente con: SELECT public.reconcile_pending_deletions();', sqlerrm;
+  raise notice 'pg_cron no disponible o no instalado: %. La reconciliación y limpieza deben invocarse manualmente.', sqlerrm;
 end $$;
 
 -- Para invocar manualmente desde service_role:
 -- SELECT public.reconcile_pending_deletions();
+
+-- =====================================================================
+-- Grants explícitos de tabla
+-- =====================================================================
+-- En Supabase la plataforma instala default privileges para el rol postgres que
+-- conceden acceso a anon/authenticated/service_role sobre el schema public. Eso
+-- hace que la migración funcione sin tocar los grants, pero deja el esquema
+-- dependiente de esa configuración externa: en cualquier otro Postgres (local,
+-- self-hosted, o un proyecto donde el default privilege no exista) TODAS las
+-- policies quedan invalidadas por "permission denied for table", porque la RLS
+-- nunca llega a evaluarse.
+--
+-- Declararlos aquí hace la migración autocontenida y verificable. Es aditivo: en
+-- Supabase solo re-confirma lo que ya estaba concedido. La RLS sigue siendo la
+-- que autoriza; estos grants únicamente hacen la tabla alcanzable.
+--
+-- anon NO recibe nada: el panel y el dispositivo se autentican antes de leer.
+do $$
+begin
+  -- Objetos de solo lectura o con escritura acotada por policy.
+  grant usage on schema public to authenticated, service_role;
+
+  grant select, insert, update, delete on
+    public.organizations,
+    public.profiles,
+    public.devices,
+    public.vehicles,
+    public.alerts,
+    public.geofences,
+    public.gps_locations,
+    public.device_registry
+  to authenticated;
+
+  -- service_role bypasa RLS: necesita acceso completo para Edge Functions,
+  -- jobs de pg_cron y la reconciliación de borrados.
+  grant all on
+    public.organizations,
+    public.profiles,
+    public.devices,
+    public.vehicles,
+    public.alerts,
+    public.geofences,
+    public.gps_locations,
+    public.device_registry
+  to service_role;
+
+  -- Tablas de infraestructura: nunca accesibles desde el cliente.
+  revoke all on public.orphan_auth_users, public.provision_rate_limits from anon, authenticated;
+end $$;
 
 

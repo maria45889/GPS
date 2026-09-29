@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { hasSupabaseConfig, supabase, withAuthRetry } from '../lib/supabase';
+import React, { useState, useEffect, useMemo } from 'react';
+import { hasSupabaseConfig, supabase } from '../lib/supabase';
 import CommandCenter from './command/CommandCenter';
 import { useVehicles, useDevices, useAlerts, useGeofences } from '../hooks';
-import { deleteVehicle, sendVehicleCommand, updateEntity } from '../lib/vehicleActions';
+import { deleteVehicle, updateEntity } from '../lib/vehicleActions';
 import { clearAllGpsCaches } from '../lib/gpsTracker';
 import { createGeofence } from '../lib/queries';
 import { EditEntityModal } from './EditEntityModal';
@@ -71,14 +71,6 @@ const Dashboard = () => {
   const [operationMessage, setOperationMessage] = useState('')
   const [alertFocusTrigger, setAlertFocusTrigger] = useState(null)
   const [routeFocusTrigger, setRouteFocusTrigger] = useState(null)
-  const [isVehicleControlBusy, setIsVehicleControlBusy] = useState(false)
-  const commandPollTimeoutRef = useRef(null)
-
-  useEffect(() => {
-    return () => {
-      if (commandPollTimeoutRef.current) clearTimeout(commandPollTimeoutRef.current)
-    }
-  }, [])
 
   const handleLogout = async () => {
     try {
@@ -239,119 +231,11 @@ const Dashboard = () => {
     setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position })
   }
 
-  // --- Control vehicular ---
-  const handleVehicleControl = async (command) => {
-    if (!selectedEntity || category !== 'vehicles' || isVehicleControlBusy) return
-    setIsVehicleControlBusy(true)
-    setSelectedEntity((prev) => (prev ? { ...prev, controlState: 'command_pending' } : null))
-
-    let commandResult
-    try {
-      commandResult = await sendVehicleCommand(selectedEntity.id, command, selectedEntity.deviceId || null)
-    } catch (err) {
-      setOperationMessage(`Error al enviar comando ${command}: ${err?.message || 'Error de red'}`)
-      setSelectedEntity((prev) => (prev ? { ...prev, controlState: undefined } : null))
-      setIsVehicleControlBusy(false)
-      return
-    }
-
-    if (commandResult.error) {
-      setOperationMessage(`Error al registrar comando ${command}: ${commandResult.error.message || 'Falló envío'}`)
-      setSelectedEntity((prev) => (prev ? { ...prev, controlState: undefined } : null))
-      setIsVehicleControlBusy(false)
-      return
-    }
-
-    setOperationMessage(
-      commandResult.remote
-        ? `Comando ${command} en cola. Esperando confirmación física de relé...`
-        : `Comando ${command} registrado localmente.`,
-    )
-
-    if (commandResult.commandId && supabase) {
-      const commandId = commandResult.commandId
-      let attempts = 0
-      const maxAttempts = 30
-      if (commandPollTimeoutRef.current) {
-        clearTimeout(commandPollTimeoutRef.current)
-        commandPollTimeoutRef.current = null
-      }
-
-      const schedulePoll = () => {
-        commandPollTimeoutRef.current = setTimeout(async () => {
-          attempts++
-          try {
-            const res = await withAuthRetry(async () =>
-              supabase
-                .from('vehicle_commands')
-                .select('status')
-                .eq('id', commandId)
-                .maybeSingle()
-            )
-            const data = res?.data
-            const error = res?.error
-
-            if (!error && data) {
-              if (data.status === 'received') {
-                setOperationMessage(`Comando ${command} recibido por el APK. Ejecutando relé...`)
-              } else if (data.status === 'done') {
-                commandPollTimeoutRef.current = null
-                setOperationMessage(`✅ Comando ${command} ejecutado exitosamente en el relé físico.`)
-                setIsVehicleControlBusy(false)
-                setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-                return
-              } else if (data.status === 'failed') {
-                commandPollTimeoutRef.current = null
-                setOperationMessage(`❌ Falló la ejecución del comando ${command} en el dispositivo.`)
-                setIsVehicleControlBusy(false)
-                setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-                return
-              }
-            }
-          } catch (err) {
-            const status = err?.status ?? err?.code
-            const isFatal = status === 401 || status === 403 || status === 404
-            if (isFatal) {
-              commandPollTimeoutRef.current = null
-              const msg = status === 401 || status === 403
-                ? `⚠️ Sesión expirada o sin permisos. Recarga la página.`
-                : `⚠️ Comando ${command} no encontrado. Es posible que haya sido cancelado.`
-              setOperationMessage(msg)
-              setIsVehicleControlBusy(false)
-              setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-              return
-            }
-          }
-
-          if (attempts >= maxAttempts) {
-            commandPollTimeoutRef.current = null
-            setOperationMessage(`⚠️ Tiempo de espera agotado esperando confirmación del comando ${command}.`)
-            setIsVehicleControlBusy(false)
-            setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-            return
-          }
-
-          schedulePoll()
-        }, 2000)
-      }
-      schedulePoll()
-    } else {
-      commandPollTimeoutRef.current = setTimeout(() => {
-        commandPollTimeoutRef.current = null
-        setIsVehicleControlBusy(false)
-        setSelectedEntity((prev) => (prev?.controlState === 'command_pending' ? { ...prev, controlState: undefined } : prev))
-      }, 5000)
-    }
-  }
-
   const handleDeleteVehicle = async (entityId, kindParam) => {
-    if (isVehicleControlBusy) return
     const kind = kindParam || (category === 'vehicles' ? 'vehicle' : 'device')
-    setIsVehicleControlBusy(true)
     const result = await deleteVehicle(entityId, kind)
     if (result.error) {
       setOperationMessage(`No se pudo eliminar: ${result.error.message || 'Error desconocido'}`)
-      setIsVehicleControlBusy(false)
       return
     }
 
@@ -365,7 +249,6 @@ const Dashboard = () => {
     }
 
     setOperationMessage(result.remote ? (kind === 'vehicle' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local')
-    setIsVehicleControlBusy(false)
   }
 
   const handleEditVehicle = (entity) => {
@@ -487,8 +370,6 @@ const Dashboard = () => {
         locateUserTrigger={locateUserTrigger}
         flyToTrigger={flyToTrigger}
         focusTrigger={alertFocusTrigger}
-        onControlVehicle={handleVehicleControl}
-        isControlBusy={isVehicleControlBusy}
         onDeleteVehicle={handleDeleteVehicle}
         onDeleteEphemeral={hideEphemeral}
         onEditVehicle={handleEditVehicle}

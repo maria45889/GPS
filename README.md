@@ -9,17 +9,16 @@ Panel web y aplicación Android para monitorear dispositivos GPS en tiempo real.
 - Registro de dispositivos en `devices`.
 - Historial de posiciones en `gps_locations`.
 - Datos de latitud, longitud, velocidad, precisión, rumbo y batería.
-- Alertas, geocercas, historial de rutas y comandos de vehículo.
+- Alertas, geocercas e historial de rutas.
 - Aplicación Android con envío GPS cada 30 segundos.
 - Tests unitarios y build de producción con Vite.
 
-> Los comandos `activate`, `stop` e `immobilize` se registran en `vehicle_commands`. El servicio GPS nativo del APK los consulta cada 30 s y los acusa (`status = received`), cerrando la cola. El teléfono no puede cortar físicamente la ignición; para eso hace falta un módulo GPS/relé instalado en la moto.
 
 ## Estructura
 
 ```text
 .
-├── supabase_setup.sql       # Tablas, índices, RLS y Realtime
+├── supabase/                # Migraciones y configuraciones de Supabase
 └── gps-dashboard/
     ├── src/                 # Panel React y lógica GPS/Supabase
     └── android/             # Proyecto Android generado con Capacitor
@@ -55,11 +54,21 @@ No subas `.env`, `service_role`, contraseñas, keystores ni archivos de configur
 ## Configuración de Supabase
 
 1. Abre el proyecto Supabase correcto.
-2. Ejecuta completo [`supabase_setup.sql`](supabase_setup.sql) en SQL Editor.
+2. Ejecuta `npx supabase db push` para aplicar las migraciones o despliega tu proyecto vinculado.
 3. Activa Authentication con Email.
 4. Crea el usuario real del panel desde Authentication > Users.
-5. Crea una organización y relaciona el UUID del usuario en `public.profiles` con rol `owner` o `admin` (el bloque comentado al final de `supabase_setup.sql` sirve de plantilla).
-6. Despliega la Edge Function que aprovisiona los dispositivos: `cd supabase && supabase functions deploy provision-device`. Configura la variable de entorno de la función: `supabase secrets set PROVISION_SECRET=<valor-aleatorio>` (el APK la envía como encabezado `x-provision-secret`).
+5. Crea una organización y relaciona el UUID del usuario en `public.profiles` con rol `owner` o `admin`.
+6. Despliega las Edge Functions. Las dos requieren `ALLOWED_ORIGIN` y fallan de forma explícita si no está definida:
+
+   ```bash
+   cd supabase
+   supabase secrets set ALLOWED_ORIGIN=https://tu-panel.vercel.app
+   supabase secrets set PROVISION_SECRET=<valor-aleatorio>
+   supabase functions deploy provision-device
+   supabase functions deploy delete-device-user
+   ```
+
+   `PROVISION_SECRET` es el código de aprovisionamiento del dispositivo. El APK lo envía en el **cuerpo JSON** de la petición (`{"deviceId": "...", "activationCode": "..."}`), no en un header.
 7. Configura las variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en Vercel para Production, Preview y Development.
 8. Haz Redeploy desde `main`.
 
@@ -72,6 +81,14 @@ APK (provision-device -> Auth propio) -> devices + gps_locations -> panel React 
 Cada dispositivo se aprovisiona una sola vez: la Edge Function crea su cuenta Auth, guarda `devices.auth_user_id` y devuelve email/password al APK, que los guarda en `SharedPreferences`. El APK ya no escribe como `anon`; usa el JWT del dispositivo (`app_metadata.device_id`) y las políticas RLS lo obligan a tocar solo su propia fila y sus posiciones.
 
 Un dispositivo se considera offline después de aproximadamente 90 segundos sin actualizar `last_seen`.
+
+## Política de CORS y Seguridad
+
+La API restringe el acceso al panel mediante CORS a través de la variable de entorno `ALLOWED_ORIGIN`. Configúrala en Supabase (Edge Functions) para permitir solicitudes únicamente desde el dominio donde esté desplegado tu dashboard (ej. `ALLOWED_ORIGIN=https://mi-panel.vercel.app`).
+
+## Autoinicio y Servicio GPS
+
+El rastreo se mantiene activo en segundo plano incluso con la pantalla apagada. El autoinicio por Direct Boot levanta `MainActivity` que arranca de forma segura el rastreo al reiniciar el dispositivo.
 
 ## APK Android
 

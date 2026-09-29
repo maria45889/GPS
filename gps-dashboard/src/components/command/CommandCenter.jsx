@@ -53,8 +53,6 @@ const CommandCenter = ({
   locateUserTrigger,
   flyToTrigger,
   focusTrigger,
-  onControlVehicle,
-  isControlBusy,
   onDeleteVehicle,
   onDeleteEphemeral,
   onEditVehicle,
@@ -222,8 +220,6 @@ const CommandCenter = ({
             onToggleRouteFollow={handleToggleRouteFollow}
             isFollowingRoute={isFollowingRoute}
             onShareRoute={onShareRoute}
-            onControlVehicle={category === 'vehicles' ? onControlVehicle : undefined}
-            isControlBusy={isControlBusy}
             onDeleteEntity={handleDeleteEntity}
             onEditVehicle={onEditVehicle}
             historyRoute={historyRoute}
@@ -253,8 +249,6 @@ const CommandCenter = ({
                 onToggleRouteFollow={handleToggleRouteFollow}
                 isFollowingRoute={isFollowingRoute}
                 onShareRoute={onShareRoute}
-                onControlVehicle={category === 'vehicles' ? onControlVehicle : undefined}
-                isControlBusy={isControlBusy}
                 onDeleteEntity={handleDeleteEntity}
                 onEditVehicle={onEditVehicle}
                 historyRoute={historyRoute}

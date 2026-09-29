@@ -35,3 +35,9 @@ local.properties
 /android/.gradle/
 /android/app/build/
 /android/build/
+
+# Scripts scratch con credenciales — NUNCA subir al repo
+test-*.js
+test-*.cjs
+delete-test-devices.*
+supabase/delete-test-devices.*

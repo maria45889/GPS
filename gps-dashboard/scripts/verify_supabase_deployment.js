@@ -25,7 +25,18 @@ async function verifyDeployment() {
   const auditResults = [];
 
   // 1. Verificar tablas requeridas
-  const requiredTables = ['devices', 'vehicles', 'alerts', 'geofences', 'gps_locations', 'device_activation_codes', 'device_registry', 'vehicle_commands', 'provision_rate_limits'];
+  const requiredTables = [
+    'organizations',
+    'profiles',
+    'devices',
+    'vehicles',
+    'alerts',
+    'geofences',
+    'gps_locations',
+    'device_registry',
+    'provision_rate_limits',
+    'orphan_auth_users',
+  ];
   for (const table of requiredTables) {
     try {
       const { error } = await supabase.from(table).select('*').limit(1);
@@ -52,7 +63,15 @@ async function verifyDeployment() {
   }
 
   // 3. Verificar RPCs requeridas
-  const requiredRpcs = ['check_rate_limit', 'record_rate_limit_failure', 'clear_rate_limit', 'update_vehicle_status', 'ack_vehicle_command', 'delete_vehicle_cascade'];
+  // Se omiten las security-definer restringidas a service_role que no exponen
+  // endpoint PostgREST para el service key: se verifican por SQL directo.
+  const requiredRpcs = [
+    'check_rate_limit',
+    'record_rate_limit_failure',
+    'clear_rate_limit',
+    'update_device_telemetry',
+    'delete_vehicle_cascade',
+  ];
   for (const rpcName of requiredRpcs) {
     try {
       const { error } = await supabase.rpc(rpcName, {});
@@ -68,9 +87,21 @@ async function verifyDeployment() {
           auditResults.push({ check: `RPC ${rpcName}`, status: 'WARN', detail: `Permisos insuficientes (${error.message})` });
         } else if (errMsg.includes('fetch') || errMsg.includes('enotfound') || errMsg.includes('network') || errCode === 'PGRST000') {
           auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: `Error de conexión (${error.message})` });
+        } else if (
+          errCode === 'PGRST202' ||
+          errCode === '42883' ||
+          errCode === '42P01' ||
+          errCode === '42804' ||
+          errMsg.includes('function') ||
+          errMsg.includes('routine')
+        ) {
+          // PostgREST responde 42883 ("function does not exist") cuando la RPC no está
+          // registrada, y 42883/42P08 cuando la firma no resuelve. Antes estos casos
+          // caían en el else y se reportaban PASS, enmascarando funciones ausentes.
+          auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: `Función SQL no existe o su firma no resuelve (${error.code}: ${error.message})` });
         } else {
-          // Errores de argumentos/parámetros indican que la RPC SÍ existe en Supabase
-          auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: `Función SQL existe (Respuesta de parámetros: ${error.message})` });
+          // Solo un error de argumentos con la función ya localizada demuestra que existe.
+          auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: `Función SQL existe (error de parámetros esperado: ${error.message})` });
         }
       }
     } catch (err) {
