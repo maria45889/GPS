@@ -8,6 +8,8 @@ import OriginCard from './OriginCard'
 import { useSimulatedFleet } from './useSimulatedFleet'
 import { useRouteHistory } from '../../hooks'
 import { normalizeEntity } from './normalize'
+import { useDashboardContext } from '../../context/DashboardContext'
+import { deleteVehicle, updateEntity } from '../../lib/vehicleActions'
 
 const toMapShape = (e, original = null) => ({
   id: e.id,
@@ -26,60 +28,46 @@ const toMapShape = (e, original = null) => ({
   controlState: original?.controlState,
 })
 
-const CommandCenter = ({
-  category,
-  onCategoryChange,
-  devices,
-  vehicles,
-  selectedEntity,
-  onSelectVehicle,
-  alerts,
-  onSelectAlert,
-  geofences,
-  isPlacingOnMap,
-  onSetGeofence,
-  onCancelGeofence,
-  pendingCenter,
-  onMapClick,
-  onMapHover,
-  isFollowingRoute,
-  onToggleRouteFollow,
-  onShareRoute,
-  userLocation,
-  onLocateUser,
-  origin,
-  onSelectOrigin,
-  onLocationChange,
-  locateUserTrigger,
-  flyToTrigger,
-  focusTrigger,
-  onDeleteVehicle,
-  onDeleteEphemeral,
-  onEditVehicle,
-  onLogout,
-  lastSyncLabel,
-  onFocusRoute,
-  routeFocusTrigger = null,
-  fleetLoading = false,
-}) => {
+const CommandCenter = () => {
+  const { state, dispatch, data } = useDashboardContext();
+  const { category, selectedEntity, flyToTrigger, isPlacingOnMap, pendingCenter, geofenceRadius, pendingGeofenceConfirm, userLocation, locateUserTrigger, isFollowingRoute, origin, entityToEdit, operationMessage, alertFocusTrigger, routeFocusTrigger } = state;
+  const { vehiclesList, devicesList, alerts, geofences, activeNetworkError, fleetLoading, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime, hideEphemeral, refetchVehicles, refetchGeofences } = data;
+
   const [baseLayer, setBaseLayer] = useState('dark')
   const [fleetOpen, setFleetOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1280 : true)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1280)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const onSelectVehicle = (entity) => {
+    if (!entity) return;
+    dispatch({ type: 'SET_SELECTED_ENTITY', payload: { ...entity, controlState: undefined } });
+    if (entity.position) {
+      dispatch({ type: 'SET_FLY_TO', payload: { coords: entity.position, zoom: 16, timestamp: Date.now() } });
+    }
+  }
+  
   const onSelectRef = useRef(onSelectVehicle)
   useEffect(() => {
     onSelectRef.current = onSelectVehicle
-  }, [onSelectVehicle])
+  }, [selectedEntity]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Flota consolidada (reales + simulados cuando hay poca data) ---
   const realFleet = useMemo(() => {
     const list =
       category === 'devices'
-        ? devices.map((e) => ({ ...normalizeEntity(e), _kind: 'device' }))
+        ? devicesList.map((e) => ({ ...normalizeEntity(e), _kind: 'device' }))
         : category === 'vehicles'
-          ? vehicles.map((e) => ({ ...normalizeEntity(e), _kind: 'vehicle' }))
+          ? vehiclesList.map((e) => ({ ...normalizeEntity(e), _kind: 'vehicle' }))
           : [
-              ...vehicles.map((e) => ({ ...normalizeEntity(e), _kind: 'vehicle' })),
-              ...devices.map((e) => ({ ...normalizeEntity(e), _kind: 'device' })),
+              ...vehiclesList.map((e) => ({ ...normalizeEntity(e), _kind: 'vehicle' })),
+              ...devicesList.map((e) => ({ ...normalizeEntity(e), _kind: 'device' })),
             ]
 
     const seen = new Set()
@@ -88,7 +76,7 @@ const CommandCenter = ({
       seen.add(e.id)
       return true
     })
-  }, [category, devices, vehicles])
+  }, [category, devicesList, vehiclesList])
 
   const simulated = useSimulatedFleet(realFleet.length)
   const combined = useMemo(() => [...realFleet, ...simulated.units], [realFleet, simulated.units])
@@ -127,22 +115,117 @@ const CommandCenter = ({
   }
 
   const handleToggleRouteFollow = () => {
+    const target = active?.position ? active : selectedEntity;
+    if (!target?.position) {
+      dispatch({ type: 'SET_FOLLOWING_ROUTE', payload: false });
+      dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Sin posición GPS para seguir' });
+      return;
+    }
     if (active?.position) onSelectRef.current(active)
-    onToggleRouteFollow?.(active || undefined)
+    const next = !isFollowingRoute;
+    dispatch({ type: 'SET_FOLLOWING_ROUTE', payload: next });
+    if (next && !origin && !userLocation?.position) {
+      dispatch({ type: 'SET_LOCATE_USER_TRIGGER', payload: { timestamp: Date.now(), coords: userLocation?.position } })
+      dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Punto de partida no definido: escribe tu calle o actívalo con tu ubicación GPS' });
+    }
   }
 
-  const handleDeleteEntity = (entity) => {
+  const handleDeleteEntity = async (entity) => {
     if (!entity) return
     if (entity?._mock) {
       simulated.removeUnit(entity.id)
       return
     }
     if (entity?._ephemeral) {
-      onDeleteEphemeral?.(entity.id)
+      hideEphemeral?.(entity.id)
       return
     }
     const kind = entity?._kind === 'vehicle' ? 'vehicle' : 'device'
-    onDeleteVehicle?.(entity.id, kind)
+    
+    const result = await deleteVehicle(entity.id, kind)
+    if (result.error) {
+      dispatch({ type: 'SET_OPERATION_MESSAGE', payload: `No se pudo eliminar: ${result.error.message || 'Error desconocido'}` })
+      return
+    }
+    dispatch({ type: 'SET_SELECTED_ENTITY', payload: null })
+    if (kind === 'vehicle') {
+      if (result.remote && refetchVehicles) await refetchVehicles();
+      dispatch({ type: 'SET_LOCAL_VEHICLES', payload: state.localVehicles?.filter((v) => v.id !== entity.id) || [] })
+    } else {
+      hideEphemeral(entity.id)
+    }
+    dispatch({ type: 'SET_OPERATION_MESSAGE', payload: result.remote ? (kind === 'vehicle' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local' })
+  }
+
+  const handleCategoryChange = (next) => dispatch({ type: 'SET_CATEGORY', payload: next })
+
+  const handleSelectAlert = (alert) => {
+    if (Number.isFinite(alert.lat) && Number.isFinite(alert.lng)) {
+      dispatch({ type: 'SET_FLY_TO', payload: { coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() } });
+      dispatch({ type: 'SET_ALERT_FOCUS', payload: { id: alert.id, coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() } });
+    }
+    const relatedVehicle = vehiclesList.find((v) => v.id === alert.vehicleId);
+    const relatedDevice = devicesList.find((d) => d.id === alert.vehicleId);
+
+    if (relatedVehicle) {
+      if (category !== 'vehicles' && category !== 'all') handleCategoryChange('vehicles');
+      onSelectVehicle(relatedVehicle);
+    } else if (relatedDevice) {
+      if (category !== 'devices' && category !== 'all') handleCategoryChange('devices');
+      onSelectVehicle(relatedDevice);
+    }
+  }
+
+  const handleFocusRoute = () => {
+    if (!active) return;
+    const points = Array.isArray(historyRoute) ? historyRoute.filter(
+      (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))
+    ) : [];
+    if (points.length < 2) return;
+    dispatch({ type: 'SET_ROUTE_FOCUS', payload: { route: points, timestamp: Date.now() } });
+  }
+
+  const lastSyncLabel = useMemo(() => {
+    if (activeNetworkError) return 'Sin conexión (Desactualizado)';
+    if ((category === 'vehicles' && vehiclesStale) || (category === 'devices' && devicesStale)) return 'Sin conexión (Desactualizado)';
+
+    if (category === 'vehicles' && vehiclesSyncTime) {
+      const date = new Date(vehiclesSyncTime);
+      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    }
+    if (category === 'devices' && devicesSyncTime) {
+      const date = new Date(devicesSyncTime);
+      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    }
+
+    const lastUpdate = active?.lastUpdate;
+    if (!lastUpdate || lastUpdate === '--') return 'Sin reporte';
+    if (lastUpdate === 'En línea') return 'En línea';
+    if (lastUpdate === 'Ahora') return 'Actualizado';
+    return lastUpdate;
+  }, [activeNetworkError, active?.lastUpdate, category, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime]);
+
+  const handleShareRoute = async () => {
+    if (!active) return;
+    const routeUrl = new URL(window.location.href);
+    routeUrl.searchParams.set('vehicle', active.id);
+    routeUrl.searchParams.set('category', category);
+    routeUrl.searchParams.set('follow', '1');
+    const shareData = {
+      title: `Ubicación de ${active.name}`,
+      text: `Ubicación GPS de ${active.name} (${active.plate || active.id})`,
+      url: routeUrl.toString(),
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(shareData.url);
+        dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Enlace copiado' });
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'No se pudo compartir' });
+    }
   }
 
   return (
@@ -155,21 +238,26 @@ const CommandCenter = ({
           selectedVehicle={selectedVehicle}
           onSelectVehicle={onSelectVehicle}
           alerts={alerts}
-          onSelectAlert={onSelectAlert}
+          onSelectAlert={handleSelectAlert}
           geofences={geofences}
           isPlacingOnMap={isPlacingOnMap}
-          pendingCenter={pendingCenter}
-          onMapClick={onMapClick}
-          onMapHover={onMapHover}
+          pendingCenter={pendingGeofenceConfirm ? pendingGeofenceConfirm.center : (isPlacingOnMap ? pendingCenter : null)}
+          onMapClick={(latlng) => {
+            dispatch({ type: 'SET_PLACING_ON_MAP', payload: false });
+            dispatch({ type: 'SET_PENDING_CENTER', payload: null });
+            dispatch({ type: 'SET_GEOFENCE_RADIUS', payload: 300 });
+            dispatch({ type: 'SET_PENDING_GEOFENCE_CONFIRM', payload: { center: latlng, name: 'Nueva geocerca' } });
+          }}
+          onMapHover={(latlng) => dispatch({ type: 'SET_PENDING_CENTER', payload: latlng })}
           isFollowingRoute={isFollowingRoute}
-          onToggleRouteFollow={onToggleRouteFollow}
-          onShareRoute={onShareRoute}
+          onToggleRouteFollow={handleToggleRouteFollow}
+          onShareRoute={handleShareRoute}
           userLocation={userLocation}
           origin={origin}
-          onLocationChange={onLocationChange}
+          onLocationChange={(loc) => dispatch({ type: 'SET_USER_LOCATION', payload: loc })}
           locateUserTrigger={locateUserTrigger}
           flyToTrigger={flyToTrigger}
-          focusTrigger={focusTrigger}
+          focusTrigger={alertFocusTrigger}
           routeFocusTrigger={routeFocusTrigger}
           baseLayer={baseLayer}
           onBaseLayerChange={setBaseLayer}
@@ -184,25 +272,24 @@ const CommandCenter = ({
       {/* Overlays */}
       <TopBar
         category={category}
-        onCategoryChange={onCategoryChange}
+        onCategoryChange={handleCategoryChange}
         stats={stats}
         alertsCount={(alerts || []).filter((a) => a.status !== 'resolved').length}
         onMenuClick={() => setFleetOpen(true)}
-        onLogout={onLogout}
         lastSyncLabel={lastSyncLabel}
       />
 
       {/* Tarjeta manual de punto de partida */}
       <div
         className={`pointer-events-none absolute inset-x-0 top-[138px] sm:top-[146px] z-30 flex justify-center px-4 ${
-          isPlacingOnMap ? 'hidden' : fleetOpen || detailOpen ? 'hidden xl:block' : ''
+          isPlacingOnMap ? 'hidden' : (fleetOpen || detailOpen ? (isDesktop ? '' : 'hidden') : '')
         }`}
       >
         <div className="pointer-events-auto">
           <OriginCard
             origin={origin}
-            onSelectOrigin={onSelectOrigin}
-            onUseGps={onLocateUser}
+            onSelectOrigin={(o) => dispatch({ type: 'SET_ORIGIN', payload: o })}
+            onUseGps={() => dispatch({ type: 'SET_LOCATE_USER_TRIGGER', payload: { timestamp: Date.now(), coords: userLocation?.position } })}
             hasGps={Boolean(userLocation?.position)}
             isFollowingRoute={isFollowingRoute}
             onToggleFollow={handleToggleRouteFollow}
@@ -211,79 +298,42 @@ const CommandCenter = ({
         </div>
       </div>
 
-      {/* Panel izquierdo - Detalle (escritorio) */}
-      <div className="pointer-events-none absolute left-4 top-[150px] bottom-36 z-20 hidden xl:block">
-        <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
-          <DetailPanel
-            entity={active}
-            category={category}
-            onToggleRouteFollow={handleToggleRouteFollow}
-            isFollowingRoute={isFollowingRoute}
-            onShareRoute={onShareRoute}
-            onDeleteEntity={handleDeleteEntity}
-            onEditVehicle={onEditVehicle}
-            historyRoute={historyRoute}
-            historyLoading={historyLoading}
-            onFocusRoute={() => onFocusRoute?.(active, historyRoute)}
-          />
-        </div>
-      </div>
-
-      {/* Hoja de detalle móvil */}
-      {detailOpen && active && (
-        <div className="absolute inset-x-0 bottom-36 z-40 mx-auto w-[94%] max-w-md xl:hidden">
-          <div className="relative rounded-2xl border border-cyan-500/25 bg-slate-900/90 p-3 shadow-[0_0_30px_rgba(6,182,212,0.25)] backdrop-blur-md">
-            <button
-              type="button"
-              onClick={() => setDetailOpen(false)}
-              className="absolute -top-2.5 right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-cyan-500/30 bg-slate-900 text-cyan-300 shadow-lg transition-all hover:bg-cyan-500/10"
-              title="Cerrar ficha"
-              aria-label="Cerrar ficha del dispositivo"
-            >
-              <span className="text-[13px] font-bold leading-none">×</span>
-            </button>
-            <div className="max-h-[42vh] overflow-y-auto cmd-scroll">
+      {/* Panel izquierdo - Detalle (condicional render) */}
+      {(isDesktop || (detailOpen && active)) && (
+        <div className={`pointer-events-none absolute ${isDesktop ? 'left-4 top-[150px] bottom-36 xl:block hidden' : 'inset-x-0 bottom-36 mx-auto w-[94%] max-w-md'} z-[45]`}>
+          <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
+            <div className={!isDesktop ? "relative rounded-2xl border border-cyan-500/25 bg-slate-900/90 p-3 shadow-[0_0_30px_rgba(6,182,212,0.25)] backdrop-blur-md" : ""}>
+              {!isDesktop && (
+                <button
+                  type="button"
+                  onClick={() => setDetailOpen(false)}
+                  className="absolute -top-2.5 right-3 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-cyan-500/30 bg-slate-900 text-cyan-300 shadow-lg transition-all hover:bg-cyan-500/10"
+                >
+                  <span className="text-[13px] font-bold leading-none">×</span>
+                </button>
+              )}
               <DetailPanel
                 entity={active}
                 category={category}
                 onToggleRouteFollow={handleToggleRouteFollow}
                 isFollowingRoute={isFollowingRoute}
-                onShareRoute={onShareRoute}
+                onShareRoute={handleShareRoute}
                 onDeleteEntity={handleDeleteEntity}
-                onEditVehicle={onEditVehicle}
+                onEditVehicle={(e) => dispatch({ type: 'SET_ENTITY_TO_EDIT', payload: e })}
                 historyRoute={historyRoute}
                 historyLoading={historyLoading}
-                onFocusRoute={() => onFocusRoute?.(active, historyRoute)}
+                onFocusRoute={handleFocusRoute}
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* Panel derecho - Flota (escritorio) */}
-      <div className="pointer-events-none absolute right-4 top-[150px] bottom-36 z-20 hidden lg:block">
-        <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
-          <FleetPanel
-            entities={combined}
-            selectedId={active?.id}
-            onSelectEntity={handleSelectFromFleet}
-            onDeleteEntity={handleDeleteEntity}
-            onResetDemos={simulated.resetDemos}
-            userLocation={userLocation}
-            onLocateUser={onLocateUser}
-            onSetGeofence={onSetGeofence}
-            alerts={alerts}
-            onSelectAlert={onSelectAlert}
-            isLoading={fleetLoading}
-          />
-        </div>
-      </div>
-
-      {/* Drawer móvil de flota */}
-      {fleetOpen && (
-        <div className="absolute inset-0 z-50 lg:hidden">
-          <button type="button" className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setFleetOpen(false)} aria-label="Cerrar panel" />
-          <div className="absolute right-0 top-0 h-full max-h-[88vh] overflow-y-auto cmd-scroll p-3">
+      {/* Panel derecho - Flota (condicional render) */}
+      {(isDesktop || fleetOpen) && (
+        <div className={`pointer-events-none absolute ${isDesktop ? 'right-4 top-[150px] bottom-36 hidden lg:block' : 'inset-0 z-50 lg:hidden'} z-20`}>
+          {!isDesktop && <button type="button" className="pointer-events-auto absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setFleetOpen(false)} />}
+          <div className={`pointer-events-auto max-h-full overflow-y-auto cmd-scroll ${!isDesktop ? 'absolute right-0 top-0 h-full max-h-[88vh] p-3' : ''}`}>
             <FleetPanel
               entities={combined}
               selectedId={active?.id}
@@ -291,10 +341,10 @@ const CommandCenter = ({
               onDeleteEntity={handleDeleteEntity}
               onResetDemos={simulated.resetDemos}
               userLocation={userLocation}
-              onLocateUser={onLocateUser}
-              onSetGeofence={onSetGeofence}
+              onLocateUser={() => dispatch({ type: 'SET_LOCATE_USER_TRIGGER', payload: { timestamp: Date.now(), coords: userLocation?.position } })}
+              onSetGeofence={() => { dispatch({ type: 'SET_PLACING_ON_MAP', payload: true }); dispatch({ type: 'SET_PENDING_CENTER', payload: null }); }}
               alerts={alerts}
-              onSelectAlert={onSelectAlert}
+              onSelectAlert={handleSelectAlert}
               isLoading={fleetLoading}
             />
           </div>
@@ -307,7 +357,7 @@ const CommandCenter = ({
           Toca o haz clic en el mapa para ubicar la geocerca
           <button
             type="button"
-            onClick={onCancelGeofence}
+            onClick={() => { dispatch({ type: 'SET_PLACING_ON_MAP', payload: false }); dispatch({ type: 'SET_PENDING_CENTER', payload: null }); }}
             className="rounded-full bg-[#f59e0b]/20 px-2.5 py-0.5 text-[9px] uppercase tracking-wider text-[#fcd34d] hover:bg-[#f59e0b]/30"
           >
             Cancelar

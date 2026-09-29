@@ -1,387 +1,241 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { hasSupabaseConfig, supabase } from '../lib/supabase';
 import CommandCenter from './command/CommandCenter';
-import { useVehicles, useDevices, useAlerts, useGeofences } from '../hooks';
 import { deleteVehicle, updateEntity } from '../lib/vehicleActions';
 import { clearAllGpsCaches } from '../lib/gpsTracker';
 import { createGeofence } from '../lib/queries';
 import { EditEntityModal } from './EditEntityModal';
+import { DashboardProvider, useDashboardContext } from '../context/DashboardContext';
 
-const Dashboard = () => {
-  const { vehicles: supabaseVehicles, isLoading: vehiclesLoading, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles()
-  const { devices: supabaseDevices, isLoading: devicesLoading, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime, hideEphemeral } = useDevices()
-  const { alerts: supabaseAlerts, error: alertsError } = useAlerts()
-  const { geofences: supabaseGeofences, refetchGeofences, error: geofencesError } = useGeofences()
+const DashboardInner = () => {
+  const { state, dispatch, data } = useDashboardContext();
+  const { category, selectedEntity, flyToTrigger, isPlacingOnMap, pendingCenter, geofenceRadius, pendingGeofenceConfirm, userLocation, locateUserTrigger, isFollowingRoute, origin, entityToEdit, operationMessage, alertFocusTrigger, routeFocusTrigger } = state;
+  const { vehiclesList, devicesList, alerts, geofences, activeNetworkError, fleetLoading, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime, hideEphemeral, refetchVehicles, refetchGeofences } = data;
 
-  const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle')
-
-  // --- Estado persistente de vista ---
-  const [category, setCategory] = useState(() => {
-    const queryCategory = new URLSearchParams(window.location.search).get('category')
-    if (queryCategory === 'devices' || queryCategory === 'vehicles' || queryCategory === 'all') return queryCategory
-    const stored = localStorage.getItem('rg_category')
-    return stored === 'vehicles' || stored === 'all' ? stored : 'devices'
-  })
-
-  const activeNetworkError = (category === 'devices' ? devicesError : vehiclesError) || alertsError || geofencesError
-  const fleetLoading = category === 'devices' ? devicesLoading : category === 'vehicles' ? vehiclesLoading : (devicesLoading || vehiclesLoading)
+  const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle');
 
   const handleCategoryChange = (next) => {
-    setCategory(next)
-    localStorage.setItem('rg_category', next)
-    setSelectedEntity(null)
-    setFlyToTrigger(null)
-  }
-
-  // --- Datos con fallback ---
-  const [localVehicles, setLocalVehicles] = useState([])
-  const [localGeofences, setLocalGeofences] = useState([])
-
-  const vehicles = useMemo(
-    () => (hasSupabaseConfig ? supabaseVehicles : localVehicles),
-    [localVehicles, supabaseVehicles],
-  )
-  const devices = useMemo(
-    () => (hasSupabaseConfig ? supabaseDevices : []),
-    [supabaseDevices],
-  )
-  const alerts = useMemo(
-    () => (hasSupabaseConfig ? supabaseAlerts : []),
-    [supabaseAlerts],
-  )
-  const geofences = useMemo(
-    () => (hasSupabaseConfig ? supabaseGeofences : localGeofences),
-    [localGeofences, supabaseGeofences],
-  )
-
-  // --- Selección ---
-  const [selectedEntity, setSelectedEntity] = useState(null)
-  const [flyToTrigger, setFlyToTrigger] = useState(null)
-  const [isPlacingOnMap, setIsPlacingOnMap] = useState(false)
-  const [pendingCenter, setPendingCenter] = useState(null)
-  const [userLocation, setUserLocation] = useState(null)
-  const [locateUserTrigger, setLocateUserTrigger] = useState(null)
-  const [isFollowingRoute, setIsFollowingRoute] = useState(
-    () => new URLSearchParams(window.location.search).get('follow') === '1',
-  )
-  const [origin, setOrigin] = useState(null)
-  const [pendingGeofenceConfirm, setPendingGeofenceConfirm] = useState(null)
-  const [geofenceRadius, setGeofenceRadius] = useState(300) // m
-  const [entityToEdit, setEntityToEdit] = useState(null)
-  const [operationMessage, setOperationMessage] = useState('')
-  const [alertFocusTrigger, setAlertFocusTrigger] = useState(null)
-  const [routeFocusTrigger, setRouteFocusTrigger] = useState(null)
-
-  const handleLogout = async () => {
-    try {
-      localStorage.removeItem('gps_dev_admin')
-      clearAllGpsCaches()
-      if (supabase) await supabase.auth.signOut()
-    } catch (err) {
-      console.error('Error al cerrar sesión:', err)
-    }
-  }
-
-  // --- Listas por categoría ---
-  const devicesList = devices
-  const vehiclesList = vehicles
-  const selectedEntityId = selectedEntity?.id
-
-  useEffect(() => {
-    const list = category === 'all' ? devicesList : (category === 'vehicles' ? vehiclesList : devicesList)
-    if (!selectedEntityId) {
-      if (list.length > 0) setSelectedEntity(list[0])
-    } else {
-      const updated = list.find((item) => item.id === selectedEntityId)
-      if (updated) {
-        setSelectedEntity((prev) => (prev ? { ...updated, controlState: prev.controlState } : updated))
-      }
-    }
-  }, [category, devicesList, vehiclesList, selectedEntityId])
+    dispatch({ type: 'SET_CATEGORY', payload: next });
+  };
 
   const selectEntity = (entity) => {
-    if (!entity) return
-    setSelectedEntity({ ...entity, controlState: undefined })
+    if (!entity) return;
+    dispatch({ type: 'SET_SELECTED_ENTITY', payload: { ...entity, controlState: undefined } });
     if (entity.position) {
-      setFlyToTrigger({ coords: entity.position, zoom: 16, timestamp: Date.now() })
+      dispatch({ type: 'SET_FLY_TO', payload: { coords: entity.position, zoom: 16, timestamp: Date.now() } });
     }
-  }
+  };
 
-  // Encuadra el mapa al recorrido histórico de la entidad indicada
   const handleFocusRoute = (entity, route) => {
-    if (!entity) return
-    if (entity !== selectedEntity) setSelectedEntity({ ...entity, controlState: undefined })
+    if (!entity) return;
+    if (entity !== selectedEntity) dispatch({ type: 'SET_SELECTED_ENTITY', payload: { ...entity, controlState: undefined } });
     const points = Array.isArray(route) ? route.filter(
-      (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])),
-    ) : []
-    if (points.length < 2) return
-    setRouteFocusTrigger({ route: points, timestamp: Date.now() })
-  }
+      (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))
+    ) : [];
+    if (points.length < 2) return;
+    dispatch({ type: 'SET_ROUTE_FOCUS', payload: { route: points, timestamp: Date.now() } });
+  };
 
-  // --- Compartir ---
   const handleShareRoute = async () => {
-    if (!selectedEntity) return
-    const routeUrl = new URL(window.location.href)
-    routeUrl.searchParams.set('vehicle', selectedEntity.id)
-    routeUrl.searchParams.set('category', category)
-    routeUrl.searchParams.set('follow', '1')
+    if (!selectedEntity) return;
+    const routeUrl = new URL(window.location.href);
+    routeUrl.searchParams.set('vehicle', selectedEntity.id);
+    routeUrl.searchParams.set('category', category);
+    routeUrl.searchParams.set('follow', '1');
     const shareData = {
       title: `Ubicación de ${selectedEntity.name}`,
       text: `Ubicación GPS de ${selectedEntity.name} (${selectedEntity.plate || selectedEntity.id})`,
       url: routeUrl.toString(),
-    }
+    };
     try {
       if (navigator.share) {
-        await navigator.share(shareData)
+        await navigator.share(shareData);
       } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(shareData.url)
-        setOperationMessage('Enlace copiado')
+        await navigator.clipboard.writeText(shareData.url);
+        dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Enlace copiado' });
       } else {
-        const textArea = document.createElement('textarea')
-        textArea.value = shareData.url
-        textArea.style.position = 'fixed'
-        textArea.style.left = '-999999px'
-        textArea.style.top = '-999999px'
-        document.body.appendChild(textArea)
-        textArea.focus()
-        textArea.select()
-        const successful = document.execCommand('copy')
-        document.body.removeChild(textArea)
+        const textArea = document.createElement('textarea');
+        textArea.value = shareData.url;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
         if (successful) {
-          setOperationMessage('Enlace copiado al portapapeles')
+          dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Enlace copiado al portapapeles' });
         } else {
-          setOperationMessage(`Copia este enlace: ${shareData.url}`)
+          dispatch({ type: 'SET_OPERATION_MESSAGE', payload: `Copia este enlace: ${shareData.url}` });
         }
       }
     } catch (error) {
-      if (error?.name !== 'AbortError') setOperationMessage('No se pudo compartir')
+      if (error?.name !== 'AbortError') dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'No se pudo compartir' });
     }
-  }
+  };
 
-  // --- Alertas ---
   const handleSelectAlert = (alert) => {
     if (Number.isFinite(alert.lat) && Number.isFinite(alert.lng)) {
-      setFlyToTrigger({ coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() })
-      setAlertFocusTrigger({ id: alert.id, coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() })
+      dispatch({ type: 'SET_FLY_TO', payload: { coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() } });
+      dispatch({ type: 'SET_ALERT_FOCUS', payload: { id: alert.id, coords: [alert.lat, alert.lng], zoom: 16, timestamp: Date.now() } });
     }
-    const relatedVehicle = vehiclesList.find((v) => v.id === alert.vehicleId)
-    const relatedDevice = devicesList.find((d) => d.id === alert.vehicleId)
+    const relatedVehicle = vehiclesList.find((v) => v.id === alert.vehicleId);
+    const relatedDevice = devicesList.find((d) => d.id === alert.vehicleId);
 
     if (relatedVehicle) {
-      if (category !== 'vehicles' && category !== 'all') handleCategoryChange('vehicles')
-      selectEntity(relatedVehicle, true)
+      if (category !== 'vehicles' && category !== 'all') handleCategoryChange('vehicles');
+      selectEntity(relatedVehicle);
     } else if (relatedDevice) {
-      if (category !== 'devices' && category !== 'all') handleCategoryChange('devices')
-      selectEntity(relatedDevice, true)
+      if (category !== 'devices' && category !== 'all') handleCategoryChange('devices');
+      selectEntity(relatedDevice);
     }
-  }
+  };
 
-  // --- Geocerca ---
   const handleMapClickForGeofence = (latlng) => {
-    setIsPlacingOnMap(false)
-    setPendingCenter(null)
-    setGeofenceRadius(300)
-    setPendingGeofenceConfirm({
-      center: latlng,
-      name: 'Nueva geocerca',
-    })
-  }
+    dispatch({ type: 'SET_PLACING_ON_MAP', payload: false });
+    dispatch({ type: 'SET_PENDING_CENTER', payload: null });
+    dispatch({ type: 'SET_GEOFENCE_RADIUS', payload: 300 });
+    dispatch({ type: 'SET_PENDING_GEOFENCE_CONFIRM', payload: { center: latlng, name: 'Nueva geocerca' } });
+  };
 
   const handleConfirmGeofence = async () => {
-    if (!pendingGeofenceConfirm) return
-    const { center, name } = pendingGeofenceConfirm
+    if (!pendingGeofenceConfirm) return;
+    const { center, name } = pendingGeofenceConfirm;
     const newGeo = {
-      name,
-      type: 'circle',
-      center,
-      positions: [center],
-      radius: geofenceRadius,
-      color: '#168ca4',
-      rule: 'outside',
-      active: true,
-    }
+      name, type: 'circle', center, positions: [center], radius: geofenceRadius, color: '#168ca4', rule: 'outside', active: true,
+    };
     if (hasSupabaseConfig && supabase) {
       try {
-        const saved = await createGeofence(newGeo)
+        const saved = await createGeofence(newGeo);
         if (saved) {
-          if (refetchGeofences) await refetchGeofences()
-          setOperationMessage('Geocerca guardada con éxito')
-          setPendingGeofenceConfirm(null)
-          setPendingCenter(null)
+          if (refetchGeofences) await refetchGeofences();
+          dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Geocerca guardada con éxito' });
+          dispatch({ type: 'SET_PENDING_GEOFENCE_CONFIRM', payload: null });
+          dispatch({ type: 'SET_PENDING_CENTER', payload: null });
         }
       } catch (err) {
-        console.error('Error al guardar geocerca en Supabase:', err)
-        setOperationMessage(`Error al guardar geocerca: ${err.message || 'Sin permisos'}. Puedes reintentar.`)
+        dispatch({ type: 'SET_OPERATION_MESSAGE', payload: `Error al guardar geocerca: ${err.message || 'Sin permisos'}. Puedes reintentar.` });
       }
     } else {
-      setLocalGeofences((prev) => [{ id: `GEOF-${Date.now()}`, ...newGeo }, ...prev])
-      setOperationMessage('Geocerca guardada localmente')
-      setPendingGeofenceConfirm(null)
-      setPendingCenter(null)
+      dispatch({ type: 'SET_LOCAL_GEOFENCES', payload: [{ id: `GEOF-${Date.now()}`, ...newGeo }, ...state.localGeofences] });
+      dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Geocerca guardada localmente' });
+      dispatch({ type: 'SET_PENDING_GEOFENCE_CONFIRM', payload: null });
+      dispatch({ type: 'SET_PENDING_CENTER', payload: null });
     }
-  }
+  };
 
   const handleCancelGeofence = () => {
-    setPendingGeofenceConfirm(null)
-    setPendingCenter(null)
-  }
+    dispatch({ type: 'SET_PENDING_GEOFENCE_CONFIRM', payload: null });
+    dispatch({ type: 'SET_PENDING_CENTER', payload: null });
+  };
 
-  // --- Ubicación del operador ---
   const handleLocateUser = () => {
-    setLocateUserTrigger({ timestamp: Date.now(), coords: userLocation?.position })
-  }
+    dispatch({ type: 'SET_LOCATE_USER_TRIGGER', payload: { timestamp: Date.now(), coords: userLocation?.position } });
+  };
 
   const handleDeleteVehicle = async (entityId, kindParam) => {
-    const kind = kindParam || (category === 'vehicles' ? 'vehicle' : 'device')
-    const result = await deleteVehicle(entityId, kind)
+    const kind = kindParam || (category === 'vehicles' ? 'vehicle' : 'device');
+    const result = await deleteVehicle(entityId, kind);
     if (result.error) {
-      setOperationMessage(`No se pudo eliminar: ${result.error.message || 'Error desconocido'}`)
-      return
+      dispatch({ type: 'SET_OPERATION_MESSAGE', payload: `No se pudo eliminar: ${result.error.message || 'Error desconocido'}` });
+      return;
     }
-
-    setSelectedEntity(null)
-
+    dispatch({ type: 'SET_SELECTED_ENTITY', payload: null });
     if (kind === 'vehicle') {
       if (result.remote && refetchVehicles) await refetchVehicles();
-      setLocalVehicles((prev) => prev.filter((v) => v.id !== entityId))
+      dispatch({ type: 'SET_LOCAL_VEHICLES', payload: state.localVehicles.filter((v) => v.id !== entityId) });
     } else {
-      hideEphemeral(entityId)
+      hideEphemeral(entityId);
     }
-
-    setOperationMessage(result.remote ? (kind === 'vehicle' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local')
-  }
+    dispatch({ type: 'SET_OPERATION_MESSAGE', payload: result.remote ? (kind === 'vehicle' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local' });
+  };
 
   const handleEditVehicle = (entity) => {
-    setEntityToEdit(entity);
+    dispatch({ type: 'SET_ENTITY_TO_EDIT', payload: entity });
   };
 
   const handleSaveEntity = async (entityId, currentCategory, updates) => {
     const result = await updateEntity(entityId, currentCategory, updates);
-    if (result.error) {
-      throw new Error(result.error.message || 'Error al guardar los cambios');
+    if (result.error) throw new Error(result.error.message || 'Error al guardar los cambios');
+    dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Cambios guardados con éxito' });
+    if (currentCategory === 'vehicles' && refetchVehicles) refetchVehicles();
+  };
+
+  const handleToggleRouteFollow = (entity) => {
+    const target = entity?.position ? entity : selectedEntity;
+    if (!target?.position) {
+      dispatch({ type: 'SET_FOLLOWING_ROUTE', payload: false });
+      dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Sin posición GPS para seguir' });
+      return;
     }
-    setOperationMessage('Cambios guardados con éxito');
-    if (currentCategory === 'vehicles' && refetchVehicles) {
-      refetchVehicles();
+    if (entity?.position && entity !== selectedEntity) selectEntity(entity);
+    const next = !isFollowingRoute;
+    dispatch({ type: 'SET_FOLLOWING_ROUTE', payload: next });
+    if (next && !origin && !userLocation?.position) {
+      handleLocateUser();
+      dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Punto de partida no definido: escribe tu calle o actívalo con tu ubicación GPS' });
     }
   };
 
-  // --- Seguir ruta ---
-  const handleToggleRouteFollow = (entity) => {
-    const target = entity?.position ? entity : selectedEntity
-    if (!target?.position) {
-      setIsFollowingRoute(false)
-      setOperationMessage('Sin posición GPS para seguir')
-      return
-    }
-    if (entity?.position && entity !== selectedEntity) selectEntity(entity)
-    const next = !isFollowingRoute
-    setIsFollowingRoute(next)
-    if (next && !origin && !userLocation?.position) {
-      handleLocateUser()
-      setOperationMessage('Punto de partida no definido: escribe tu calle o actívalo con tu ubicación GPS')
-    }
-  }
-
   const handleSelectOrigin = (selected) => {
-    setOrigin(selected)
-    if (selected) {
-      setOperationMessage('Punto de partida fijado')
+    dispatch({ type: 'SET_ORIGIN', payload: selected });
+    if (selected) dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Punto de partida fijado' });
+  };
+
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem('gps_dev_admin');
+      clearAllGpsCaches();
+      if (supabase) await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Error al cerrar sesión:', err);
     }
-  }
+  };
 
-  // --- Compartido ---
   useEffect(() => {
-    if (!sharedVehicleId) return
-    const sharedCategory = new URLSearchParams(window.location.search).get('category')
-
-    const inVehicles = vehiclesList.find((v) => v.id === sharedVehicleId)
-    const inDevices = devicesList.find((d) => d.id === sharedVehicleId)
-
+    if (!sharedVehicleId) return;
+    const sharedCategory = new URLSearchParams(window.location.search).get('category');
+    const inVehicles = vehiclesList.find((v) => v.id === sharedVehicleId);
+    const inDevices = devicesList.find((d) => d.id === sharedVehicleId);
     const targetCategory = sharedCategory === 'devices'
       ? (inDevices ? 'devices' : null)
-      : (sharedCategory === 'vehicles' ? (inVehicles ? 'vehicles' : null) : null)
-
-    const resolvedCategory = targetCategory || (inDevices && !inVehicles ? 'devices' : (inVehicles ? 'vehicles' : (inDevices ? 'devices' : null)))
-    const targetEntity = resolvedCategory === 'devices' ? inDevices : (resolvedCategory === 'vehicles' ? inVehicles : null)
+      : (sharedCategory === 'vehicles' ? (inVehicles ? 'vehicles' : null) : null);
+    const resolvedCategory = targetCategory || (inDevices && !inVehicles ? 'devices' : (inVehicles ? 'vehicles' : (inDevices ? 'devices' : null)));
+    const targetEntity = resolvedCategory === 'devices' ? inDevices : (resolvedCategory === 'vehicles' ? inVehicles : null);
 
     if (resolvedCategory && category !== resolvedCategory) {
-      queueMicrotask(() => {
-        setCategory(resolvedCategory)
-        localStorage.setItem('rg_category', resolvedCategory)
-      })
+      queueMicrotask(() => handleCategoryChange(resolvedCategory));
     }
-    if (targetEntity) selectEntity(targetEntity)
-  }, [sharedVehicleId, vehiclesList, devicesList]) // eslint-disable-line react-hooks/exhaustive-deps/exhaustive-deps
+    if (targetEntity) selectEntity(targetEntity);
+  }, [sharedVehicleId, vehiclesList, devicesList]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Última sincronización ---
   const lastSyncLabel = useMemo(() => {
-    if (activeNetworkError) return 'Sin conexión (Desactualizado)'
-    if ((category === 'vehicles' && vehiclesStale) || (category === 'devices' && devicesStale)) return 'Sin conexión (Desactualizado)'
+    if (activeNetworkError) return 'Sin conexión (Desactualizado)';
+    if ((category === 'vehicles' && vehiclesStale) || (category === 'devices' && devicesStale)) return 'Sin conexión (Desactualizado)';
 
     if (category === 'vehicles' && vehiclesSyncTime) {
-      const date = new Date(vehiclesSyncTime)
-      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+      const date = new Date(vehiclesSyncTime);
+      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
     }
     if (category === 'devices' && devicesSyncTime) {
-      const date = new Date(devicesSyncTime)
-      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+      const date = new Date(devicesSyncTime);
+      return `Act. ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
     }
 
-    const lastUpdate = selectedEntity?.lastUpdate
-    if (!lastUpdate || lastUpdate === '--') return 'Sin reporte'
-    if (lastUpdate === 'En línea') return 'En línea'
-    if (lastUpdate === 'Ahora') return 'Actualizado'
-    return lastUpdate
-  }, [activeNetworkError, selectedEntity?.lastUpdate, category, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime])
+    const lastUpdate = selectedEntity?.lastUpdate;
+    if (!lastUpdate || lastUpdate === '--') return 'Sin reporte';
+    if (lastUpdate === 'En línea') return 'En línea';
+    if (lastUpdate === 'Ahora') return 'Actualizado';
+    return lastUpdate;
+  }, [activeNetworkError, selectedEntity?.lastUpdate, category, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime]);
 
   return (
     <div className="relative flex w-full flex-col bg-[#0b0f19] h-[100dvh] overflow-hidden">
-      <CommandCenter
-        category={category}
-        onCategoryChange={handleCategoryChange}
-        devices={devicesList}
-        vehicles={vehiclesList}
-        selectedEntity={selectedEntity}
-        onSelectVehicle={(entity) => selectEntity(entity)}
-        alerts={alerts}
-        onSelectAlert={handleSelectAlert}
-        geofences={geofences}
-        isPlacingOnMap={isPlacingOnMap}
-        onSetGeofence={() => {
-          setIsPlacingOnMap(true)
-          setPendingCenter(null)
-        }}
-        onCancelGeofence={() => {
-          setIsPlacingOnMap(false)
-          setPendingCenter(null)
-        }}
-        pendingCenter={pendingGeofenceConfirm ? pendingGeofenceConfirm.center : (isPlacingOnMap ? pendingCenter : null)}
-        onMapClick={handleMapClickForGeofence}
-        onMapHover={(latlng) => setPendingCenter(latlng)}
-        isFollowingRoute={isFollowingRoute}
-        onToggleRouteFollow={handleToggleRouteFollow}
-        origin={origin}
-        onSelectOrigin={handleSelectOrigin}
-        onShareRoute={handleShareRoute}
-        userLocation={userLocation}
-        onLocateUser={handleLocateUser}
-        onLocationChange={setUserLocation}
-        locateUserTrigger={locateUserTrigger}
-        flyToTrigger={flyToTrigger}
-        focusTrigger={alertFocusTrigger}
-        onDeleteVehicle={handleDeleteVehicle}
-        onDeleteEphemeral={hideEphemeral}
-        onEditVehicle={handleEditVehicle}
-        onLogout={handleLogout}
-        lastSyncLabel={lastSyncLabel}
-        onFocusRoute={handleFocusRoute}
-        routeFocusTrigger={routeFocusTrigger}
-        fleetLoading={fleetLoading}
-      />
+      <CommandCenter />
 
       {operationMessage && (
-        <button type="button" className="dashboard-toast" onClick={() => setOperationMessage('')} aria-label="Cerrar mensaje">
+        <button type="button" className="dashboard-toast" onClick={() => dispatch({ type: 'SET_OPERATION_MESSAGE', payload: '' })} aria-label="Cerrar mensaje">
           {operationMessage}
         </button>
       )}
@@ -406,7 +260,7 @@ const Dashboard = () => {
                   <button
                     key={r}
                     type="button"
-                    onClick={() => setGeofenceRadius(r)}
+                    onClick={() => dispatch({ type: 'SET_GEOFENCE_RADIUS', payload: r })}
                     aria-pressed={geofenceRadius === r}
                     className={`rounded-md border px-2.5 py-1.5 font-mono text-[11px] font-bold transition-all ${
                       geofenceRadius === r
@@ -443,12 +297,18 @@ const Dashboard = () => {
         <EditEntityModal
           entity={entityToEdit}
           category={category}
-          onClose={() => setEntityToEdit(null)}
+          onClose={() => dispatch({ type: 'SET_ENTITY_TO_EDIT', payload: null })}
           onSave={handleSaveEntity}
         />
       )}
     </div>
-  )
-}
+  );
+};
 
-export default Dashboard
+const Dashboard = () => (
+  <DashboardProvider>
+    <DashboardInner />
+  </DashboardProvider>
+);
+
+export default Dashboard;

@@ -6,33 +6,19 @@ export const deleteVehicle = async (entityId, kind = 'vehicle') => {
 
   return withAuthRetry(async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session?.access_token) {
-        return { remote: false, error: new Error('No hay sesión activa') };
-      }
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabaseUrl) {
-        throw new Error('Configuración de Supabase URL no encontrada');
-      }
       const isDevice = kind === 'device';
-      const response = await fetch(`${supabaseUrl}/functions/v1/delete-device-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`
-        },
-        body: JSON.stringify(isDevice ? { device_id: entityId } : { vehicle_id: entityId })
+      const body = isDevice ? { device_id: entityId } : { vehicle_id: entityId };
+
+      const { data, error } = await supabase.functions.invoke('delete-device-user', {
+        body,
       });
 
-      const responseData = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        // B13: Preservar el código HTTP en el error para que withAuthRetry
-        // pueda detectar 401 y renovar el token correctamente.
-        const err = new Error(responseData.error || 'Error al eliminar el vehículo y dispositivo de forma segura')
-        err.status = response.status
-        throw err
+      if (error) {
+        // Preservar el código HTTP en el error para que withAuthRetry
+        // pueda detectar 401 y renovar el token correctamente si corresponde.
+        const err = new Error(error.message || 'Error al eliminar el vehículo y dispositivo de forma segura');
+        err.status = error.status || 500;
+        throw err;
       }
 
       return { remote: true };

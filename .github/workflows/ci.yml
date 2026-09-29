@@ -35,6 +35,13 @@ jobs:
         working-directory: gps-dashboard
         run: npm test
 
+      - name: Verify Supabase Deployment
+        working-directory: gps-dashboard
+        run: npm run verify:supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
       - name: Verify Android Build
         working-directory: gps-dashboard/android
         run: ./gradlew compileDebugJavaWithJavac

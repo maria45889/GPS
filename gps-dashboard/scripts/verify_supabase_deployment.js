@@ -15,14 +15,15 @@ console.log('🔍 Auditoría de Despliegue de Supabase - Pre-Flight');
 console.log('=====================================================');
 
 if (!supabaseUrl || supabaseUrl.includes('your-project')) {
-  console.log('⚠️ ADVERTENCIA: SUPABASE_URL no configurado. Modo de verificación offline (contrato SQL).');
-  process.exit(0);
+  console.error('❌ ERROR: SUPABASE_URL no configurado. Se requieren secretos reales para verificar en CI.');
+  process.exit(1);
 }
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 async function verifyDeployment() {
   const auditResults = [];
+  let hasFailures = false;
 
   // 1. Verificar tablas requeridas
   const requiredTables = [
@@ -42,11 +43,13 @@ async function verifyDeployment() {
       const { error } = await supabase.from(table).select('*').limit(1);
       if (error && error.code !== 'PGRST116') {
         auditResults.push({ check: `Tabla ${table}`, status: 'FAIL', detail: error.message });
+        hasFailures = true;
       } else {
         auditResults.push({ check: `Tabla ${table}`, status: 'PASS', detail: 'Existe y accesible' });
       }
     } catch (err) {
       auditResults.push({ check: `Tabla ${table}`, status: 'FAIL', detail: err.message });
+      hasFailures = true;
     }
   }
 
@@ -63,8 +66,6 @@ async function verifyDeployment() {
   }
 
   // 3. Verificar RPCs requeridas
-  // Se omiten las security-definer restringidas a service_role que no exponen
-  // endpoint PostgREST para el service key: se verifican por SQL directo.
   const requiredRpcs = [
     'check_rate_limit',
     'record_rate_limit_failure',
@@ -83,10 +84,12 @@ async function verifyDeployment() {
 
         if (errCode === 'PGRST202' || errMsg.includes('not found') || errMsg.includes('does not exist') || errMsg.includes('could not find the function')) {
           auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: 'Función SQL no existe' });
+          hasFailures = true;
         } else if (errCode === '42501' || errMsg.includes('permission denied')) {
           auditResults.push({ check: `RPC ${rpcName}`, status: 'WARN', detail: `Permisos insuficientes (${error.message})` });
         } else if (errMsg.includes('fetch') || errMsg.includes('enotfound') || errMsg.includes('network') || errCode === 'PGRST000') {
           auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: `Error de conexión (${error.message})` });
+          hasFailures = true;
         } else if (
           errCode === 'PGRST202' ||
           errCode === '42883' ||
@@ -95,12 +98,9 @@ async function verifyDeployment() {
           errMsg.includes('function') ||
           errMsg.includes('routine')
         ) {
-          // PostgREST responde 42883 ("function does not exist") cuando la RPC no está
-          // registrada, y 42883/42P08 cuando la firma no resuelve. Antes estos casos
-          // caían en el else y se reportaban PASS, enmascarando funciones ausentes.
           auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: `Función SQL no existe o su firma no resuelve (${error.code}: ${error.message})` });
+          hasFailures = true;
         } else {
-          // Solo un error de argumentos con la función ya localizada demuestra que existe.
           auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: `Función SQL existe (error de parámetros esperado: ${error.message})` });
         }
       }
@@ -108,8 +108,10 @@ async function verifyDeployment() {
       const errMsg = String(err.message || '').toLowerCase();
       if (errMsg.includes('not found') || errMsg.includes('does not exist')) {
         auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: 'Función SQL no existe' });
+        hasFailures = true;
       } else if (errMsg.includes('fetch') || errMsg.includes('network')) {
         auditResults.push({ check: `RPC ${rpcName}`, status: 'FAIL', detail: `Error de red (${err.message})` });
+        hasFailures = true;
       } else {
         auditResults.push({ check: `RPC ${rpcName}`, status: 'PASS', detail: `Registrada (${err.message || 'OK'})` });
       }
@@ -117,9 +119,15 @@ async function verifyDeployment() {
   }
 
   console.table(auditResults);
-  console.log('\n✅ Auditoría de Supabase finalizada.');
+  if (hasFailures) {
+    console.error('\n❌ Auditoría de Supabase falló. Hay requerimientos faltantes.');
+    process.exit(1);
+  } else {
+    console.log('\n✅ Auditoría de Supabase finalizada y aprobada.');
+  }
 }
 
 verifyDeployment().catch((err) => {
   console.error('❌ Error en auditoría:', err);
+  process.exit(1);
 });

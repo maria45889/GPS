@@ -3,7 +3,7 @@ import Dashboard from './components/Dashboard';
 import { AuthGate } from './components/AuthGate';
 import { Capacitor } from '@capacitor/core';
 import { gpsTracker } from './lib/gpsTracker';
-import { refreshNativeSession } from './lib/supabase';
+import { refreshNativeSession, setupAuthSync } from './lib/supabase';
 
 // Intervalo de envío GPS en ms (30 s producción)
 const GPS_INTERVAL_MS = 30_000;
@@ -65,6 +65,11 @@ function NativeTrackerScreen() {
 
 function App() {
   const isNativePlatform = Capacitor.isNativePlatform();
+
+  useEffect(() => {
+    const cleanup = setupAuthSync();
+    return cleanup;
+  }, []);
 
   if (isNativePlatform) {
     return <NativeTrackerScreen />;

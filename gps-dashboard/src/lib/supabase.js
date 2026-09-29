@@ -139,22 +139,32 @@ export const withAuthRetry = async (queryFn) => {
   }
 };
 
-if (supabase && nativeAuth?.access_token) {
-  refreshNativeSession().catch((err) => console.warn('No se pudo establecer la sesión Supabase nativa inicial:', err));
-
-  if (typeof window !== 'undefined') {
-    // Sincronizar token nativo periódicamente (cada 5 min) o al recuperar el foco
-    window.setInterval(() => {
-      refreshNativeSession();
-    }, 5 * 60 * 1000);
-
-    window.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        refreshNativeSession();
-      }
-    });
+export const setupAuthSync = () => {
+  if (!supabase) return () => {};
+  
+  if (nativeAuth?.access_token) {
+    refreshNativeSession().catch((err) => console.warn('No se pudo establecer la sesión Supabase nativa inicial:', err));
   }
-}
+
+  if (typeof window === 'undefined') return () => {};
+
+  const interval = window.setInterval(() => {
+    refreshNativeSession();
+  }, 5 * 60 * 1000);
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      refreshNativeSession();
+    }
+  };
+
+  window.addEventListener('visibilitychange', handleVisibilityChange);
+
+  return () => {
+    window.clearInterval(interval);
+    window.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+};
 
 if (!hasSupabaseConfig) {
   console.warn('Supabase no configurado. La app usará modo local/fallback.');
