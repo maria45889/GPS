@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: gps-dashboard/package-lock.json
           
@@ -42,6 +42,12 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
       - name: Verify Android Build
         working-directory: gps-dashboard/android
-        run: ./gradlew compileDebugJavaWithJavac
+        run: ./gradlew :app:compileDebugJavaWithJavac
