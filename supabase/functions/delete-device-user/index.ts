@@ -26,6 +26,47 @@ const json = (data: unknown, status = 200) =>
     headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
   })
 
+/**
+ * Resuelve el vehicle_id de un device_id.
+ *
+ * device_registry es el puente device_id -> vehicle_id, pero puede no tener fila
+ * (devices provisionados antes de que provision-device insertara ahí). La tabla
+ * `vehicles` tiene la columna device_id y es la fuente autoritativa del vínculo,
+ * así que se consulta como fallback. Sin esto, borrar un vehículo legacy fallaba
+ * en silencio y el registro quedaba huérfano.
+ *
+ * Se filtra siempre por organization_id: un device de otra org nunca debe
+ * revelar (ni devolver) el vehicle_id de otro tenant.
+ */
+async function resolveVehicleId(
+  client: ReturnType<typeof createClient>,
+  deviceId: string | null | undefined,
+  organizationId: string | null | undefined
+): Promise<string | null> {
+  if (!deviceId) return null
+
+  const { data: regData } = await client
+    .from('device_registry')
+    .select('vehicle_id')
+    .eq('device_id', deviceId)
+    .maybeSingle()
+
+  if (regData?.vehicle_id) return regData.vehicle_id as string
+
+  let query = client
+    .from('vehicles')
+    .select('id')
+    .eq('device_id', deviceId)
+
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId)
+  }
+
+  const { data: vehicleData } = await query.limit(1).maybeSingle()
+
+  return (vehicleData?.id as string | undefined) ?? null
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
@@ -97,7 +138,10 @@ serve(async (req) => {
       if (deviceError) {
         return json({ error: 'Could not fetch device details' }, 500)
       }
-      if (deviceData && deviceData.organization_id !== profile?.organization_id) {
+      if (!deviceData) {
+        return json({ error: 'Device not found' }, 404)
+      }
+      if (deviceData.organization_id !== profile?.organization_id) {
         return json({ error: 'Forbidden: Device organization mismatch' }, 403)
       }
       // Resolver auth_user_id solo si no fue enviado en el body
@@ -118,19 +162,19 @@ serve(async (req) => {
     if (deviceError) {
       return json({ error: 'Could not fetch device details to verify organization' }, 500)
     }
-    if (deviceData && deviceData.organization_id !== profile?.organization_id) {
+    if (!deviceData) {
+      return json({ error: 'Device not found' }, 404)
+    }
+    if (deviceData.organization_id !== profile?.organization_id) {
       return json({ error: 'Forbidden: Device organization mismatch' }, 403)
     }
     targetDeviceId = deviceData?.id ?? null
 
-    // C3: Buscar vehicle_id en device_registry (devices NO tiene vehicle_id)
-    const { data: regData } = await supabaseAdmin
-      .from('device_registry')
-      .select('vehicle_id')
-      .eq('device_id', targetDeviceId)
-      .maybeSingle()
-
-    resolvedVehicleId = regData?.vehicle_id ?? null
+    // C3: Buscar vehicle_id. device_registry es el puente primario, pero puede no
+    // tener fila (devices provisionados antes de que provision-device la insertara).
+    // vehicles.device_id es la fuente autoritativa del vinculo, asi que se usa de
+    // fallback: sin esto el vehiculo queda huerfano para siempre.
+    resolvedVehicleId = await resolveVehicleId(supabaseAdmin, targetDeviceId, profile?.organization_id)
   }
 
   if (device_id && !vehicle_id && !auth_user_id) {
@@ -143,19 +187,16 @@ serve(async (req) => {
     if (deviceError) {
       return json({ error: 'Could not fetch device details to verify organization' }, 500)
     }
-    if (deviceData && deviceData.organization_id !== profile?.organization_id) {
+    if (!deviceData) {
+      return json({ error: 'Device not found' }, 404)
+    }
+    if (deviceData.organization_id !== profile?.organization_id) {
       return json({ error: 'Forbidden: Device organization mismatch' }, 403)
     }
     if (!targetAuthUserId && deviceData) targetAuthUserId = deviceData.auth_user_id;
 
-    // Buscar si tiene un vehículo asociado
-    const { data: regData } = await supabaseAdmin
-      .from('device_registry')
-      .select('vehicle_id')
-      .eq('device_id', device_id)
-      .maybeSingle()
-
-    resolvedVehicleId = regData?.vehicle_id ?? null
+    // Buscar si tiene un vehículo asociado (mismo helper que en el bloque de device_id)
+    resolvedVehicleId = await resolveVehicleId(supabaseAdmin, device_id, profile?.organization_id)
   }
 
   // B2: Si el llamador envió AMBOS identificadores, verificar que apunten al MISMO dispositivo.

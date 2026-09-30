@@ -215,10 +215,14 @@ serve(async (req) => {
   }
 
   // Insert into devices
+  // 'status' debe ser 'active': la policy gps_locations_device_insert exige
+  // status in ('active','online') y el default de la columna es 'offline',
+  // sin este campo RLS rechazaria el 100% de los inserts de posicion.
   const { error: deviceErr } = await supabase.from('devices').insert({
     id: deviceId,
     auth_user_id: created.data.user.id,
-    organization_id: orgId
+    organization_id: orgId,
+    status: 'active'
   })
 
   // Insert into vehicles
@@ -230,10 +234,24 @@ serve(async (req) => {
     status: 'active'
   })
 
-  if (deviceErr || vehicleErr) {
+  // Insert into device_registry
+  // Esta tabla es el puente device_id -> vehicle_id. Sin esta fila:
+  //   - delete-device-user nunca resuelve vehicle_id y deja vehiculos huerfanos
+  //   - reconcile_pending_deletions cae siempre en la rama ELSE y borra el device
+  //     (cascada => se pierde todo el historial GPS) sin borrar el vehiculo
+  //   - el UPDATE de device_registry en delete_vehicle_cascade es un no-op
+  const { error: registryErr } = await supabase.from('device_registry').insert({
+    device_id: deviceId,
+    organization_id: orgId,
+    vehicle_id: deviceId,
+    label: 'Auto-Móvil ' + deviceId.substring(0, 4),
+    status: 'active'
+  })
+
+  if (deviceErr || vehicleErr || registryErr) {
     await recordDbFailedAttempt(`ip:${clientIp}`)
     await recordDbFailedAttempt(`device:${deviceId}`)
-    
+
     // Cleanup orphan user
     if (created.data?.user?.id) {
       const { error: deleteErr } = await supabase.auth.admin.deleteUser(created.data.user.id)
@@ -245,7 +263,7 @@ serve(async (req) => {
         })
       }
     }
-    return json({ error: 'error al insertar en devices/vehicles: ' + (deviceErr?.message || vehicleErr?.message) }, 500)
+    return json({ error: 'error al insertar en devices/vehicles/device_registry: ' + (deviceErr?.message || vehicleErr?.message || registryErr?.message) }, 500)
   }
 
   await clearDbRateLimit(`ip:${clientIp}`)
