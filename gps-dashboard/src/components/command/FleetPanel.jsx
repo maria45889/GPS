@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Search, Crosshair, MapPin, Plus, AlertTriangle, Trash2, RotateCcw } from 'lucide-react'
-import { isOnline, statusColor, signalFor, hashSpark } from './normalize'
+import { isOnline, statusColor, signalFor } from './normalize'
 
 const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onResetDemos, userLocation, onLocateUser, onSetGeofence, alerts, onSelectAlert, isLoading = false }) => {
   const [query, setQuery] = useState('')
@@ -77,8 +77,7 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
           const isSel = entity.id === selectedId
           const online = isOnline(entity)
           const color = statusColor(entity)
-          const spark = hashSpark((String(entity.id).split('').reduce((a, c) => a + c.charCodeAt(0), 0) + entity.speed) * 7 + 13, 20)
-          const sparkPts = spark.map((v, i) => `${(i / (spark.length - 1)) * 52},${(v / 110) * 14}`).join(' ')
+
           const signal = signalFor(entity)
           return (
             <div
@@ -117,10 +116,7 @@ const FleetPanel = ({ entities, selectedId, onSelectEntity, onDeleteEntity, onRe
                     <span className="font-mono text-[10px] text-slate-400">{entity.battery ?? '—'}%</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className={`font-mono text-[10px] font-bold ${signal > 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>{signal}%</span>
-                    <svg viewBox="0 0 52 16" className="h-3.5 w-14" aria-hidden="true">
-                      <polyline points={sparkPts} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" opacity="0.9" style={{ filter: `drop-shadow(0 0 2px ${color})` }} />
-                    </svg>
+                    {signal !== null && <span className="font-mono text-[9px] font-bold tracking-wider text-slate-500">{signal.label}</span>}
                   </div>
                 </div>
               </button>

@@ -36,12 +36,26 @@ export const saveCachedLocations = (locations, deviceId = getDeviceId()) => {
   }
 };
 
+// Tope de la cola offline. Sin esto, un device sin red durante horas acumula miles
+// de posiciones en localStorage (~5 MB en navegador): al superarla, el setItem lanza
+// QuotaExceededError, la caché se corrompe y se pierde TODO el historial offline.
+// Al truncar, se conservan las muestras más recientes (las que importan para la
+// trayectoria) descartando las más antiguas.
+export const MAX_CACHED_LOCATIONS = 1000;
+
 export const cacheLocation = (location, deviceId = getDeviceId()) => {
   const current = getCachedLocations(deviceId);
   current.push({
     ...location,
     cachedAt: new Date().toISOString(),
   });
+  if (current.length > MAX_CACHED_LOCATIONS) {
+    current.splice(0, current.length - MAX_CACHED_LOCATIONS);
+    console.warn(
+      `GPSTracker: cola offline truncada a ${MAX_CACHED_LOCATIONS} entradas ` +
+      `(localStorage no tiene espacio infinito). Se descartó el historial más antiguo.`
+    );
+  }
   saveCachedLocations(current, deviceId);
 };
 
@@ -84,9 +98,11 @@ export const flushCachedLocations = async (deviceId = getDeviceId()) => {
       device_id: deviceId,
       latitude: item.latitude,
       longitude: item.longitude,
-      speed: item.speed || 0,
-      accuracy: (item.accuracy !== null && item.accuracy !== undefined && Number.isFinite(Number(item.accuracy))) ? Number(item.accuracy) : null,
-      bearing: item.bearing || null,
+      // Mismos clamps que en sendCurrentLocation: la cola puede contener entradas
+      // cacheadas antes de que existieran los CHECK constraints.
+      speed: Math.min(400, Math.max(0, Number(item.speed) || 0)),
+      accuracy: Number.isFinite(Number(item.accuracy)) ? Math.max(0, Number(item.accuracy)) : null,
+      bearing: Number.isFinite(Number(item.bearing)) ? Math.min(360, Math.max(0, Number(item.bearing))) : null,
       timestamp: item.timestamp || new Date().toISOString(),
       // B10: Preservar el event_id de la cola; generarlo si no existe (datos anteriores sin él).
       event_id: item.event_id || generateEventId(deviceId, item.timestamp || '', item.latitude, item.longitude),
@@ -144,13 +160,30 @@ class GPSTracker {
   async sendCurrentLocation(position) {
     if (!position || !position.coords) return;
     const { latitude, longitude, speed, accuracy, heading } = position.coords;
+
+    // Los clamps de abajo son obligatorios, no cosméticos: la migración
+    // 20260930231939 añade CHECK constraints (speed 0-400 km/h, bearing 0-360,
+    // accuracy >= 0). Si un device reporta basura, sin clamp el INSERT falla con
+    // 'violates check constraint' y la posición se pierde.
+    const rawSpeedKmh = speed ? speed * 3.6 : 0;
+    const clampedSpeed = Number.isFinite(rawSpeedKmh) ? Math.min(400, Math.max(0, rawSpeedKmh)) : 0;
+    const rawAccuracy = Number(accuracy);
+    const clampedAccuracy = Number.isFinite(rawAccuracy) ? Math.max(0, rawAccuracy) : null;
+    const rawBearing = Number(heading);
+    const clampedBearing = Number.isFinite(rawBearing) ? Math.min(360, Math.max(0, rawBearing)) : null;
+
     const locationData = {
       latitude,
       longitude,
-      speed: speed ? Math.max(0, speed * 3.6) : 0,
-      accuracy: (accuracy !== null && accuracy !== undefined && Number.isFinite(Number(accuracy))) ? Number(accuracy) : null,
-      bearing: heading || null,
-      timestamp: new Date().toISOString(),
+      speed: clampedSpeed,
+      accuracy: clampedAccuracy,
+      bearing: clampedBearing,
+      // Usar el timestamp real del fix GPS, no la hora de procesamiento. Con una
+      // cola offline, `new Date()` mentía: al vaciar la cola todas las posiciones
+      // salían con la hora del flush y la velocidad calculada en el mapa era falsa.
+      timestamp: position.timestamp
+        ? new Date(position.timestamp).toISOString()
+        : new Date().toISOString(),
     };
 
     if (!supabase) {
@@ -169,7 +202,7 @@ class GPSTracker {
 
       // Si el usuario es un operador web sin claim de device_id provisionado, no intentamos registrarlo como dispositivo físico en la DB
       if (!currentDeviceId) {
-        if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' || (typeof window !== 'undefined' && window.location?.hostname === 'localhost')) {
+        if (import.meta.env?.DEV || (typeof window !== 'undefined' && window.location?.hostname === 'localhost')) {
           console.warn('GPSTracker: El usuario autenticado es un operador web sin device_id asignado. Omite envío de posición.');
         }
         return {

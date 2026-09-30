@@ -19,6 +19,11 @@ if (!supabaseUrl || supabaseUrl.includes('your-project')) {
   process.exit(1);
 }
 
+if (!serviceRoleKey || serviceRoleKey === 'your-key') {
+  console.error('❌ ERROR: SUPABASE_SERVICE_ROLE_KEY no configurado. Se requiere un secreto real para auditar objetos protegidos por RLS.');
+  process.exit(1);
+}
+
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 async function verifyDeployment() {

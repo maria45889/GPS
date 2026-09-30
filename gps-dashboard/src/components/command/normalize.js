@@ -37,31 +37,20 @@ export const statusColor = (entity) => {
   return '#ef4444'
 }
 
-export const signalFor = (entity) => {
-  if (!entity || !isOnline(entity)) return 0
-  const accuracy = Number(entity?.accuracy)
-  if (Number.isFinite(accuracy) && accuracy > 0) {
-    if (accuracy <= 10) return 96
-    if (accuracy <= 25) return 90
-    if (accuracy <= 50) return 82
-    if (accuracy <= 100) return 72
-    return 58
-  }
-  const battery = Number(entity?.battery)
-  if (Number.isFinite(battery) && battery > 0) {
-    if (battery >= 60) return 88
-    if (battery >= 25) return 74
-    return 55
-  }
-  return 70
-}
+// El schema no tiene columna de "señal" (barras de celda). La única magnitud de
+// calidad de_fix_ disponible es `accuracy` en metros. Esta función devuelve una
+// etiqueta cualitativa honesta derivada de ella, no un porcentaje inventado.
+export const SIGNAL_BANDS = [
+  { max: 10, label: 'MUY BUENA', score: 96 },
+  { max: 25, label: 'BUENA', score: 90 },
+  { max: 50, label: 'MEDIA', score: 82 },
+  { max: 100, label: 'BAJA', score: 72 },
+  { max: Infinity, label: 'MUY BAJA', score: 58 },
+]
 
-export const hashSpark = (seedValue, max = 18) => {
-  let s = Number(seedValue) || 1
-  const out = []
-  for (let i = 0; i < max; i++) {
-    s = (s * 9301 + 49297) % 233280
-    out.push(((s / 233280) * 100) + ((i % 3) * 4))
-  }
-  return out
+export const signalFor = (entity) => {
+  if (!entity || !isOnline(entity)) return null
+  const accuracy = Number(entity?.accuracy)
+  if (!Number.isFinite(accuracy) || accuracy <= 0) return null
+  return SIGNAL_BANDS.find((band) => accuracy <= band.max)
 }

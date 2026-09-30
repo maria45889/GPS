@@ -95,8 +95,8 @@ const DetailPanel = ({
           <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
             <Wifi size={12} className="text-slate-500" /> Señal
           </span>
-          <span className={`flex items-center gap-1 font-mono text-[12px] font-bold ${signal > 0 ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>
-            <Wifi size={12} /> {signal}%
+          <span className={`flex items-center gap-1 font-mono text-[12px] font-bold ${signal ? 'text-[#10b981]' : 'text-slate-600'}`}>
+            <Wifi size={12} /> {signal ? signal.label : '—'}
           </span>
         </div>
       </div>

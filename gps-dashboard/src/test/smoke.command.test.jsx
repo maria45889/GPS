@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import CommandCenter from '../components/command/CommandCenter';
 
 global.ResizeObserver = global.ResizeObserver || class {
@@ -9,6 +9,8 @@ global.ResizeObserver = global.ResizeObserver || class {
   unobserve() {}
   disconnect() {}
 };
+
+import { DashboardContext } from '../context/dashboard-context';
 
 describe('smoke: CommandCenter render', () => {
   it('renderiza sin errores con 1 dispositivo y 1 vehículo (sin posición)', () => {
@@ -21,48 +23,78 @@ describe('smoke: CommandCenter render', () => {
       battery: 40, speed: 0, accuracy: null, lastUpdate: 'Hace 2 días',
     }];
 
+    const mockState = {
+      category: 'all',
+      selectedEntity: null,
+      isFollowingRoute: false,
+      userLocation: null,
+      origin: null,
+      locateUserTrigger: 0,
+      flyToTrigger: null,
+      focusTrigger: null,
+      isControlBusy: false,
+      lastSyncLabel: 'Act. 10:30',
+      fleetLoading: false
+    };
+
+    const mockData = {
+      devices,
+      vehicles,
+      alerts: [],
+      geofences: [],
+      devicesList: devices,
+      vehiclesList: vehicles,
+      activeNetworkError: null,
+      fleetLoading: false,
+      vehiclesStale: false,
+      devicesStale: false,
+      vehiclesSyncTime: null,
+      devicesSyncTime: null,
+      hideEphemeral: () => {},
+      refetchVehicles: () => {},
+      refetchGeofences: () => {},
+      signOut: () => {}
+    };
+
+    const mockDispatch = () => {};
+
     let rendered = false;
     try {
       render(
-        <CommandCenter
-          category="all"
-          onCategoryChange={() => {}}
-          devices={devices}
-          vehicles={vehicles}
-          selectedEntity={null}
-          onSelectVehicle={() => {}}
-          alerts={[]}
-          geofences={[]}
-          onSetGeofence={() => {}}
-          onCancelGeofence={() => {}}
-          pendingCenter={null}
-          onMapClick={() => {}}
-          onMapHover={() => {}}
-          isFollowingRoute={false}
-          onToggleRouteFollow={() => {}}
-          onShareRoute={() => {}}
-          userLocation={null}
-          onLocateUser={() => {}}
-          origin={null}
-          onSelectOrigin={() => {}}
-          onLocationChange={() => {}}
-          locateUserTrigger={0}
-          flyToTrigger={null}
-          focusTrigger={null}
-          onControlVehicle={() => {}}
-          isControlBusy={false}
-          onDeleteVehicle={() => {}}
-          onDeleteEphemeral={() => {}}
-          onEditVehicle={() => {}}
-          onLogout={() => {}}
-          lastSyncLabel="Act. 10:30"
-          fleetLoading={false}
-        />
+        <DashboardContext.Provider value={{ state: mockState, dispatch: mockDispatch, data: mockData }}>
+          <CommandCenter />
+        </DashboardContext.Provider>
       );
       rendered = true;
     } catch (err) {
       expect(err).toBeUndefined();
     }
     expect(rendered).toBe(true);
+  });
+
+  it('expone el botón de cerrar sesión cuando el contexto provee signOut', () => {
+    const signOut = vi.fn();
+    const mockState = {
+      category: 'all', selectedEntity: null, isFollowingRoute: false,
+      userLocation: null, origin: null, locateUserTrigger: 0, flyToTrigger: null,
+      isPlacingOnMap: false, pendingCenter: null, pendingGeofenceConfirm: null,
+      alertFocusTrigger: null, routeFocusTrigger: null, localVehicles: [], localGeofences: [],
+    };
+    const mockData = {
+      devices: [], vehicles: [], alerts: [], geofences: [],
+      devicesList: [], vehiclesList: [], activeNetworkError: null, fleetLoading: false,
+      vehiclesStale: false, devicesStale: false, vehiclesSyncTime: null, devicesSyncTime: null,
+      hideEphemeral: () => {}, refetchVehicles: () => {}, refetchGeofences: () => {}, signOut,
+    };
+
+    render(
+      <DashboardContext.Provider value={{ state: mockState, dispatch: () => {}, data: mockData }}>
+        <CommandCenter />
+      </DashboardContext.Provider>
+    );
+
+    const logout = screen.getByRole('button', { name: /cerrar sesión/i });
+    fireEvent.click(logout);
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 });

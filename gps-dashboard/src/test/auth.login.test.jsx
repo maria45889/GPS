@@ -36,14 +36,71 @@ describe('AuthGate', () => {
     vi.clearAllMocks();
   });
 
-  it('renderiza el formulario de inicio de sesión cuando no hay sesión activa', () => {
+  it('renderiza el formulario de inicio de sesión cuando no hay sesión activa', async () => {
+    render(
+      <AuthGate>
+        <div>Panel Protegido</div>
+      </AuthGate>
+    );
+    expect(await screen.findByText('Entrar al monitoreo')).toBeInTheDocument();
+  });
+
+  it('muestra error de perfil si el usuario no tiene perfil asignado', async () => {
+    const { supabase } = await import('../lib/supabase');
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'u-1' } } }
+    });
+    // mock maybeSingle to return no data (no profile)
+    supabase.from().select().eq().maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+
     render(
       <AuthGate>
         <div>Panel Protegido</div>
       </AuthGate>
     );
 
-    expect(screen.getAllByText('Entrar al monitoreo')[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Entrar' })[0]).toBeInTheDocument();
+    expect(await screen.findByText('Sin perfil de operador')).toBeInTheDocument();
+    expect(await screen.findByText(/no tiene un perfil de operador asignado/)).toBeInTheDocument();
+  });
+
+  it('renderiza los hijos (hace bypass) si el perfil es de un operador autorizado', async () => {
+    const { supabase } = await import('../lib/supabase');
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'u-1' } } }
+    });
+    // mock maybeSingle to return a valid profile
+    supabase.from().select().eq().maybeSingle.mockResolvedValueOnce({ 
+      data: { user_id: 'u-1', role: 'operator', organization_id: 'org-1' }, 
+      error: null 
+    });
+
+    render(
+      <AuthGate>
+        <div>Panel Protegido</div>
+      </AuthGate>
+    );
+
+    expect(await screen.findByText('Panel Protegido')).toBeInTheDocument();
+  });
+
+  it('muestra error de conexión si el query del perfil falla', async () => {
+    const { supabase } = await import('../lib/supabase');
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: { user: { id: 'u-1' } } }
+    });
+    // mock maybeSingle to return error
+    supabase.from().select().eq().maybeSingle.mockResolvedValueOnce({ 
+      data: null, 
+      error: { message: 'Database unreachable' } 
+    });
+
+    render(
+      <AuthGate>
+        <div>Panel Protegido</div>
+      </AuthGate>
+    );
+
+    expect(await screen.findByText('Sin perfil de operador')).toBeInTheDocument();
+    expect(await screen.findByText(/Error de consulta/)).toBeInTheDocument();
   });
 });

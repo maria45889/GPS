@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchDevices, fetchLatestLocations, transformDevice } from '../lib/queries'
 import { deviceStatusFromLastSeen } from '../lib/mapLogic'
 import { useLiveCollection } from './useLiveCollection'
@@ -39,7 +39,12 @@ const ephemeralDevice = (location) => ({
 export const useDevices = () => {
   const [hiddenEphemerals, setHiddenEphemerals] = useState(readHiddenEphemerals)
   const hiddenRef = useRef(hiddenEphemerals)
-  hiddenRef.current = hiddenEphemerals
+
+  // Espejo del estado para poder leerlo dentro de fetchFn sin recrear el
+  // callback en cada cambio. Se sincroniza en un efecto y no durante el render.
+  useEffect(() => {
+    hiddenRef.current = hiddenEphemerals
+  }, [hiddenEphemerals])
 
   const fetchFn = useCallback(async () => {
     const dbDevices = await fetchDevices()

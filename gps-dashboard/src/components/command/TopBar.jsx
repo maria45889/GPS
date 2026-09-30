@@ -1,6 +1,6 @@
 import React from 'react'
 import { Radar, Wifi, LogOut } from 'lucide-react'
-import { useNow } from './useTelemetryStream'
+import { useNow } from './useNow'
 
 const VIEWS = [
   { id: 'devices', label: 'Equipos' },
@@ -8,9 +8,13 @@ const VIEWS = [
   { id: 'all', label: 'Flota Completa' },
 ]
 
-const TopBar = ({ category, onCategoryChange, stats, alertsCount, onMenuClick, onLogout, lastSyncLabel }) => {
+const Clock = () => {
   const now = useNow(1000)
   const time = new Date(now).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  return <span className="font-mono text-[12px] font-bold tabular-nums text-slate-200">{time}</span>
+}
+
+const TopBar = ({ category, onCategoryChange, stats, alertsCount, onMenuClick, onLogout, lastSyncLabel }) => {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col gap-2.5 p-3 sm:p-4">
@@ -34,7 +38,7 @@ const TopBar = ({ category, onCategoryChange, stats, alertsCount, onMenuClick, o
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 rounded-xl border border-cyan-500/20 bg-slate-900/60 px-4 py-2.5 shadow-[0_0_20px_rgba(6,182,212,0.1)] backdrop-blur-md sm:flex">
             <Wifi size={15} className="text-[#10b981]" />
-            <span className="font-mono text-[12px] font-bold tabular-nums text-slate-200">{time}</span>
+            <Clock />
             <span
               className="flex items-center gap-1 rounded-md bg-[#10b981]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#10b981]"
               title="Sincronización de datos en tiempo real"
@@ -63,6 +67,7 @@ const TopBar = ({ category, onCategoryChange, stats, alertsCount, onMenuClick, o
             <button
               type="button"
               onClick={onLogout}
+              aria-label="Cerrar sesión"
               className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-cyan-500/20 bg-slate-900/60 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-red-400 shadow-[0_0_20px_rgba(6,182,212,0.1)] backdrop-blur-md transition-all hover:border-red-400/40 hover:bg-red-500/10"
               title="Cerrar sesión"
             >

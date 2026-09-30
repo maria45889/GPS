@@ -12,51 +12,6 @@
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RideGuard - GPS Dashboard</title>
-    <!-- Prevenir crashes de React cuando Google Translate modifica el DOM -->
-    <script>
-      if (typeof Node === 'function' && Node.prototype) {
-        const originalRemoveChild = Node.prototype.removeChild;
-        Node.prototype.removeChild = function(child) {
-          if (child.parentNode !== this) {
-            if (console) console.warn('React translation crash prevented (removeChild).');
-            return child;
-          }
-          return originalRemoveChild.apply(this, arguments);
-        };
-        const originalInsertBefore = Node.prototype.insertBefore;
-        Node.prototype.insertBefore = function(newNode, referenceNode) {
-          if (referenceNode && referenceNode.parentNode !== this) {
-            if (console) console.warn('React translation crash prevented (insertBefore).');
-            return newNode;
-          }
-          return originalInsertBefore.apply(this, arguments);
-        };
-        const originalReplaceChild = Node.prototype.replaceChild;
-        Node.prototype.replaceChild = function(newChild, oldChild) {
-          if (oldChild && oldChild.parentNode !== this) {
-            if (console) console.warn('React translation crash prevented (replaceChild).');
-            return oldChild;
-          }
-          return originalReplaceChild.apply(this, arguments);
-        };
-      }
-      
-      // React 19 usa remove() directamente en Element y CharacterData (Text)
-      if (typeof Element !== 'undefined' && Element.prototype.remove) {
-        const origRemove = Element.prototype.remove;
-        Element.prototype.remove = function() {
-          if (!this.parentNode) return;
-          return origRemove.call(this);
-        };
-      }
-      if (typeof CharacterData !== 'undefined' && CharacterData.prototype.remove) {
-        const origTextRemove = CharacterData.prototype.remove;
-        CharacterData.prototype.remove = function() {
-          if (!this.parentNode) return;
-          return origTextRemove.call(this);
-        };
-      }
-    </script>
   </head>
   <body>
     <div id="root"></div>

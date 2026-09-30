@@ -34,3 +34,4 @@ test-*.js
 test-*.cjs
 delete-test-devices.*
 scripts/test-*
+coverage/

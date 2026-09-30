@@ -293,15 +293,35 @@ export const fetchGeofences = async () => {
   })
 }
 
+// useVehicles y useDevices piden las mismas ubicaciones en el mismo ciclo de
+// poll. Sin deduplicar, cada tick de 30s dispara dos consultas idénticas.
+// Se cachea la respuesta durante un intervalo corto y se comparten las
+// peticiones concurentes (single-flight).
+const LOCATIONS_TTL_MS = 10_000
+let locationsCache = null
+let locationsInFlight = null
+
+export const clearQueryCaches = () => {
+  locationsCache = null
+  locationsInFlight = null
+}
+
 export const fetchLatestLocations = async () => {
   if (!supabase) return []
 
-  return withAuthRetry(async () => {
+  const now = Date.now()
+  if (locationsCache && now - locationsCache.at < LOCATIONS_TTL_MS) {
+    return locationsCache.rows
+  }
+  if (locationsInFlight) return locationsInFlight
+
+  locationsInFlight = withAuthRetry(async () => {
     const { data, error } = await supabase
       .from('latest_gps_locations')
       .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
 
     if (!error && Array.isArray(data)) {
+      locationsCache = { at: Date.now(), rows: data }
       return data
     }
 
@@ -314,18 +334,13 @@ export const fetchLatestLocations = async () => {
       throw error
     }
 
-    console.warn('⚠️ Vista latest_gps_locations no disponible (PGRST202/42P01). Activando fallback sobre tabla gps_locations:', error?.message || error)
-
-    const { data: fallbackData, error: fallbackError } = await supabase
-      .from('gps_locations')
-      .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
-      .order('timestamp', { ascending: false })
-      .limit(10000)
-
-    if (fallbackError) throw fallbackError
-
-    return latestLocationsByDevice(fallbackData)
+    console.warn('⚠️ Vista latest_gps_locations no disponible (PGRST202/42P01).', error?.message || error)
+    throw error
+  }).finally(() => {
+    locationsInFlight = null
   })
+
+  return locationsInFlight
 }
 
 export const latestLocationsByDevice = (locations = []) => {

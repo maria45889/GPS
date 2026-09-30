@@ -9,6 +9,7 @@ export const useAlerts = () => {
 
   useEffect(() => {
     let cancelled = false
+    let timeoutId = null
 
     const loadAlerts = async () => {
       setIsLoading(true)
@@ -42,7 +43,10 @@ export const useAlerts = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'alerts' },
         () => {
-          if (!cancelled) loadAlerts()
+          if (!cancelled) {
+            clearTimeout(timeoutId)
+            timeoutId = setTimeout(loadAlerts, 1000)
+          }
         }
       )
       .subscribe((status, err) => {
@@ -54,6 +58,7 @@ export const useAlerts = () => {
 
     return () => {
       cancelled = true
+      clearTimeout(timeoutId)
       supabase.removeChannel(channel)
     }
   }, [])

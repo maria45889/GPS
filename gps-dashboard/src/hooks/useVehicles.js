@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { fetchLatestLocations, fetchVehicles, isCoordinateValid, isLocationValidForMap, sanitizeAccuracy } from '../lib/queries'
 import { deviceStatusFromLastSeen } from '../lib/mapLogic'
 import { useLiveCollection } from './useLiveCollection'

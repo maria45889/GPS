@@ -9,7 +9,7 @@ export const deleteVehicle = async (entityId, kind = 'vehicle') => {
       const isDevice = kind === 'device';
       const body = isDevice ? { device_id: entityId } : { vehicle_id: entityId };
 
-      const { data, error } = await supabase.functions.invoke('delete-device-user', {
+      const { error } = await supabase.functions.invoke('delete-device-user', {
         body,
       });
 
@@ -23,6 +23,8 @@ export const deleteVehicle = async (entityId, kind = 'vehicle') => {
 
       return { remote: true };
     } catch (error) {
+      // Los 401 se relanzan para que withAuthRetry renueve el token y reintente.
+      if (error?.status === 401) throw error;
       console.error('Error al invocar la función de eliminación segura:', error);
       return { remote: false, error };
     }

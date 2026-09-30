@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
 import Dashboard from './components/Dashboard';
 import { AuthGate } from './components/AuthGate';
 import { Capacitor } from '@capacitor/core';
@@ -72,16 +73,22 @@ function App() {
   }, []);
 
   if (isNativePlatform) {
-    return <NativeTrackerScreen />;
+    return (
+      <ErrorBoundary>
+        <NativeTrackerScreen />
+      </ErrorBoundary>
+    );
   }
 
   // Web Dashboard Platform
   return (
-    <AuthGate>
-      <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#0b0f19] text-slate-100 antialiased">
-        <Dashboard />
-      </div>
-    </AuthGate>
+    <ErrorBoundary>
+      <AuthGate>
+        <div className="relative w-screen h-[100dvh] overflow-hidden bg-[#0b0f19] text-slate-100 antialiased">
+          <Dashboard />
+        </div>
+      </AuthGate>
+    </ErrorBoundary>
   );
 }
 

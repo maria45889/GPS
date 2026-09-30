@@ -8,6 +8,18 @@ export default defineConfig({
       ignored: ['**/.gradle_home/**']
     }
   },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      reportsDirectory: './coverage',
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/test/**', 'src/**/*.test.{js,jsx}', 'src/main.jsx'],
+    },
+  },
   build: {
     rollupOptions: {
       output: {

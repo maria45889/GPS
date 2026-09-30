@@ -60,8 +60,8 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
       <div className="pointer-events-auto flex w-full max-w-3xl items-center gap-3 overflow-x-auto rounded-2xl border border-cyan-500/40 bg-slate-900/70 px-4 py-3 shadow-[0_0_30px_rgba(6,182,212,0.2)] backdrop-blur-md cmd-scroll">
         <MetricCell
           icon={<Gauge size={13} />}
-          label="Señal"
-          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{entity ? `${signal}%` : '—'}</span>}
+          label="Precisión"
+          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{accuracy ?? '—'}<span className="text-[9px] text-slate-500"> m</span></span>}
           className="hidden md:flex"
         />
         <Divider className="hidden md:block" />
@@ -69,6 +69,13 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
           icon={<Battery size={13} />}
           label="Batería"
           value={<span className="font-mono text-[16px] font-extrabold" style={{ color: entity ? batteryTone : '#64748b' }}>{battery ?? '—'}<span className="text-[9px] text-slate-500">%</span></span>}
+          className="hidden md:flex"
+        />
+        <Divider className="hidden md:block" />
+        <MetricCell
+          icon={<Gauge size={13} />}
+          label="Señal"
+          value={<span className="font-mono text-[13px] font-extrabold text-slate-100">{signal ? signal.label : '—'}</span>}
           className="hidden md:flex"
         />
         <Divider className="hidden md:block" />

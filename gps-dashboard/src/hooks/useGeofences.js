@@ -12,6 +12,7 @@ export const useGeofences = () => {
 
   useEffect(() => {
     let cancelled = false
+    let timeoutId = null
 
     const loadGeofences = async () => {
       setIsLoading(true)
@@ -45,7 +46,10 @@ export const useGeofences = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'geofences' },
         () => {
-          if (!cancelled) loadGeofences()
+          if (!cancelled) {
+            clearTimeout(timeoutId)
+            timeoutId = setTimeout(loadGeofences, 1000)
+          }
         }
       )
       .subscribe((status, err) => {
@@ -57,6 +61,7 @@ export const useGeofences = () => {
 
     return () => {
       cancelled = true
+      clearTimeout(timeoutId)
       supabase.removeChannel(channel)
     }
   }, [refreshKey])

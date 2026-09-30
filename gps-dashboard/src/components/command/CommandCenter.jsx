@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import MapArea from '../MapArea'
 import TopBar from './TopBar'
 import DetailPanel from './DetailPanel'
@@ -9,7 +9,7 @@ import { useSimulatedFleet } from './useSimulatedFleet'
 import { useRouteHistory } from '../../hooks'
 import { normalizeEntity } from './normalize'
 import { useDashboardContext } from '../../context/DashboardContext'
-import { deleteVehicle, updateEntity } from '../../lib/vehicleActions'
+import { deleteVehicle } from '../../lib/vehicleActions'
 
 const toMapShape = (e, original = null) => ({
   id: e.id,
@@ -30,8 +30,8 @@ const toMapShape = (e, original = null) => ({
 
 const CommandCenter = () => {
   const { state, dispatch, data } = useDashboardContext();
-  const { category, selectedEntity, flyToTrigger, isPlacingOnMap, pendingCenter, geofenceRadius, pendingGeofenceConfirm, userLocation, locateUserTrigger, isFollowingRoute, origin, entityToEdit, operationMessage, alertFocusTrigger, routeFocusTrigger } = state;
-  const { vehiclesList, devicesList, alerts, geofences, activeNetworkError, fleetLoading, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime, hideEphemeral, refetchVehicles, refetchGeofences } = data;
+  const { category, selectedEntity, flyToTrigger, isPlacingOnMap, pendingCenter, pendingGeofenceConfirm, userLocation, locateUserTrigger, isFollowingRoute, origin, alertFocusTrigger, routeFocusTrigger } = state;
+  const { vehiclesList, devicesList, alerts, geofences, activeNetworkError, fleetLoading, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime, hideEphemeral, refetchVehicles, signOut } = data;
 
   const [baseLayer, setBaseLayer] = useState('dark')
   const [fleetOpen, setFleetOpen] = useState(false)
@@ -157,6 +157,14 @@ const CommandCenter = () => {
     dispatch({ type: 'SET_OPERATION_MESSAGE', payload: result.remote ? (kind === 'vehicle' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local' })
   }
 
+  // useCallback: sin esto la prop cambia de identidad en cada render, lo que
+  // rompe la memoización de MapArea y reinicia el watcher de posición del mapa
+  // en cada cambio de estado del dashboard.
+  const handleUserLocation = useCallback(
+    (loc) => dispatch({ type: 'SET_USER_LOCATION', payload: loc }),
+    [dispatch]
+  )
+
   const handleCategoryChange = (next) => dispatch({ type: 'SET_CATEGORY', payload: next })
 
   const handleSelectAlert = (alert) => {
@@ -254,7 +262,7 @@ const CommandCenter = () => {
           onShareRoute={handleShareRoute}
           userLocation={userLocation}
           origin={origin}
-          onLocationChange={(loc) => dispatch({ type: 'SET_USER_LOCATION', payload: loc })}
+          onLocationChange={handleUserLocation}
           locateUserTrigger={locateUserTrigger}
           flyToTrigger={flyToTrigger}
           focusTrigger={alertFocusTrigger}
@@ -276,6 +284,7 @@ const CommandCenter = () => {
         stats={stats}
         alertsCount={(alerts || []).filter((a) => a.status !== 'resolved').length}
         onMenuClick={() => setFleetOpen(true)}
+        onLogout={signOut}
         lastSyncLabel={lastSyncLabel}
       />
 
