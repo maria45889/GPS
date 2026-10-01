@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -54,7 +55,8 @@ let currentNativeToken = nativeAuth?.access_token || null;
 export const supabase = hasSupabaseConfig
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: true,
+        // Bug #8: En móviles, usar localStorage causa carreras con Native y guarda en plano
+        persistSession: !Capacitor.isNativePlatform(),
         autoRefreshToken: true,
       },
       global: {
@@ -121,7 +123,7 @@ export const refreshNativeSession = async () => {
 export const withAuthRetry = async (queryFn) => {
   try {
     const res = await queryFn();
-    if (res?.error && (res.error.status === 401 || String(res.error.message || '').includes('JWT'))) {
+    if ((res?.error && res.status === 401) || String(res?.error?.message || '').includes('JWT')) {
       const newToken = await refreshNativeSession();
       if (newToken) {
         return await queryFn();

@@ -199,33 +199,31 @@ serve(async (req) => {
     resolvedVehicleId = await resolveVehicleId(supabaseAdmin, device_id, profile?.organization_id)
   }
 
-  // B2: Si el llamador envió AMBOS identificadores, verificar que apunten al MISMO dispositivo.
+  // B2/B5b: Si el llamador envió MÚLTIPLES identificadores, verificar que apunten al MISMO dispositivo.
   // Sin esta validación, podría eliminarse el usuario de B mientras se borra el vehículo de A.
-  if (auth_user_id && vehicle_id) {
-    // Obtener el device_id del vehículo para cruzar con el del usuario
+  
+  if (targetDeviceId && targetAuthUserId) {
+    const { data: deviceByAuth } = await supabaseAdmin
+      .from('devices')
+      .select('id')
+      .eq('auth_user_id', targetAuthUserId)
+      .single()
+      
+    if (!deviceByAuth || deviceByAuth.id !== targetDeviceId) {
+       return json({ error: 'Conflicto: device_id y auth_user_id no corresponden al mismo dispositivo' }, 409)
+    }
+  }
+  
+  if (targetDeviceId && resolvedVehicleId) {
     const { data: vehicleData } = await supabaseAdmin
       .from('vehicles')
       .select('device_id')
-      .eq('id', vehicle_id)
+      .eq('id', resolvedVehicleId)
       .single()
-
-    const { data: deviceByAuth } = await supabaseAdmin
-      .from('devices')
-      .select('id, organization_id')
-      .eq('auth_user_id', auth_user_id)
-      .single()
-
-    if (!vehicleData || !deviceByAuth) {
-      return json({ error: 'No se pudo verificar la correspondencia de identificadores' }, 404)
+      
+    if (!vehicleData || vehicleData.device_id !== targetDeviceId) {
+       return json({ error: 'Conflicto: vehicle_id y device_id no corresponden al mismo dispositivo' }, 409)
     }
-    if (vehicleData.device_id !== deviceByAuth.id) {
-      // B2: Los dos identificadores apuntan a dispositivos distintos — rechazar.
-      return json({ error: 'Conflicto: vehicle_id y auth_user_id no corresponden al mismo dispositivo' }, 409)
-    }
-    if (deviceByAuth.organization_id !== profile?.organization_id) {
-      return json({ error: 'Forbidden: Device organization mismatch' }, 403)
-    }
-    targetDeviceId = deviceByAuth.id
   }
 
   // B3: Permitir eliminar vehículo aunque no exista auth_user_id (dispositivo desconectado/no provisionado).
@@ -281,6 +279,11 @@ serve(async (req) => {
         error: rpcError?.message || rpcData?.error || 'Auth deleted, but failed to delete vehicle',
         warning: 'Device is permanently disconnected but vehicle record remains.'
       }, 500)
+    }
+
+    if (targetDeviceId) {
+      await supabaseAdmin.from('devices').update({ deletion_pending: false, status: 'inactive', auth_user_id: null }).eq('id', targetDeviceId)
+      await supabaseAdmin.from('device_registry').delete().eq('device_id', targetDeviceId)
     }
   } else if (targetDeviceId && !resolvedVehicleId) {
     // B3: No hay vehículo — limpiar solo el registro del dispositivo.

@@ -52,7 +52,7 @@ const MapArea = ({
     if (onBaseLayerChange) onBaseLayerChange(next);
   };
 
-  const defaultCenter = [4.6097, -74.0817];
+  const defaultCenter = [-0.279758, -78.539656]; // Quicentro Sur, Quito, Ecuador
   const currentPinPosition = selectedVehicle?.position || defaultCenter;
 
   const handleZoomIn = () => {
@@ -181,87 +181,88 @@ const MapArea = ({
       </MapContainer>
 
       {selectedVehicle && !isVehicleDetailOpen && !hideSelectionBar && (
-        <div className="map-selection-bar" aria-label={`Acciones para ${selectedVehicle.name}`}>
-          <div className="map-selection-identity">
-            <span className={`map-selection-dot ${selectedVehicle.status}`} />
-            <div>
-              <strong>{selectedVehicle.name}</strong>
-              <span>{selectedVehicle.plate || selectedVehicle.id} · {selectedVehicle.speed || 0} km/h</span>
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-[90%] max-w-[400px] bg-[#0b1221]/95 backdrop-blur-xl border border-cyan-500/30 shadow-[0_10px_40px_rgba(0,0,0,0.6)] rounded-2xl p-4 flex flex-col gap-3 transition-all">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${selectedVehicle.status === 'active' ? 'bg-green-400 text-green-400' : selectedVehicle.status === 'stopped' ? 'bg-yellow-400 text-yellow-400' : 'bg-gray-400 text-gray-400'}`} />
+              <div>
+                <strong className="block text-white text-base leading-none mb-1">{selectedVehicle.name}</strong>
+                <span className="text-cyan-300 text-xs font-mono">{selectedVehicle.plate || selectedVehicle.id} · {selectedVehicle.speed || 0} km/h</span>
+              </div>
             </div>
           </div>
-          <div className="map-selection-actions">
+          <div className="flex gap-2 w-full">
             <button
               type="button"
               onClick={onToggleRouteFollow}
               disabled={!selectedVehicle?.position}
-              aria-label={isFollowingRoute && selectedVehicle?.position ? 'Dejar de seguir vehículo' : 'Seguir vehículo en el mapa'}
-              title={!selectedVehicle?.position ? 'Sin posición GPS para seguir' : 'Seguir vehículo en el mapa'}
-              className={`${isFollowingRoute && selectedVehicle?.position ? 'is-active' : ''} ${!selectedVehicle?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex-1 h-10 flex items-center justify-center gap-2 rounded-xl text-sm font-bold transition-all ${isFollowingRoute && selectedVehicle?.position ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/50' : 'bg-[#162133] text-gray-300 border border-gray-600/50 hover:bg-[#1f2d44]'} ${!selectedVehicle?.position ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <Navigation size={15} />
-              <span>{isFollowingRoute && selectedVehicle?.position ? 'Siguiendo' : 'Seguir'}</span>
+              <Navigation size={16} />
+              {isFollowingRoute && selectedVehicle?.position ? 'Siguiendo' : 'Seguir'}
             </button>
-            <button type="button" onClick={onShareRoute} aria-label="Compartir ubicación y ruta" title="Compartir ubicación y ruta">
-              <Share2 size={15} />
-              <span>Compartir</span>
+            <button 
+              type="button" 
+              onClick={onShareRoute} 
+              className="flex-1 h-10 flex items-center justify-center gap-2 rounded-xl bg-[#162133] text-gray-300 border border-gray-600/50 hover:bg-[#1f2d44] text-sm font-bold transition-all"
+            >
+              <Share2 size={16} />
+              Compartir
             </button>
           </div>
         </div>
       )}
 
-      {/* Simplified Floating UI Overlays */}
-      <div className="absolute inset-0 pointer-events-none z-10 p-4 flex flex-col justify-between">
+      {/* Modern UI Overlays */}
+      <div className="absolute inset-0 pointer-events-none z-10 p-4">
         {!hideControls && (
-          <div className="flex justify-end pointer-events-auto">
-            <div className="map-control-stack bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/30 shadow-xl flex flex-col">
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 pointer-events-auto">
+            <div className="bg-[#0b1221]/90 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden">
               <button
                 onClick={handleZoomIn}
                 aria-label="Acercar mapa"
-                className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors border-b border-cyan-500/20"
+                className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center text-white hover:bg-white/10 transition-colors border-b border-white/10 active:bg-white/20"
               >
-                <Plus size={18} />
+                <Plus size={24} />
               </button>
               <button
                 onClick={handleZoomOut}
                 aria-label="Alejar mapa"
-                className="w-10 h-10 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center text-white hover:bg-white/10 transition-colors active:bg-white/20"
               >
-                <Minus size={18} />
+                <Minus size={24} />
               </button>
+            </div>
+
+            <div className="bg-[#0b1221]/90 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden">
+              <button onClick={handleRecenter} title="Centrar vehículo activo" className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center text-cyan-400 hover:bg-white/10 transition-colors border-b border-white/10 active:bg-white/20"><Crosshair size={20} /></button>
+              <button onClick={handleFitFleet} title="Ver toda la flota" className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center text-cyan-400 hover:bg-white/10 transition-colors border-b border-white/10 active:bg-white/20"><Maximize size={20} /></button>
+              <button onClick={() => changeBaseLayer(baseLayer === 'dark' ? 'satellite' : 'dark')} title="Cambiar capa del mapa" className="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center text-cyan-400 hover:bg-white/10 transition-colors active:bg-white/20"><Layers size={20} /></button>
             </div>
           </div>
         )}
 
         {isFollowingRoute && (navState.navRoute.length >= 2 || navState.navError) && (
-          <div className="absolute left-4 top-4 pointer-events-auto bg-[#0D1424]/90 backdrop-blur-xl rounded-xl border border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.25)] px-3 py-2 text-xs">
-            <div className="flex items-center gap-1.5 text-cyan-300 font-bold uppercase tracking-wide">
-              <Navigation size={13} />
-              Ruta de navegación
+          <div className="absolute left-4 top-4 pointer-events-auto bg-[#0b1221]/95 backdrop-blur-xl rounded-2xl border border-cyan-500/40 shadow-[0_0_30px_rgba(34,211,238,0.15)] px-4 py-3 max-w-[280px]">
+            <div className="flex items-center gap-2 text-cyan-400 font-bold uppercase tracking-wider text-xs">
+              <Navigation size={14} />
+              Ruta activa
             </div>
             {navState.navError && navState.navRoute.length < 2 && (
-              <div className="mt-1 text-[11px] text-red-300">
-                No se pudo trazar la ruta aquí. Intenta con otra ubicación de partida.
+              <div className="mt-2 text-xs text-red-400 leading-tight">
+                No se pudo trazar la ruta. Intenta con otra posición.
               </div>
             )}
             {navState.navMeta && (
-              <div className="flex gap-3 mt-1 text-[11px] text-slate-200">
-                <span>{formatNavDistance(navState.navMeta.distanceM)}</span>
-                <span>·</span>
-                <span>{formatNavDuration(navState.navMeta.durationS)}</span>
+              <div className="flex flex-col gap-1 mt-2 text-sm text-slate-200">
+                <div className="font-bold text-white text-lg">{formatNavDuration(navState.navMeta.durationS)}</div>
+                <div className="text-cyan-200/70">{formatNavDistance(navState.navMeta.distanceM)}</div>
               </div>
             )}
           </div>
         )}
 
-        {!hideControls && (
-          <div className="map-secondary-controls pointer-events-auto">
-            <button aria-label="Centrar vehículo activo" onClick={handleRecenter} title="Centrar vehículo activo"><Crosshair size={16} /></button>
-            <button aria-label="Ver toda la flota" onClick={handleFitFleet} title="Ver toda la flota"><Maximize size={16} /></button>
-            <button aria-label="Cambiar capa del mapa" onClick={() => changeBaseLayer(baseLayer === 'dark' ? 'satellite' : 'dark')} title="Cambiar capa del mapa"><Layers size={16} /><span>{baseLayer === 'dark' ? 'Satélite' : 'Oscuro'}</span></button>
-          </div>
-        )}
-
-        <div className="flex justify-between items-end pointer-events-auto">
+        <div className="absolute bottom-2 right-4 pointer-events-auto">
           <div />
           <div className="text-gray-500 text-xs">
             <span>© Esri / </span>

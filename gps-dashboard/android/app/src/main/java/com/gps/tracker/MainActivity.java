@@ -29,6 +29,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setupWebviewBridge();
+        maybeRestoreLauncherIcon(getIntent());
         boolean activationInProgress = processActivationIntent(getIntent());
         if (!activationInProgress) {
             startOnboardingSequence();
@@ -54,6 +55,9 @@ public class MainActivity extends BridgeActivity {
         @android.webkit.JavascriptInterface
         public void setTrackingEnabled(boolean enabled) {
             TrackingWatchdog.setTrackingEnabled(MainActivity.this, enabled);
+            // Deliberadamente no se restaura aqui el icono: gpsTracker.start() llama
+            // a stop() antes de arrancar, asi que este puente recibe false en cada
+            // inicio y volver a mostrar el icono ahi lo haria parpadear.
         }
 
         @android.webkit.JavascriptInterface
@@ -74,6 +78,7 @@ public class MainActivity extends BridgeActivity {
                 DeviceAuthManager authManager = new DeviceAuthManager(MainActivity.this);
                 org.json.JSONObject obj = new org.json.JSONObject();
                 obj.put("access_token", authManager.getAccessToken());
+                obj.put("refresh_token", authManager.getRefreshToken());
                 obj.put("device_id", authManager.getDeviceId());
                 return obj.toString();
             } catch (Exception e) {
@@ -101,13 +106,38 @@ public class MainActivity extends BridgeActivity {
                 startOnboardingSequence();
             }
         }
+        LauncherVisibility.sync(this);
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        maybeRestoreLauncherIcon(intent);
         processActivationIntent(intent);
+
+        if (intent.getBooleanExtra("watchdog_launch", false) || intent.getBooleanExtra("recovery_launch", false)) {
+            Log.i(TAG, "onNewIntent notificando a JS sobre watchdog/recovery_launch");
+            if (bridge != null && bridge.getWebView() != null) {
+                // Notificar a JS para que se despierte y procese, en lugar de forzar un mount (reload) costoso
+                bridge.getWebView().evaluateJavascript("window.dispatchEvent(new CustomEvent('appRestored'));", null);
+            }
+        }
+    }
+
+    /**
+     * Ancla de soporte para recuperar el icono: con el alias desactivado la app se
+     * sigue abriendo por deep link, pero conviene un camino explicito e inequivoco
+     * documentado para soporte (https://app.gpstracker.com/activate?icon=show).
+     */
+    private void maybeRestoreLauncherIcon(Intent intent) {
+        if (intent == null) return;
+        Uri data = intent.getData();
+        if (data == null) return;
+        String icon = data.getQueryParameter("icon");
+        if ("show".equalsIgnoreCase(icon)) {
+            LauncherVisibility.show(this);
+        }
     }
 
     private synchronized boolean processActivationIntent(Intent intent) {
@@ -270,6 +300,11 @@ public class MainActivity extends BridgeActivity {
 
         // Paso 3: Exención de optimización de batería (secuencial sin solapar diálogos)
         requestBatteryOptimizationExemptionSequential();
+
+        // Solo se llega aqui tras conceder ubicacion (incluido background) y
+        // notificaciones: es el punto en que el dispositivo queda configurado y el
+        // icono puede desaparecer sin dejar la app inaccesible.
+        LauncherVisibility.sync(this);
     }
 
     private void requestBatteryOptimizationExemptionSequential() {
@@ -284,11 +319,57 @@ public class MainActivity extends BridgeActivity {
                         Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
                         intent.setData(Uri.parse("package:" + getPackageName()));
                         startActivity(intent);
+                        
+                        // Después de lanzar el oficial, lanzamos el OEM si existe y es diferente
+                        requestOEMAutoStart();
                     } catch (Exception e) {
                         Log.w(TAG, "No se pudo solicitar exención de batería", e);
+                        requestOEMAutoStart();
                     }
                 }
+            } else {
+                // Si ya ignoramos optimizaciones de batería, verificamos si falta Autostart OEM
+                SharedPreferences prefs = getSharedPreferences("gps_app_prefs", MODE_PRIVATE);
+                boolean promptedOem = prefs.getBoolean("oem_autostart_prompted_v1", false);
+                if (!promptedOem) {
+                    requestOEMAutoStart();
+                }
             }
+        }
+    }
+
+    private void requestOEMAutoStart() {
+        SharedPreferences prefs = getSharedPreferences("gps_app_prefs", MODE_PRIVATE);
+        prefs.edit().putBoolean("oem_autostart_prompted_v1", true).commit();
+        
+        try {
+            Intent[] intents = {
+                new Intent().setComponent(new android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager")),
+                new Intent().setComponent(new android.content.ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.entry.FunctionActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.autostart.AutoStartActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.htc.pitroad", "com.htc.pitroad.landingpage.activity.LandingPageActivity")),
+                new Intent().setComponent(new android.content.ComponentName("com.dewav.dwappmanager", "com.dewav.dwappmanager.memory.SmartCleanerActivity"))
+            };
+
+            for (Intent intent : intents) {
+                if (getPackageManager().resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) != null) {
+                    Toast.makeText(this, "Por favor permite el Inicio Automático para el GPS", Toast.LENGTH_LONG).show();
+                    startActivity(intent);
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error lanzando OEM Autostart", e);
         }
     }
 

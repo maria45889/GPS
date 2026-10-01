@@ -14,6 +14,18 @@
     <title>RideGuard - GPS Dashboard</title>
   </head>
   <body>
+    <script>
+      // Parche Anti-Google-Translate para evitar crasheos en React (removeChild)
+      if (typeof Node === 'function' && Node.prototype) {
+        const originalRemoveChild = Node.prototype.removeChild;
+        Node.prototype.removeChild = function (child) {
+          if (child.parentNode !== this) {
+            return child;
+          }
+          return originalRemoveChild.apply(this, arguments);
+        };
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

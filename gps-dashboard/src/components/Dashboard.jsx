@@ -168,7 +168,7 @@ const DashboardInner = () => {
       {entityToEdit && (
         <EditEntityModal
           entity={entityToEdit}
-          category={category}
+          category={entityToEdit._kind === 'vehicle' ? 'vehicles' : 'devices'}
           onClose={() => dispatch({ type: 'SET_ENTITY_TO_EDIT', payload: null })}
           onSave={handleSaveEntity}
         />

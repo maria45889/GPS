@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -20,9 +21,23 @@
             android:launchMode="singleTask"
             android:exported="true">
 
+            <!--
+                CATEGORY_INFO, y NO CATEGORY_LAUNCHER: el icono del cajón lo lleva el
+                activity-alias .LauncherAlias de abajo, que es el componente que
+                LauncherVisibility deshabilita una vez configurado el dispositivo.
+
+                Este filtro existe para que PackageManager.getLaunchIntentForPackage()
+                siga resolviendo a MainActivity. Ese método consulta MAIN + CATEGORY_INFO,
+                y el plugin de geolocalización lo usa para construir el contentIntent de
+                la notificacion de foreground: si nadie resolviera el intent de launch,
+                la notificacion se quedaria sin contentIntent y tocarla no abriria la app.
+                Con solo CATEGORY_DEFAULT el filtro tambien casaria con MAIN + LAUNCHER y
+                el icono reapareceria, porque el match de IntentFilter cortocircuita en
+                cuanto encuentra CATEGORY_DEFAULT.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.INFO" />
             </intent-filter>
 
             <intent-filter>
@@ -40,6 +55,32 @@
             </intent-filter>
 
         </activity>
+
+        <!--
+            Unica entrada MAIN + LAUNCHER del paquete, y por tanto el unico componente
+            del cajon de aplicaciones. Se declara aparte de MainActivity para poder
+            desactivarlo con PackageManager.setComponentEnabledSetting() sin tocar la
+            Activity: MainActivity sigue siendo arrancable por BootReceiver y
+            AlarmRecoveryReceiver (intents explicitos), por los deep links y por el
+            toque en la notificacion de tracking. Deshabilitar MainActivity en su lugar
+            los dejaria todos rotos con ActivityNotFoundException.
+        -->
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:targetActivity=".MainActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/title_activity_main"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:theme="@style/AppTheme.NoActionBarLaunch">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity-alias>
 
         <!-- BootReceiver: auto-inicia el plugin de Capacitor tras reinicio del dispositivo -->
         <receiver
@@ -72,6 +113,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Override for the background geolocation service to not be exported -->
+        <service
+            android:name="com.equimaps.capacitor_background_geolocation.BackgroundGeolocationService"
+            android:exported="false"
+            tools:replace="android:exported"
+            android:foregroundServiceType="location" />
+
     </application>
 
     <!-- Permissions -->

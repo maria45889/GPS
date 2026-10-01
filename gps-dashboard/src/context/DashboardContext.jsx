@@ -91,7 +91,7 @@ export const DashboardProvider = ({ children }) => {
 
   // Hook data
   const { vehicles: supabaseVehicles, isLoading: vehiclesLoading, error: vehiclesError, lastSyncTime: vehiclesSyncTime, isStale: vehiclesStale, refetchVehicles } = useVehicles();
-  const { devices: supabaseDevices, isLoading: devicesLoading, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime, hideEphemeral } = useDevices();
+  const { devices: supabaseDevices, isLoading: devicesLoading, error: devicesError, isStale: devicesStale, lastSyncTime: devicesSyncTime, hideEphemeral, refetchDevices } = useDevices();
   const { alerts: supabaseAlerts, error: alertsError } = useAlerts();
   const { geofences: supabaseGeofences, refetchGeofences, error: geofencesError } = useGeofences();
 
@@ -154,6 +154,7 @@ export const DashboardProvider = ({ children }) => {
       devicesSyncTime,
       hideEphemeral,
       refetchVehicles,
+      refetchDevices,
       refetchGeofences,
       signOut
     }

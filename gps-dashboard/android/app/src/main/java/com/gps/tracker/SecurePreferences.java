@@ -144,8 +144,8 @@ public class SecurePreferences {
         }
     }
 
-    public synchronized void putLong(String key, long value) {
-        putString(key, String.valueOf(value));
+    public synchronized boolean putLong(String key, long value) {
+        return putString(key, String.valueOf(value));
     }
 
     public synchronized long getLong(String key, long defaultValue) {

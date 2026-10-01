@@ -71,7 +71,7 @@ export const useDevices = () => {
     })
   }, [])
 
-  const { data: devices, setData: setDevices, isLoading, error, lastSyncTime, isStale } = useLiveCollection({
+  const { data: devices, setData: setDevices, isLoading, error, lastSyncTime, isStale, refetch: refetchDevices } = useLiveCollection({
     fetchFn,
     subscribeTables: ['gps_locations', 'devices']
   })
@@ -87,7 +87,7 @@ export const useDevices = () => {
   }, [setDevices])
 
   return useMemo(
-    () => ({ devices, isLoading, error, isStale, lastSyncTime, hideEphemeral, hiddenEphemerals }),
-    [devices, isLoading, error, isStale, lastSyncTime, hideEphemeral, hiddenEphemerals],
+    () => ({ devices, isLoading, error, isStale, lastSyncTime, hideEphemeral, hiddenEphemerals, refetchDevices }),
+    [devices, isLoading, error, isStale, lastSyncTime, hideEphemeral, hiddenEphemerals, refetchDevices],
   )
 }

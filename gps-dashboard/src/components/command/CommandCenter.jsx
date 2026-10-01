@@ -31,7 +31,7 @@ const toMapShape = (e, original = null) => ({
 const CommandCenter = () => {
   const { state, dispatch, data } = useDashboardContext();
   const { category, selectedEntity, flyToTrigger, isPlacingOnMap, pendingCenter, pendingGeofenceConfirm, userLocation, locateUserTrigger, isFollowingRoute, origin, alertFocusTrigger, routeFocusTrigger } = state;
-  const { vehiclesList, devicesList, alerts, geofences, activeNetworkError, fleetLoading, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime, hideEphemeral, refetchVehicles, signOut } = data;
+  const { vehiclesList, devicesList, alerts, geofences, activeNetworkError, fleetLoading, vehiclesStale, devicesStale, vehiclesSyncTime, devicesSyncTime, hideEphemeral, refetchVehicles, refetchDevices, signOut } = data;
 
   const [baseLayer, setBaseLayer] = useState('dark')
   const [fleetOpen, setFleetOpen] = useState(false)
@@ -152,6 +152,7 @@ const CommandCenter = () => {
       if (result.remote && refetchVehicles) await refetchVehicles();
       dispatch({ type: 'SET_LOCAL_VEHICLES', payload: state.localVehicles?.filter((v) => v.id !== entity.id) || [] })
     } else {
+      if (result.remote && refetchDevices) await refetchDevices();
       hideEphemeral(entity.id)
     }
     dispatch({ type: 'SET_OPERATION_MESSAGE', payload: result.remote ? (kind === 'vehicle' ? 'Vehículo eliminado' : 'Dispositivo eliminado') : 'Eliminado del panel local' })

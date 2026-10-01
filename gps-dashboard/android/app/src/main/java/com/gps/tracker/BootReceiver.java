@@ -9,6 +9,9 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.SystemClock;
 import android.util.Log;
+import android.app.NotificationManager;
+import android.app.NotificationChannel;
+import androidx.core.app.NotificationCompat;
 
 /**
  * Se registra para BOOT_COMPLETED, USER_UNLOCKED y MY_PACKAGE_REPLACED.
@@ -77,6 +80,7 @@ public class BootReceiver extends BroadcastReceiver {
                 Log.w(TAG, "Permisos de ubicación insuficientes tras el arranque. Marcando pending_perm_prompt=true.");
                 context.getSharedPreferences("gps_app_prefs", Context.MODE_PRIVATE)
                         .edit().putBoolean("pending_perm_prompt", true).commit();
+                showMissingPermissionNotification(context);
                 return;
             }
 
@@ -96,6 +100,35 @@ public class BootReceiver extends BroadcastReceiver {
 
     }
 
+    private void showMissingPermissionNotification(Context context) {
+        try {
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            String channelId = "recovery_channel";
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel channel = new NotificationChannel(channelId, "Recuperación de Rastreo", NotificationManager.IMPORTANCE_HIGH);
+                nm.createNotificationChannel(channel);
+            }
+            
+            Intent intent = new Intent(context, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT : PendingIntent.FLAG_UPDATE_CURRENT;
+            PendingIntent pendingIntent = PendingIntent.getActivity(context, 0, intent, flags);
+            
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, channelId)
+                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setContentTitle("Rastreo Detenido")
+                    .setContentText("Toca aquí para otorgar los permisos necesarios de ubicación en segundo plano.")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+                    .setContentIntent(pendingIntent);
+            
+            nm.notify(1001, builder.build());
+        } catch (Exception e) {
+            Log.e(TAG, "Error mostrando notificación de permisos", e);
+        }
+    }
+
     private void scheduleRecoveryAlarm(Context context, long delayMs) {
         try {
             Intent recoveryIntent = new Intent(context, AlarmRecoveryReceiver.class);
@@ -108,15 +141,14 @@ public class BootReceiver extends BroadcastReceiver {
             if (alarmManager != null) {
                 long triggerAt = SystemClock.elapsedRealtime() + delayMs;
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    // Android 12+: usar AlarmClock para poder iniciar Activity desde alarma
-                    long triggerAtRtc = System.currentTimeMillis() + delayMs;
-                    AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(triggerAtRtc, null);
-                    alarmManager.setAlarmClock(info, pendingIntent);
+                    if (alarmManager.canScheduleExactAlarms()) {
+                        long triggerAtRtc = System.currentTimeMillis() + delayMs;
+                        AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(triggerAtRtc, null);
+                        alarmManager.setAlarmClock(info, pendingIntent);
+                    } else {
+                        alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
+                    }
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    // La alarma de recuperacion debe ser exacta: setAndAllowWhileIdle es
-                    // inexacto y Doze puede diferirla minutos, defeating el proposito del
-                    // reintento. setExactAndAllowWhileIdle es exacta en Doze y es la que
-                    // justifica android.permission.SCHEDULE_EXACT_ALARM en el manifest.
                     alarmManager.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);
                 } else {
                     alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pendingIntent);

@@ -9,7 +9,7 @@ export const deleteVehicle = async (entityId, kind = 'vehicle') => {
       const isDevice = kind === 'device';
       const body = isDevice ? { device_id: entityId } : { vehicle_id: entityId };
 
-      const { error } = await supabase.functions.invoke('delete-device-user', {
+      const { data, error } = await supabase.functions.invoke('delete-device-user', {
         body,
       });
 
@@ -18,6 +18,12 @@ export const deleteVehicle = async (entityId, kind = 'vehicle') => {
         // pueda detectar 401 y renovar el token correctamente si corresponde.
         const err = new Error(error.message || 'Error al eliminar el vehículo y dispositivo de forma segura');
         err.status = error.status || 500;
+        throw err;
+      }
+
+      if (data && data.error) {
+        const err = new Error(data.error);
+        err.status = data.status || 400;
         throw err;
       }
 

@@ -154,11 +154,9 @@
   transition: filter 0.5s ease;
 }
 
-/* Modo oscuro: convierte los tiles de OpenStreetMap a un mapa oscuro
-   limpio y moderno, con calles y etiquetas legibles. El filtro va sobre
-   el pane completo (una sola rasterización) para no degradar el zoom. */
+/* El mapa base usará sus colores originales para máxima claridad y lectura de las calles. */
 .cyber-tiles.dark-mode .leaflet-tile-pane {
-  filter: invert(0.95) hue-rotate(180deg) brightness(0.92) contrast(1.06) saturate(0.45) !important;
+  filter: brightness(0.9) contrast(1.05) !important;
 }
 
 .header-status,

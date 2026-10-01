@@ -47,6 +47,8 @@ public class PermissionUtils {
         if (context == null) return false;
         boolean locationOk = hasAnyLocationPermission(context);
         if (!locationOk) return false;
+        
+        if (!hasBackgroundLocationPermission(context)) return false;
 
         return hasNotificationPermission(context);
     }

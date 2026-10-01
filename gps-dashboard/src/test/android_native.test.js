@@ -21,6 +21,7 @@ let bootReceiver;
 let alarmReceiver;
 let mainActivity;
 let watchdog;
+let launcherVisibility;
 let tracker;
 let manifest;
 
@@ -31,6 +32,7 @@ beforeAll(() => {
   alarmReceiver = readJava('AlarmRecoveryReceiver.java');
   mainActivity = readJava('MainActivity.java');
   watchdog = readJava('TrackingWatchdog.java');
+  launcherVisibility = readJava('LauncherVisibility.java');
   tracker = fs.readFileSync(
     path.resolve(__dirname, '../lib/gpsTracker.js'),
     'utf-8'
@@ -267,6 +269,100 @@ describe('MainActivity: puente de autenticacion nativa', () => {
 
   it('no loguea el access_token en texto plano', () => {
     expect(mainActivity).not.toMatch(/Log\.[diwev]\([^)]*access_token/);
+  });
+});
+
+describe('Ocultacion del icono del cajon', () => {
+  const activityBlock = () =>
+    manifest.slice(
+      manifest.indexOf('<activity'),
+      manifest.indexOf('</activity>')
+    );
+
+  it('deja MAIN + LAUNCHER en un activity-alias, no en MainActivity', () => {
+    // La entrada del cajon debe ser un componente aparte: es lo unico que se puede
+    // desactivar sin romper los intents explicitos de los receivers.
+    expect(manifest).toContain('<activity-alias');
+    expect(manifest).toContain('android:name=".LauncherAlias"');
+    expect(manifest).toContain('android:targetActivity=".MainActivity"');
+    expect(activityBlock()).not.toContain(
+      'android.intent.category.LAUNCHER'
+    );
+    const aliasBlock = manifest.slice(
+      manifest.indexOf('<activity-alias'),
+      manifest.indexOf('</activity-alias>')
+    );
+    expect(aliasBlock).toContain('android.intent.category.LAUNCHER');
+    expect(aliasBlock).toContain('android:enabled="true"');
+  });
+
+  it('mantiene MAIN + CATEGORY_INFO en MainActivity para la notificacion de tracking', () => {
+    // getLaunchIntentForPackage() consulta MAIN + CATEGORY_INFO y el plugin lo usa
+    // como contentIntent: sin este filtro, tocar la notificacion no abriria la app.
+    expect(activityBlock()).toContain('android.intent.category.INFO');
+    expect(activityBlock()).toContain('android.intent.action.MAIN');
+  });
+
+  it('usa DONT_KILL_APP al desactivar, que es lo que protege el foreground service', () => {
+    expect(launcherVisibility).toContain('PackageManager.DONT_KILL_APP');
+    expect(launcherVisibility).toMatch(
+      /setComponentEnabledSetting\([\s\S]{0,120}state, flags\)/
+    );
+  });
+
+  it('exige los tres permisos y el aprovisionamiento antes de ocultar el icono', () => {
+    expect(launcherVisibility).toContain(
+      'PermissionUtils.hasFineLocationPermission(context)'
+    );
+    expect(launcherVisibility).toContain(
+      'PermissionUtils.hasBackgroundLocationPermission(context)'
+    );
+    expect(launcherVisibility).toContain(
+      'PermissionUtils.hasNotificationPermission(context)'
+    );
+    expect(launcherVisibility).toContain('new DeviceAuthManager(context).isProvisioned()');
+  });
+
+  it('sincroniza el icono al terminar el onboarding y en cada resume', () => {
+    const onboarding = mainActivity.slice(
+      mainActivity.indexOf('private void startOnboardingSequence()'),
+      mainActivity.indexOf('private void requestBatteryOptimizationExemptionSequential()')
+    );
+    expect(onboarding).toContain('LauncherVisibility.sync(this)');
+    expect(mainActivity).toMatch(/onResume\(\)[\s\S]{0,600}LauncherVisibility\.sync\(this\)/);
+  });
+
+  it('restaura el icono si el propietario revoca permisos o credenciales', () => {
+    const sync = launcherVisibility.slice(
+      launcherVisibility.indexOf('public static void sync('),
+      launcherVisibility.indexOf('public static boolean isFullyConfigured(')
+    );
+    expect(sync).toMatch(/if \(configured && !hidden\) \{\s*hide\(context\);/);
+    expect(sync).toMatch(/else if \(!configured && hidden\) \{\s*show\(context\);/);
+  });
+
+  it('deja una via de soporte por deep link para recuperar el icono', () => {
+    expect(mainActivity).toContain('private void maybeRestoreLauncherIcon(Intent intent)');
+    expect(mainActivity).toContain('LauncherVisibility.show(this)');
+    expect(mainActivity).toMatch(/maybeRestoreLauncherIcon\(intent\);/);
+  });
+
+  it('no restaura el icono desde setTrackingEnabled(false), que start() emite siempre', () => {
+    // gpsTracker.start() llama a this.stop() antes de arrancar, asi que el puente
+    // recibe false en cada inicio: mostrar ahi el icono lo haria parpadear.
+    const bridge = mainActivity.slice(
+      mainActivity.indexOf('public void setTrackingEnabled('),
+      mainActivity.indexOf('public void heartbeat(')
+    );
+    expect(bridge).not.toContain('LauncherVisibility');
+  });
+
+  it('no rompe el arranque por boot: los receivers siguen lanzando MainActivity', () => {
+    // MainActivity nunca se desactiva, por eso estos intents explicitos siguen
+    // funcionando y el tracking sobrevive a un reinicio con el icono oculto.
+    expect(bootReceiver).toContain('new Intent(context, MainActivity.class)');
+    expect(alarmReceiver).toContain('new Intent(context, MainActivity.class)');
+    expect(activityBlock()).toContain('android:exported="true"');
   });
 });
 

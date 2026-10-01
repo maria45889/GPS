@@ -19,3 +19,17 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Capacitor rules
+-keep class com.getcapacitor.** { *; }
+-keep interface com.getcapacitor.** { *; }
+-dontwarn com.getcapacitor.**
+
+# Background Geolocation (if any reflection is used)
+-keep class com.transistorsoft.** { *; }
+-dontwarn com.transistorsoft.**
+
+# Keep our custom receivers and services intact for manifest instantiation
+-keep class com.gps.tracker.** { *; }
+-keep class * extends android.content.BroadcastReceiver
+-keep class * extends android.app.Service

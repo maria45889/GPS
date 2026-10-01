@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.Log;
 
 import org.json.JSONObject;
 
@@ -30,6 +31,7 @@ import java.nio.charset.StandardCharsets;
  * caso el dispositivo queda sin autenticar hasta un re-registro manual.
  */
 public class DeviceAuthManager {
+    private static final String TAG = "DeviceAuthManager";
     private static final String PREFS = "device_auth";
     private static final String KEY_EMAIL = "email";
     private static final String KEY_PASSWORD = "password";
@@ -103,6 +105,10 @@ public class DeviceAuthManager {
     private static final Object GLOBAL_AUTH_LOCK = new Object();
 
     /** Devuelve un access_token valido, aprovisionando o renovando si hace falta. */
+    public String getRefreshToken() {
+        return prefs.getString(KEY_REFRESH_TOKEN, null);
+    }
+
     public String getAccessToken() {
         long expiresAt;
         String token;
@@ -276,8 +282,17 @@ public class DeviceAuthManager {
         prefs.remove(KEY_AUTH_FAIL_COUNT);
         prefs.remove(KEY_NEXT_AUTH_RETRY);
 
-        prefs.putString(KEY_ACCESS_TOKEN, res.optString("access_token", null));
-        prefs.putLong(KEY_EXPIRES_AT, expiresAt);
+        boolean success = prefs.putString(KEY_ACCESS_TOKEN, res.optString("access_token", null));
+        if (!success) {
+            Log.e(TAG, "storeSession: Fallo al guardar KEY_ACCESS_TOKEN");
+            return false;
+        }
+        
+        success = prefs.putLong(KEY_EXPIRES_AT, expiresAt);
+        if (!success) {
+            Log.e(TAG, "storeSession: Fallo al guardar KEY_EXPIRES_AT");
+            return false;
+        }
 
         String refresh = res.optString("refresh_token", null);
         if (refresh != null && !refresh.isEmpty()) prefs.putString(KEY_REFRESH_TOKEN, refresh);

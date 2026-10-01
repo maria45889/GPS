@@ -9,14 +9,12 @@ const getCacheKey = (deviceId = getDeviceId()) => (deviceId ? `gps_tracker_cache
 // Permite idempotencia: reintentos con el mismo evento no crean duplicados en Supabase
 // si existe la restricción única ON (device_id, event_id).
 function generateEventId(deviceId, timestamp, latitude, longitude) {
-  const raw = `${deviceId}|${timestamp}|${latitude}|${longitude}`;
-  // Hash FNV-1a de 32 bits → cadena hexadecimal estable (sin crypto, sin dependencias externas)
-  let h = 0x811c9dc5;
-  for (let i = 0; i < raw.length; i++) {
-    h ^= raw.charCodeAt(i);
-    h = (h * 0x01000193) >>> 0;
+  // Bug #11: Usar UUID v4 en vez de FNV-1a de 32 bits que generaba colisiones
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
   }
-  return `evt-${h.toString(16).padStart(8, '0')}`;
+  // Fallback si crypto no está disponible
+  return 'evt-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
 export const getCachedLocations = (deviceId = getDeviceId()) => {
@@ -131,6 +129,16 @@ class GPSTracker {
     this.currentRunId = 0;
     this.wakeLock = null;
 
+    if (typeof window !== 'undefined') {
+      window.addEventListener('appRestored', () => {
+        if (this.isRunning) {
+          this.nativeHeartbeat();
+        } else {
+          this.start(this.intervalMs);
+        }
+      });
+    }
+
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', async () => {
         if (this.intervalId && document.visibilityState === 'visible') {
@@ -197,7 +205,12 @@ class GPSTracker {
     let currentDeviceId = null;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (authError || !user) {
+         throw new Error(authError?.message || 'Usuario no autenticado (sesión ausente o caída)');
+      }
+
       currentDeviceId = user?.app_metadata?.device_id || user?.user_metadata?.device_id;
 
       // Si el usuario es un operador web sin claim de device_id provisionado, no intentamos registrarlo como dispositivo físico en la DB
@@ -255,25 +268,39 @@ class GPSTracker {
         await new Promise((resolve) => {
           navigator.geolocation.getCurrentPosition(
             async (pos) => {
-              if (runId === this.currentRunId) {
-                await this.sendCurrentLocation(pos);
+              try {
+                if (runId === this.currentRunId) {
+                  await this.sendCurrentLocation(pos);
+                }
+              } catch (e) {
+                console.error('Error in sendCurrentLocation', e);
+              } finally {
+                resolve();
               }
-              resolve();
             },
             async () => {
-              if (runId === this.currentRunId) {
-                const deviceId = getDeviceId();
-                await flushCachedLocations(deviceId);
+              try {
+                if (runId === this.currentRunId) {
+                  const deviceId = getDeviceId();
+                  await flushCachedLocations(deviceId);
+                }
+              } catch (e) {
+                console.error('Error in flushCachedLocations', e);
+              } finally {
+                resolve();
               }
-              resolve();
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 }
           );
         });
       } else {
-        if (runId === this.currentRunId) {
-          const deviceId = getDeviceId();
-          await flushCachedLocations(deviceId);
+        try {
+          if (runId === this.currentRunId) {
+            const deviceId = getDeviceId();
+            await flushCachedLocations(deviceId);
+          }
+        } catch (e) {
+          console.error('Error in flushCachedLocations offline', e);
         }
       }
     } finally {
@@ -291,42 +318,63 @@ class GPSTracker {
     this.intervalMs = intervalMs;
     this.currentRunId++;
     const runId = this.currentRunId;
+    this.isRunning = true;
 
     if (Capacitor.isNativePlatform()) {
-      try {
-        this.watcherId = await BackgroundGeolocation.addWatcher(
-          {
-            backgroundMessage: 'Cancel to prevent battery drain.',
-            backgroundTitle: 'Rastreo GPS Activo',
-            requestPermissions: true,
-            stale: false,
-            distanceFilter: 5
-          },
-          async (location, error) => {
-            if (error) {
-              if (error.code === 'NOT_AUTHORIZED' && window.confirm('Esta app necesita permiso de ubicación en segundo plano. ¿Ir a ajustes?')) {
-                BackgroundGeolocation.openSettings();
-              }
-              return console.error('Background Geolocation Error:', error);
-            }
-            if (location) {
-              this.nativeHeartbeat();
-              const pos = {
-                coords: {
-                  latitude: location.latitude,
-                  longitude: location.longitude,
-                  speed: location.speed,
-                  accuracy: location.accuracy,
-                  heading: location.bearing
+      let attempts = 0;
+      let success = false;
+      while (attempts < 3 && !success) {
+        try {
+          this.watcherId = await BackgroundGeolocation.addWatcher(
+            {
+              backgroundMessage: 'Cancel to prevent battery drain.',
+              backgroundTitle: 'Rastreo GPS Activo',
+              requestPermissions: true,
+              stale: false,
+              distanceFilter: 5
+            },
+            async (location, error) => {
+              if (error) {
+                if (error.code === 'NOT_AUTHORIZED' && window.confirm('Esta app necesita permiso de ubicación en segundo plano. ¿Ir a ajustes?')) {
+                  BackgroundGeolocation.openSettings();
                 }
-              };
-              await this.sendCurrentLocation(pos);
+                return console.error('Background Geolocation Error:', error);
+              }
+              if (location) {
+                this.nativeHeartbeat();
+                const pos = {
+                  coords: {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    speed: location.speed,
+                    accuracy: location.accuracy,
+                    heading: location.bearing
+                  }
+                };
+                await this.sendCurrentLocation(pos);
+              }
             }
+          );
+          this.nativeSetTrackingEnabled(true);
+  
+          // Bucle de liveness: El distanceFilter impide que el plugin emita posiciones si el
+          // vehiculo esta estacionado. Esto asegura que el watchdog no nos mate por falta de latidos.
+          this.livenessTimer = setInterval(() => {
+            this.nativeHeartbeat();
+          }, 10 * 60 * 1000); // 10 minutos (menor a STALE_AFTER_MS = 25m)
+  
+          success = true;
+        } catch (err) {
+          attempts++;
+          console.error(`Error starting BackgroundGeolocation (intento ${attempts}):`, err);
+          if (attempts >= 3) {
+            // Clean up on failure to avoid inconsistent state
+            this.stop();
+          } else {
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
-        );
-        this.nativeSetTrackingEnabled(true);
-      } catch (err) {
-        console.error('Error starting BackgroundGeolocation:', err);
+        }
       }
     } else {
       this.requestWakeLock();
@@ -359,6 +407,10 @@ class GPSTracker {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
+    }
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer);
+      this.livenessTimer = null;
     }
     this.releaseWakeLock();
     this.currentRunId++;

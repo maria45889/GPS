@@ -2,7 +2,23 @@
   "version": 2,
   "buildCommand": "cd gps-dashboard && npm run build",
   "outputDirectory": "gps-dashboard/dist",
-  "installCommand": "cd gps-dashboard && npm install",
+  "installCommand": "cd gps-dashboard && npm ci",
   "framework": "vite",
-  "devCommand": "cd gps-dashboard && npm run dev"
+  "devCommand": "cd gps-dashboard && npm run dev",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
 }

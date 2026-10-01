@@ -20,8 +20,12 @@ export const useRouteHistory = (entity) => {
   const wantsTelemetry = Boolean(entityId && !isVehicle && embedded.length < 2)
 
   useEffect(() => {
-    if (!wantsTelemetry || fetchedIdRef.current === entityId) return undefined
-    fetchedIdRef.current = entityId
+    if (fetchedIdRef.current !== entityId) {
+      setTelemetryRoute([])
+      fetchedIdRef.current = entityId
+    }
+
+    if (!wantsTelemetry) return undefined
 
     let active = true
     setLoading(true)

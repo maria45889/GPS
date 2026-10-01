@@ -21,7 +21,7 @@ export const parsePoint = (point) => {
   return null
 }
 
-export const isPointOnSegment = ([px, py], [ax, ay], [bx, by], epsilon = 1e-7) => {
+export const isPointOnSegment = ([px, py], [ax, ay], [bx, by], epsilon = 1e-12) => {
   const cross = (py - ay) * (bx - ax) - (px - ax) * (by - ay)
   if (Math.abs(cross) > epsilon) return false
 
@@ -119,8 +119,8 @@ export const projectedPath = (position, bearing = 0, meters = 700, steps = 7) =>
   for (let i = 1; i <= steps; i++) {
     const d = (meters * i) / steps
     out.push([
-      Number((lat + (d * Math.cos(rad)) / 111320).toFixed(6)),
-      Number((lng + (d * Math.sin(rad)) / (111320 * cosLat)).toFixed(6)),
+      Number((lat + (d * Math.sin(rad)) / 111320).toFixed(6)),
+      Number((lng + (d * Math.cos(rad)) / (111320 * cosLat)).toFixed(6)),
     ])
   }
   return out

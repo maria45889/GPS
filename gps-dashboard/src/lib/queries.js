@@ -257,6 +257,7 @@ export const fetchDevices = async () => {
     const { data, error } = await supabase
       .from('devices')
       .select('id, status, last_seen, platform, model, app_version, battery, label')
+      .neq('status', 'inactive')
       .order('last_seen', { ascending: false })
 
     if (error) throw error

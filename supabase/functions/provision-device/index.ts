@@ -75,9 +75,9 @@ async function clearDbRateLimit(key: string) {
   try {
     const { error } = await supabase.rpc('clear_rate_limit', { p_key: key })
     // B2: Verificar el objeto error de Supabase — no siempre lanza excepción.
-    if (error) console.warn(`clearDbRateLimit(${key}) RPC error:`, error.message)
+    if (error) console.warn(`clearDbRateLimit RPC error for type ${key.split(':')[0]}:`, error.message)
   } catch (e) {
-    console.warn(`clearDbRateLimit(${key}) network error:`, e)
+    console.warn(`clearDbRateLimit network error for type ${key.split(':')[0]}:`, e)
   }
   // Siempre limpiar memoria (independientemente de si DB tuvo éxito)
   attemptStore.delete(key)
@@ -119,7 +119,7 @@ serve(async (req) => {
   }
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
-  const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('cf-connecting-ip') || 'unknown-ip'
+  const clientIp = req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for')?.split(',').pop()?.trim() || 'unknown-ip'
 
 
   let body: Record<string, unknown>
@@ -174,13 +174,17 @@ serve(async (req) => {
 
   const deviceExisting = await supabase
     .from('devices')
-    .select('auth_user_id')
+    .select('auth_user_id, status')
     .eq('id', deviceId)
     .maybeSingle()
 
   if (deviceExisting.error) return json({ error: deviceExisting.error.message }, 500)
 
-  const isAlreadyRegistered = Boolean(existingReg.data || deviceExisting.data)
+  // Si existe en device_registrations (existingReg.data), siempre lo consideramos registrado
+  // Si existe en devices, lo consideramos registrado SOLO SI está activo/online.
+  // Si está 'inactive', es porque fue eliminado (baja lógica), por lo que permitimos re-aprovisionar.
+  const isInactive = deviceExisting.data && deviceExisting.data.status === 'inactive';
+  const isAlreadyRegistered = Boolean(existingReg.data || (deviceExisting.data && !isInactive))
 
   // Generamos un correo único agregando un timestamp corto para evitar colisiones "email already registered"
   // si hubo un intento fallido anterior que dejó al usuario huérfano en auth.users
@@ -191,6 +195,16 @@ serve(async (req) => {
   if (isAlreadyRegistered) {
     // Anti-hijack protection: no re-provisioning allowed for existing devices
     return json({ error: 'El dispositivo ya se encuentra registrado y activado.' }, 403)
+  }
+
+  // Si está inactivo, primero limpiamos el usuario de auth anterior si lo había,
+  // o simplemente dejamos que el nuevo usuario tome el control sobreescribiendo el auth_user_id.
+  if (isInactive && deviceExisting.data.auth_user_id) {
+    try {
+      await supabase.auth.admin.deleteUser(deviceExisting.data.auth_user_id);
+    } catch (e) {
+      // Ignorar si el usuario ya no existe
+    }
   }
 
   // Primer aprovisionamiento del dispositivo
@@ -207,26 +221,26 @@ serve(async (req) => {
   }
 
   // Auto-provisioning directly via service role (bypassing activation code requirements)
-  const { data: orgData } = await supabase.from('organizations').select('id').limit(1).single()
+  const { data: orgData } = await supabase.from('organizations').select('id').limit(1).maybeSingle()
   const orgId = orgData?.id
 
   if (!orgId) {
     return json({ error: 'No hay organizaciones creadas en la base de datos' }, 500)
   }
 
-  // Insert into devices
+  // Insert or Upsert into devices
   // 'status' debe ser 'active': la policy gps_locations_device_insert exige
   // status in ('active','online') y el default de la columna es 'offline',
   // sin este campo RLS rechazaria el 100% de los inserts de posicion.
-  const { error: deviceErr } = await supabase.from('devices').insert({
+  const { error: deviceErr } = await supabase.from('devices').upsert({
     id: deviceId,
     auth_user_id: created.data.user.id,
     organization_id: orgId,
     status: 'active'
   })
 
-  // Insert into vehicles
-  const { error: vehicleErr } = await supabase.from('vehicles').insert({
+  // Insert or Upsert into vehicles
+  const { error: vehicleErr } = await supabase.from('vehicles').upsert({
     id: deviceId, // We use the same ID for simplicity in auto-provisioning
     device_id: deviceId,
     name: 'Auto-Móvil ' + deviceId.substring(0, 4),
@@ -234,13 +248,13 @@ serve(async (req) => {
     status: 'active'
   })
 
-  // Insert into device_registry
+  // Insert or Upsert into device_registry
   // Esta tabla es el puente device_id -> vehicle_id. Sin esta fila:
   //   - delete-device-user nunca resuelve vehicle_id y deja vehiculos huerfanos
   //   - reconcile_pending_deletions cae siempre en la rama ELSE y borra el device
   //     (cascada => se pierde todo el historial GPS) sin borrar el vehiculo
   //   - el UPDATE de device_registry en delete_vehicle_cascade es un no-op
-  const { error: registryErr } = await supabase.from('device_registry').insert({
+  const { error: registryErr } = await supabase.from('device_registry').upsert({
     device_id: deviceId,
     organization_id: orgId,
     vehicle_id: deviceId,
