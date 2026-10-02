@@ -2,7 +2,7 @@
 // público de AWS. Se reemplazó el mosaico raster de Esri porque sin suscripción Esri
 // limita el tráfico y el panel se quedaba en blanco.
 
-export const OFM_STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
+export const OFM_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 export const OFM_TILEJSON_URL = 'https://tiles.openfreemap.org/planet';
 export const OFM_DEM_TILES = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png';
 export const ESRI_IMAGERY_TILES =
@@ -236,4 +236,16 @@ export const applyLayerVariant = (map, baseLayer, is3D = true) => {
     if (wants3D && !map.getSource(DEM_SOURCE_ID)) addTerrain(map);
     map.setTerrain(wants3D ? { source: DEM_SOURCE_ID, exaggeration: 1 } : null);
   }
+
+  // Mejora contraste de etiquetas
+  map.getStyle?.()?.layers?.forEach((layer) => {
+    if (layer.type === 'symbol' && /label|name|place|road|highway|text/i.test(layer.id)) {
+      const isDark = variant === 'dark' || baseLayer === 'dark';
+      try {
+        map.setPaintProperty(layer.id, 'text-halo-color', isDark ? '#0b1221' : '#ffffff');
+        map.setPaintProperty(layer.id, 'text-halo-width', 1.25);
+        map.setPaintProperty(layer.id, 'text-halo-blur', 0.25);
+      } catch {}
+    }
+  });
 };
