@@ -26,6 +26,7 @@ const MapCanvas = ({
   const mapRef = useRef(null);
   const [map, setMap] = useState(null);
   const [ready, setReady] = useState(false);
+  const [fatalError, setFatalError] = useState(false);
   const handlersRef = useRef({ onMapClick, onMapHover, isPlacingOnMap });
 
   handlersRef.current = { onMapClick, onMapHover, isPlacingOnMap };
@@ -62,6 +63,7 @@ const MapCanvas = ({
             touchPitch: true,
           });
         } catch {
+          setFatalError(true);
           onTileFailure?.('WebGL no disponible en este navegador o dispositivo');
           return;
         }
@@ -183,7 +185,27 @@ const MapCanvas = ({
       <div className="gps-map-shell absolute inset-0">
         <div ref={containerRef} className="gps-map-canvas" />
       </div>
-      {map ? children : <div className="gps-map-loading">Cargando mapa…</div>}
+      {map ? (
+        children
+      ) : fatalError ? (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0b1221] p-6 text-center text-white">
+          <div className="mb-4 text-xl font-bold text-red-400">Error: Aceleración por hardware desactivada</div>
+          <div className="max-w-md text-sm leading-relaxed text-slate-300">
+            <p className="mb-4">Tu navegador Chrome no tiene activada la <strong>Aceleración por Hardware (WebGL)</strong>, la cual es indispensable para renderizar los mapas modernos en 3D de este panel.</p>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-left">
+              <strong className="block mb-2 text-cyan-400">Cómo solucionarlo rápido:</strong>
+              <ol className="list-inside list-decimal space-y-1">
+                <li>Abre una nueva pestaña y ve a <code>chrome://settings/system</code></li>
+                <li>Activa la opción <strong>"Usar aceleración de gráficos cuando esté disponible"</strong></li>
+                <li>Haz clic en el botón <strong>"Reiniciar"</strong> que aparecerá.</li>
+                <li>Vuelve a cargar esta página.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="gps-map-loading">Cargando mapa…</div>
+      )}
     </MapContext.Provider>
   );
 };
