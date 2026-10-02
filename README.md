@@ -1,6 +1,6 @@
 # GPS Fleet Monitor
 
-Panel web y aplicación Android para monitorear dispositivos GPS en tiempo real. El proyecto combina React/Vite, Supabase, MapLibre GL (mapa 3D sin API key) y un servicio Android en foreground para enviar la ubicación periódicamente, incluso con la pantalla apagada.
+Panel web y aplicación Android para monitorear dispositivos GPS en tiempo real. El proyecto combina React/Vite, Supabase, Leaflet y un servicio Android en foreground para enviar la ubicación periódicamente, incluso con la pantalla apagada.
 
 ## Qué incluye
 

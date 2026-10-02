@@ -1,39 +1,62 @@
-import { useEffect, useRef } from 'react';
-import { boundsFromPositions, circleFeature, featureCollection, toLngLat } from '../../lib/mapGeo';
-import { ensureGeoJsonSource, ensureLayer, scheduleGeoJsonUpdate } from './geoLayer';
-import { classesOf } from '../../lib/maplibreLoader';
-import { useMapEffect, useMapLibre } from './MapContext';
-import { userLocationHtml } from './MapIcons';
+import React, { useEffect, useRef } from 'react';
+import { useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
 
-const USER_SOURCE = 'gps-user-accuracy';
-const USER_FILL_LAYER = 'gps-user-accuracy-fill';
-const USER_LINE_LAYER = 'gps-user-accuracy-line';
+export const MapController = () => {
+  const map = useMap();
+  
+  useEffect(() => {
+    let lastWidth = 0;
+    let lastHeight = 0;
+    let frameId = null;
 
-const toCenter = (coords) => (Array.isArray(coords) ? [Number(coords[1]), Number(coords[0])] : null);
+    const handleResize = () => {
+      const container = map.getContainer();
+      const width = container.clientWidth;
+      const height = container.clientHeight;
 
-/** Ya no hay `invalidateSize`: el redimensionado vive en MapCanvas con ResizeObserver. */
-export const MapController = () => null;
+      if (width === lastWidth && height === lastHeight) return;
+
+      lastWidth = width;
+      lastHeight = height;
+      if (frameId) cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false, pan: false });
+      });
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(map.getContainer());
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      resizeObserver.disconnect();
+      if (frameId) cancelAnimationFrame(frameId);
+    };
+  }, [map]);
+
+  return null;
+};
 
 export const MapFlyToHandler = ({ targetPosition, flyToTrigger }) => {
-  const map = useMapLibre();
+  const map = useMap();
 
   useEffect(() => {
-    if (!map) return;
-    if (flyToTrigger?.coords) {
-      const center = toCenter(flyToTrigger.coords);
-      if (center) {
-        map.flyTo({
-          center,
-          zoom: flyToTrigger.zoom || 16,
-          duration: 1500,
-          essential: true,
-        });
-      }
-      return;
-    }
-    if (targetPosition) {
-      const center = toCenter(targetPosition);
-      if (center) map.flyTo({ center, zoom: 16, duration: 1200, essential: true });
+    if (flyToTrigger && flyToTrigger.coords) {
+      map.flyTo(flyToTrigger.coords, flyToTrigger.zoom || 16, {
+        animate: true,
+        duration: 1.5,
+      });
+    } else if (targetPosition) {
+      map.flyTo(targetPosition, 16, {
+        animate: true,
+        duration: 1.2,
+      });
     }
   }, [targetPosition, flyToTrigger, map]);
 
@@ -41,46 +64,53 @@ export const MapFlyToHandler = ({ targetPosition, flyToTrigger }) => {
 };
 
 export const AlertFocusHandler = ({ focusTrigger, markerRefs }) => {
-  const map = useMapLibre();
+  const map = useMap();
 
   useEffect(() => {
-    if (!map || !focusTrigger?.coords) return;
-    const center = toCenter(focusTrigger.coords);
-    if (center) map.flyTo({ center, zoom: focusTrigger.zoom || 16, duration: 1000, essential: true });
-
-    const marker = markerRefs?.current?.[focusTrigger.id];
-    if (!marker) return;
-    const timer = window.setTimeout(() => {
-      try {
-        marker.togglePopup?.();
-      } catch {
-        /* el marcador pudo desmontarse durante el vuelo */
-      }
-    }, 700);
-    return () => window.clearTimeout(timer);
+    if (!focusTrigger?.coords) return;
+    map.flyTo(focusTrigger.coords, focusTrigger.zoom || 16, { animate: true, duration: 1 });
+    const marker = markerRefs.current[focusTrigger.id];
+    if (marker) window.setTimeout(() => marker.openPopup(), 700);
   }, [focusTrigger, map, markerRefs]);
 
   return null;
 };
 
 export const RouteFocusHandler = ({ routeFocusTrigger }) => {
-  const map = useMapLibre();
+  const map = useMap();
 
   useEffect(() => {
-    if (!map || !Array.isArray(routeFocusTrigger?.route) || routeFocusTrigger.route.length < 2) return;
-    const bounds = boundsFromPositions(routeFocusTrigger.route);
-    if (!bounds) return;
-    map.fitBounds(
-      [[bounds[0], bounds[1]], [bounds[2], bounds[3]]],
-      { padding: 72, maxZoom: 16, duration: 900, pitch: map.getPitch() },
-    );
+    if (!routeFocusTrigger?.route || routeFocusTrigger.route.length < 2) return;
+    const points = routeFocusTrigger.route.filter((p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])));
+    if (points.length < 2) return;
+    const bounds = L.latLngBounds(points.map(([lat, lng]) => [Number(lat), Number(lng)]));
+    map.fitBounds(bounds, { padding: [56, 56], maxZoom: 16 });
   }, [routeFocusTrigger, map]);
 
   return null;
 };
 
-/** El clic y el hover ya se atienden en MapCanvas para no duplicar listeners. */
-export const MapClickHandler = () => null;
+export const MapClickHandler = ({ isPlacingOnMap, onMapClick, onMapHover }) => {
+  const lastHoverRef = useRef(0);
+
+  useMapEvents({
+    click(e) {
+      if (isPlacingOnMap && onMapClick) {
+        onMapClick([e.latlng.lat, e.latlng.lng]);
+      }
+    },
+    mousemove(e) {
+      if (isPlacingOnMap && onMapHover) {
+        const now = Date.now();
+        if (now - lastHoverRef.current > 40) {
+          lastHoverRef.current = now;
+          onMapHover([e.latlng.lat, e.latlng.lng]);
+        }
+      }
+    },
+  });
+  return null;
+};
 
 export const UserLocationTracker = ({ locateUserTrigger, onLocationChange }) => {
   const watchIdRef = useRef(null);
@@ -93,33 +123,43 @@ export const UserLocationTracker = ({ locateUserTrigger, onLocationChange }) => 
       return undefined;
     }
 
-    const toPayload = ({ coords }) => ({
-      position: [coords.latitude, coords.longitude],
-      accuracy: coords.accuracy,
-      speed: coords.speed,
-    });
-
-    const toError = (error) => {
-      let message = 'No se pudo obtener la ubicación GPS';
-      if (error.code === error.PERMISSION_DENIED) {
-        message = 'Permiso de ubicación denegado. Por favor concédelo en los ajustes.';
-      } else if (error.code === error.POSITION_UNAVAILABLE) {
-        message = 'Señal GPS no disponible. Verifica que la ubicación esté activada.';
-      } else if (error.code === error.TIMEOUT) {
-        message = 'Tiempo de espera agotado buscando señal GPS.';
-      }
-      onLocationChange?.({ error: message, code: error.code });
-    };
-
     navigator.geolocation.getCurrentPosition(
-      (position) => onLocationChange?.(toPayload(position)),
-      toError,
+      ({ coords }) => {
+        onLocationChange?.({
+          position: [coords.latitude, coords.longitude],
+          accuracy: coords.accuracy,
+          speed: coords.speed,
+        });
+      },
+      (error) => {
+        let errorMsg = 'No se pudo obtener la ubicación GPS';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMsg = 'Permiso de ubicación denegado. Por favor concédelo en los ajustes.';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMsg = 'Señal GPS no disponible. Verifica que la ubicación esté activada.';
+        } else if (error.code === error.TIMEOUT) {
+          errorMsg = 'Tiempo de espera agotado buscando señal GPS.';
+        }
+        onLocationChange?.({ error: errorMsg, code: error.code });
+      },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 15000 },
     );
 
     watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => onLocationChange?.(toPayload(position)),
-      toError,
+      ({ coords }) => {
+        onLocationChange?.({
+          position: [coords.latitude, coords.longitude],
+          accuracy: coords.accuracy,
+          speed: coords.speed,
+        });
+      },
+      (error) => {
+        let errorMsg = 'No se pudo obtener la ubicación GPS';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMsg = 'Permiso de ubicación denegado. Por favor concédelo en los ajustes.';
+        }
+        onLocationChange?.({ error: errorMsg, code: error.code });
+      },
       { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 },
     );
 
@@ -133,62 +173,3 @@ export const UserLocationTracker = ({ locateUserTrigger, onLocationChange }) => 
 
   return null;
 };
-
-/** Círculo de precisión y pin azul de la ubicación del usuario. */
-export const UserLocationVisual = ({ userLocation }) => {
-  const markerRef = useRef(null);
-  const position = userLocation?.position;
-  const lngLat = toLngLat(position);
-
-  useMapEffect((map) => {
-    const classes = classesOf(map);
-    ensureGeoJsonSource(map, USER_SOURCE);
-    ensureLayer(map, {
-      id: USER_FILL_LAYER,
-      type: 'fill',
-      source: USER_SOURCE,
-      paint: { 'fill-color': '#5ad6e7', 'fill-opacity': 0.14 },
-    });
-    ensureLayer(map, {
-      id: USER_LINE_LAYER,
-      type: 'line',
-      source: USER_SOURCE,
-      paint: { 'line-color': '#168ca4', 'line-width': 1.5, 'line-opacity': 0.9 },
-    });
-
-    scheduleGeoJsonUpdate(
-      map,
-      USER_SOURCE,
-      featureCollection([lngLat ? circleFeature(position, userLocation?.accuracy || 35) : null]),
-    );
-
-    if (!lngLat) {
-      markerRef.current?.remove();
-      markerRef.current = null;
-      return undefined;
-    }
-
-    if (!markerRef.current) {
-      const element = document.createElement('div');
-      element.className = 'user-location-marker';
-      element.innerHTML = userLocationHtml();
-      markerRef.current = new classes.Marker({ element, anchor: 'center' })
-        .setLngLat(lngLat)
-        .setPopup(new classes.Popup({ offset: 12, className: 'gps-popup' }).setHTML('<b>Tu ubicación actual</b>'))
-        .addTo(map);
-    } else {
-      markerRef.current.setLngLat(lngLat);
-    }
-
-    return undefined;
-  }, [lngLat?.[0], lngLat?.[1], userLocation?.accuracy]);
-
-  useMapEffect(() => () => {
-    markerRef.current?.remove();
-    markerRef.current = null;
-  }, []);
-
-  return null;
-};
-
-export default MapController;

@@ -1,163 +1,157 @@
-import { useMemo, useState } from 'react';
-import { circleToPolygon, featureCollection, polygonFeature, toLngLat } from '../../lib/mapGeo';
-import { ensureGeoJsonSource, ensureLayer, scheduleGeoJsonUpdate } from './geoLayer';
-import { geofencePopupHtml, sanitizeColorSafe, zoneLabelHtml } from './MapIcons';
-import { geofenceStatusText, isGeofenceBreach } from '../../lib/mapLogic';
-import { classesOf } from '../../lib/maplibreLoader';
-import { useMapEffect } from './MapContext';
+import React from 'react';
+import { Polygon, Circle, Marker, Popup } from 'react-leaflet';
+import { isVehicleInsideCircle, isVehicleInsidePolygon } from '../../lib/mapLogic';
+import { createZoneLabel } from './MapIcons';
 
-const SOURCE = 'gps-geofences';
-const FILL_LAYER = 'gps-geofence-fill';
-const LINE_LAYER = 'gps-geofence-line';
-const PENDING_SOURCE = 'gps-geofence-pending';
-const PENDING_LAYER = 'gps-geofence-pending-layer';
-
-const buildFeature = (geo, isBreach) => {
-  const color = sanitizeColorSafe(isBreach ? '#ef5c72' : geo.color || '#00E676');
-  const properties = {
-    id: String(geo.id ?? ''),
-    name: geo.name || 'Zona',
-    color,
-    isPolygon: geo.type === 'polygon' && Array.isArray(geo.positions) && geo.positions.length > 0,
-  };
-
-  if (properties.isPolygon) {
-    const ring = geo.positions
-      .filter((p) => Array.isArray(p) && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])))
-      .map(([lat, lng]) => [Number(lng), Number(lat)]);
-    if (ring.length < 3) return null;
-    const closed = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1] ? ring : [...ring, ring[0]];
-    const feature = polygonFeature(closed, properties);
-    if (feature) feature.properties.detail = `Zona Delimitada Poligonal${geofenceStatusText(geo, isBreach)}`;
-    return feature;
+const isInsideGeofence = (vehicle, geofence) => {
+  if (!vehicle?.position || !geofence) return false;
+  if (geofence.type === 'polygon') {
+    const positions = geofence.positions || geofence.coordinates || [];
+    return isVehicleInsidePolygon(vehicle.position, positions);
   }
-
-  if (!geo.center) return null;
-  const ring = circleToPolygon(geo.center, Number(geo.radius || 600));
-  if (!ring) return null;
-  const feature = polygonFeature(ring, { ...properties, isPolygon: false });
-  feature.properties.detail = `Zona Circular - Radio: ${geo.radius || 600}m${geofenceStatusText(geo, isBreach)}`;
-  return feature;
+  if (!geofence?.center) return false;
+  return isVehicleInsideCircle(vehicle.position, geofence.center, Number(geofence.radius || 600));
 };
 
-/**
- * Geocercas como geometría vectorial: circulo y polígono comparten capa y el color se
- * actualiza por propiedad, así que no hay que recrear capas al cambiar de estado.
- */
+const getGeofenceType = (geofence) => {
+  if (geofence.mode) return geofence.mode;
+  if (geofence.zoneType) return geofence.zoneType;
+  const ruleStr = String(geofence.rule || '').toLowerCase();
+  if (ruleStr.includes('prohibid') || ruleStr.includes('inside') || ruleStr.includes('ingreso no autoriz')) return 'forbidden';
+  if (ruleStr.includes('entrada') || ruleStr.includes('ingreso')) return 'entry';
+  if (ruleStr.includes('salida') || ruleStr.includes('egreso')) return 'exit';
+  return 'allowed'; // Zona permitida por defecto
+};
+
+const isGeofenceBreach = (vehicle, geofence) => {
+  if (!vehicle?.position || !geofence) return false;
+  const inside = isInsideGeofence(vehicle, geofence);
+  const type = getGeofenceType(geofence);
+
+  switch (type) {
+    case 'forbidden':
+      return inside;
+    case 'entry':
+      return inside;
+    case 'exit':
+      return !inside;
+    case 'allowed':
+    default:
+      return !inside;
+  }
+};
+
+const getGeofenceStatusText = (geo, isBreach) => {
+  if (!isBreach) return '';
+  const type = getGeofenceType(geo);
+  switch (type) {
+    case 'forbidden':
+      return ' · Intrusión: vehículo en zona prohibida';
+    case 'entry':
+      return ' · Entrada registrada';
+    case 'exit':
+      return ' · Salida registrada';
+    case 'allowed':
+    default:
+      return ' · Intrusión: vehículo fuera de zona permitida';
+  }
+};
+
+export const sanitizeColor = (color) => {
+  if (typeof color !== 'string') return '#00E676';
+  const trimmed = color.trim();
+  if (/^#([0-9a-fA-F]{3}){1,2}$/.test(trimmed) || /^rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+\s*)?\)$/.test(trimmed)) {
+    return trimmed;
+  }
+  return '#00E676';
+};
+
 export const MapGeofences = ({ geofences, selectedVehicle, pendingCenter }) => {
-  const [labels] = useState(() => new Map());
+  return (
+    <>
+      {geofences.filter(geo => geo.active).map((geo) => {
+        const isPolygon = geo.type === 'polygon' && geo.positions && geo.positions.length > 0;
+        const isBreach = isGeofenceBreach(selectedVehicle, geo);
+        const geoColor = sanitizeColor(isBreach ? '#ef5c72' : geo.color || '#00E676');
 
-  const active = useMemo(
-    () => (geofences || []).filter((geo) => geo.active),
-    [geofences],
+        if (isPolygon) {
+          return (
+            <React.Fragment key={geo.id}>
+              <Polygon 
+                positions={geo.positions} 
+                className="geofence-polygon"
+                pathOptions={{
+                  color: geoColor,
+                  fillColor: geoColor,
+                  fillOpacity: 0.035,
+                  weight: 1.2,
+                  dashArray: '5, 7',
+                  opacity: 0.75,
+                }}
+              >
+                <Popup className="dark-popup">
+                  <div className="text-xs">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
+                      <span className="font-bold text-white">{geo.name}</span>
+                    </div>
+                    <p className="text-[11px] text-[#94A3B8]">Zona Delimitada Poligonal{getGeofenceStatusText(geo, isBreach)}</p>
+                    <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
+                  </div>
+                </Popup>
+              </Polygon>
+              {geo.center && (
+                <Marker position={geo.center} icon={createZoneLabel(geo.name, geoColor)} />
+              )}
+            </React.Fragment>
+          );
+        } else if (geo.center) {
+          return (
+            <React.Fragment key={geo.id}>
+              <Circle 
+                center={geo.center}
+                radius={geo.radius || 600}
+                pathOptions={{
+                  color: geoColor,
+                  fillColor: geoColor,
+                  fillOpacity: 0.045,
+                  weight: 1.5,
+                  dashArray: '5, 6',
+                  opacity: 0.8,
+                }}
+              >
+                <Popup className="dark-popup">
+                  <div className="text-xs">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: geoColor, boxShadow: `0 0 8px ${geoColor}` }}></span>
+                      <span className="font-bold text-white">{geo.name}</span>
+                    </div>
+                    <p className="text-[11px] text-[#94A3B8]">Zona Circular - Radio: {geo.radius || 600}m{getGeofenceStatusText(geo, isBreach)}</p>
+                    <div className="mt-2 text-[10px] text-[#00E676] font-mono">Regla: {geo.rule || 'Supervision'}</div>
+                  </div>
+                </Popup>
+              </Circle>
+              <Marker position={geo.center} icon={createZoneLabel(geo.name, geoColor)} />
+            </React.Fragment>
+          );
+        }
+        return null;
+      })}
+
+      {/* Temporary Ghost Circle when placing or confirming geofence */}
+      {pendingCenter && (
+        <Circle 
+          center={pendingCenter}
+          radius={300}
+          pathOptions={{
+            color: '#38bdf8',
+            fillColor: '#0284c7',
+            fillOpacity: 0.15,
+            weight: 1.5,
+            dashArray: '4, 4',
+          }}
+        />
+      )}
+    </>
   );
-
-  useMapEffect((map) => {
-    ensureGeoJsonSource(map, SOURCE);
-    ensureLayer(map, {
-      id: FILL_LAYER,
-      type: 'fill',
-      source: SOURCE,
-      paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.06 },
-    });
-    ensureLayer(map, {
-      id: LINE_LAYER,
-      type: 'line',
-      source: SOURCE,
-      paint: {
-        'line-color': ['get', 'color'],
-        'line-width': 1.8,
-        'line-dasharray': [4, 4],
-        'line-opacity': 0.85,
-      },
-    });
-  }, []);
-
-  useMapEffect((map) => {
-    scheduleGeoJsonUpdate(map, SOURCE, featureCollection(active.map((geo) => buildFeature(geo, isGeofenceBreach(selectedVehicle, geo)))));
-  }, [active, selectedVehicle?.position]);
-
-  useMapEffect((map) => {
-    ensureGeoJsonSource(map, PENDING_SOURCE);
-    ensureLayer(map, {
-      id: PENDING_LAYER,
-      type: 'fill',
-      source: PENDING_SOURCE,
-      paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.15 },
-    });
-    ensureLayer(map, {
-      id: `${PENDING_LAYER}-line`,
-      type: 'line',
-      source: PENDING_SOURCE,
-      paint: { 'line-color': '#38bdf8', 'line-width': 1.6, 'line-dasharray': [4, 4] },
-    });
-    const ring = pendingCenter ? circleToPolygon(pendingCenter, 300) : null;
-    scheduleGeoJsonUpdate(map, PENDING_SOURCE, featureCollection([ring ? polygonFeature(ring, { kind: 'pending' }) : null]));
-  }, [pendingCenter]);
-
-  // Popup con el detalle de la zona al tocarla.
-  useMapEffect((map) => {
-    const openPopup = (event) => {
-      const feature = event.features?.[0];
-      if (!feature) return;
-      const classes = classesOf(map);
-      if (!classes) return;
-      const properties = feature.properties || {};
-      new classes.Popup({ className: 'gps-popup', maxWidth: '260px', focusAfterOpen: false })
-        .setLngLat(event.lngLat)
-        .setHTML(geofencePopupHtml({
-          name: properties.name,
-          color: properties.color,
-          detail: properties.detail || '',
-          rule: properties.rule || 'Supervision',
-        }))
-        .addTo(map);
-    };
-
-    map.on('click', FILL_LAYER, openPopup);
-    map.on('mouseenter', FILL_LAYER, () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', FILL_LAYER, () => { map.getCanvas().style.cursor = ''; });
-    return () => {
-      map.off('click', FILL_LAYER, openPopup);
-    };
-  }, []);
-
-  // Etiquetas con el nombre de la zona.
-  useMapEffect((map) => {
-    const classes = classesOf(map);
-    const next = new Map();
-    active.forEach((geo) => {
-      const center = geo.center || (geo.positions && geo.positions[0]);
-      const lngLat = toLngLat(center);
-      if (!lngLat) return;
-      const isBreach = isGeofenceBreach(selectedVehicle, geo);
-      const color = sanitizeColorSafe(isBreach ? '#ef5c72' : geo.color || '#00E676');
-      const key = String(geo.id ?? geo.name);
-      const signature = `${geo.name}|${color}`;
-      next.set(key, { lngLat, signature });
-
-      let entry = labels.get(key);
-      if (!entry) {
-        const element = document.createElement('div');
-        element.className = 'zone-marker';
-        entry = { marker: new classes.Marker({ element, anchor: 'center' }).setLngLat(lngLat).addTo(map), element, signature: null };
-        labels.set(key, entry);
-      }
-      if (entry.signature !== signature) {
-        entry.signature = signature;
-        entry.element.innerHTML = zoneLabelHtml(geo.name, color);
-      }
-      entry.marker.setLngLat(lngLat);
-    });
-
-    labels.forEach((entry, key) => {
-      if (next.has(key)) return;
-      entry.marker.remove();
-      labels.delete(key);
-    });
-  }, [active, selectedVehicle?.position]);
-
-  return null;
 };
-
-export default MapGeofences;

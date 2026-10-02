@@ -13,7 +13,7 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
 
   const toggleLayer = (layerId) => {
     if (layerId === 'satellite') {
-      onBaseLayerChange(baseLayer === 'satellite' ? 'light' : 'satellite')
+      onBaseLayerChange(baseLayer === 'satellite' ? 'dark' : 'satellite')
       return
     }
     setExtraLayers((prev) => (prev.includes(layerId) ? prev.filter((l) => l !== layerId) : [...prev, layerId]))
@@ -21,13 +21,6 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
 
   const isLayerActive = (layerId) =>
     layerId === 'satellite' ? baseLayer === 'satellite' : extraLayers.includes(layerId)
-
-  // El mapa ya no depende de una clave: alterna claro -> satélite -> oscuro.
-  const toggleTheme = () => {
-    if (baseLayer === 'satellite') onBaseLayerChange?.('dark')
-    else if (baseLayer === 'dark') onBaseLayerChange?.('light')
-    else onBaseLayerChange?.('satellite')
-  }
 
   const hasPosition = Boolean(entity?.position)
   const heading = Math.round(entity?.bearing ?? 0)
@@ -48,7 +41,7 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
             <button
               key={layer.id}
               type="button"
-              onClick={() => (layer.id === 'satellite' ? toggleTheme() : toggleLayer(layer.id))}
+              onClick={() => toggleLayer(layer.id)}
               aria-label={`Activar capa ${layer.label}`}
               aria-pressed={active}
               className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] transition-all sm:px-3 ${

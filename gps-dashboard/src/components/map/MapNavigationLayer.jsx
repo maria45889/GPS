@@ -1,30 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
-import { featureCollection, lineFeature } from '../../lib/mapGeo';
+import React, { useEffect, useRef, useState } from 'react';
+import { Polyline } from 'react-leaflet';
 import { fetchDrivingRoute } from '../../lib/routing';
-import { ensureGeoJsonSource, ensureLayer, scheduleGeoJsonUpdate } from './geoLayer';
-import { useMapEffect } from './MapContext';
 
-const SOURCE = 'gps-nav-route';
-const GLOW_LAYER = 'gps-nav-glow';
-const LINE_LAYER = 'gps-nav-line';
-const RECALC_MS = 8000;
-
-/**
- * Ruta de navegación hacia el dispositivo. La lógica de consulta (OSRM, sin key) queda
- * igual; sólo cambia el desenho de la línea, que pasa a ser vectorial con capa propia.
- */
 export const MapNavigationLayer = ({
   isFollowingRoute,
-  originPosition,
-  targetPosition,
-  followRoute = [],
+  originPosition, // origin.position or userLocation.position
+  targetPosition, // selectedVehicle.position
+  followRoute = [], // active route ahead or projected path
   onNavStateChange,
 }) => {
   const [navRoute, setNavRoute] = useState([]);
+
   const latestOriginRef = useRef(originPosition);
   const latestTargetRef = useRef(targetPosition);
   const onNavStateChangeRef = useRef(onNavStateChange);
 
+  // Keep refs updated to avoid re-triggering the interval effect
   useEffect(() => {
     latestOriginRef.current = originPosition;
     latestTargetRef.current = targetPosition;
@@ -41,76 +32,76 @@ export const MapNavigationLayer = ({
     let controller = null;
 
     const loadRoute = async () => {
-      const origin = latestOriginRef.current;
+      const originPos = latestOriginRef.current;
       const destination = latestTargetRef.current;
-      if (!origin || !destination) return;
+      if (!originPos || !destination) return;
 
-      controller?.abort();
+      if (controller) {
+        controller.abort();
+      }
+      
       const ctrl = new AbortController();
       controller = ctrl;
       try {
-        const result = await fetchDrivingRoute(origin, destination, { signal: ctrl.signal });
+        const result = await fetchDrivingRoute(originPos, destination, { signal: ctrl.signal });
         if (!active) return;
         if (result) {
           setNavRoute(result.coords);
-          onNavStateChangeRef.current?.({
-            navRoute: result.coords,
-            navMeta: { distanceM: result.distanceM, durationS: result.durationS },
-            navError: false,
-          });
+          if (onNavStateChangeRef.current) onNavStateChangeRef.current({ navRoute: result.coords, navMeta: { distanceM: result.distanceM, durationS: result.durationS }, navError: false });
         } else {
           setNavRoute([]);
-          onNavStateChangeRef.current?.({ navRoute: [], navMeta: null, navError: true });
+          if (onNavStateChangeRef.current) onNavStateChangeRef.current({ navRoute: [], navMeta: null, navError: true });
         }
       } catch (err) {
-        if (!active || err?.name === 'AbortError') return;
+        if (!active) return;
+        if (err.name === 'AbortError') return;
         setNavRoute([]);
-        onNavStateChangeRef.current?.({ navRoute: [], navMeta: null, navError: true });
+        if (onNavStateChangeRef.current) onNavStateChangeRef.current({ navRoute: [], navMeta: null, navError: true });
       }
     };
 
+    // Initial load
     loadRoute();
-    const interval = setInterval(loadRoute, RECALC_MS);
 
+    // Recalcular conforme el dispositivo avanza (cada 8s en modo seguimiento).
+    const interval = setInterval(loadRoute, 8000);
+    
     return () => {
       active = false;
-      controller?.abort();
+      if (controller) controller.abort();
       clearInterval(interval);
     };
-  }, [isFollowingRoute]);
+  }, [isFollowingRoute]); // We ONLY depend on isFollowingRoute now!
 
-  const positions = navRoute.length >= 2 ? navRoute : followRoute;
+  return (
+    <>
+      {isFollowingRoute && navRoute.length >= 2 && (
+        <>
+          <Polyline
+            positions={navRoute}
+            className="route-follow"
+            pathOptions={{ color: '#22d3ee', weight: 4.5, opacity: 0.95, dashArray: '8 12', lineCap: 'round', lineJoin: 'round' }}
+          />
+          <Polyline
+            positions={navRoute}
+            pathOptions={{ color: '#22d3ee', weight: 11, opacity: 0.18 }}
+          />
+        </>
+      )}
 
-  useMapEffect((map) => {
-    ensureGeoJsonSource(map, SOURCE);
-    ensureLayer(map, {
-      id: GLOW_LAYER,
-      type: 'line',
-      source: SOURCE,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#22d3ee', 'line-width': 11, 'line-opacity': 0.18 },
-    });
-    ensureLayer(map, {
-      id: LINE_LAYER,
-      type: 'line',
-      source: SOURCE,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': '#22d3ee',
-        'line-width': 4.5,
-        'line-opacity': 0.95,
-        'line-dasharray': [3, 2],
-      },
-    });
-
-    scheduleGeoJsonUpdate(
-      map,
-      SOURCE,
-      featureCollection([isFollowingRoute && positions?.length >= 2 ? lineFeature(positions) : null]),
-    );
-  }, [isFollowingRoute, positions]);
-
-  return null;
+      {isFollowingRoute && navRoute.length < 2 && followRoute.length >= 2 && (
+        <>
+          <Polyline
+            positions={followRoute}
+            className="route-follow"
+            pathOptions={{ color: '#22d3ee', weight: 4.5, opacity: 0.95, dashArray: '8 12', lineCap: 'round', lineJoin: 'round' }}
+          />
+          <Polyline
+            positions={followRoute}
+            pathOptions={{ color: '#22d3ee', weight: 11, opacity: 0.18 }}
+          />
+        </>
+      )}
+    </>
+  );
 };
-
-export default MapNavigationLayer;

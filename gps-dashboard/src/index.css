@@ -96,7 +96,10 @@
   border-color: rgba(0,230,118,0.4);
 }
 
+/* Leaflet map styling */
+.leaflet-container { background: #04060a !important; font-family: inherit !important; }
 
+.user-location-pin { background: transparent !important; border: 0 !important; }
 .user-location-dot {
   width: 20px;
   height: 20px;
@@ -114,6 +117,8 @@
   background: #ffffff;
 }
 
+/* Marcador visual del punto de partida manual */
+.origin-pin { background: transparent !important; border: 0 !important; }
 .origin-flag {
   position: relative;
   width: 26px;
@@ -142,6 +147,17 @@
   box-shadow: 0 0 6px rgba(34,211,238,0.8);
 }
 
+/* Midnight green GIS filter for map tiles */
+.cyber-tiles .leaflet-tile {
+  opacity: 1 !important;
+  filter: none !important;
+  transition: filter 0.5s ease;
+}
+
+/* El mapa base usará sus colores originales para máxima claridad y lectura de las calles. */
+.cyber-tiles.dark-mode .leaflet-tile-pane {
+  filter: brightness(0.9) contrast(1.05) !important;
+}
 
 .header-status,
 .header-signal-actions {
@@ -199,6 +215,13 @@
     display: none !important;
   }
 
+  .cyber-tiles .leaflet-tile {
+    filter: none !important;
+  }
+
+  .leaflet-container {
+    min-height: 280px;
+  }
 
   .mobile-menu-button {
     display: flex !important;
@@ -511,8 +534,46 @@
   }
 }
 
+.leaflet-control-zoom { display: none !important; }
 
+.leaflet-control-attribution {
+  background: linear-gradient(135deg, rgba(7,9,12,0.8) 0%, rgba(10,15,26,0.7) 100%) !important;
+  color: #475569 !important;
+  font-size: 9px !important;
+  backdrop-filter: blur(12px);
+  border-radius: 8px 0 0 0;
+  border: 1px solid rgba(0,230,118,0.1);
+}
+.leaflet-control-attribution a { color: #00E676 !important; transition: color 0.2s ease; }
+.leaflet-control-attribution a:hover { color: #00F0FF !important; }
 
+/* Dark Glassmorphism Popups — enhanced neon accent */
+.dark-popup .leaflet-popup-content-wrapper {
+  background: linear-gradient(135deg, rgba(10,16,28,0.95) 0%, rgba(6,9,18,0.92) 100%) !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(0,230,118,0.4) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 40px -6px rgba(0,0,0,0.9), 0 0 25px rgba(0,230,118,0.15), 0 0 50px rgba(0,180,216,0.1), inset 0 1px 1px rgba(255,255,255,0.1) !important;
+  backdrop-filter: blur(24px) saturate(200%) !important;
+  padding: 3px !important;
+  transition: all 0.3s ease;
+}
+.dark-popup .leaflet-popup-content { margin: 14px 16px !important; line-height: 1.6 !important; }
+.dark-popup .leaflet-popup-tip-container { overflow: visible !important; }
+.dark-popup .leaflet-popup-tip {
+  background: linear-gradient(135deg, rgba(10,16,28,0.98) 0%, rgba(6,9,18,0.95) 100%) !important;
+  border: 1px solid rgba(0,230,118,0.35) !important;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.8), 0 0 15px rgba(0,230,118,0.2) !important;
+}
+.dark-popup .leaflet-popup-close-button {
+  color: #64748B !important; padding: 10px 12px !important;
+  font-size: 18px !important; font-weight: 300 !important; transition: all 0.3s ease !important;
+}
+.dark-popup .leaflet-popup-close-button:hover { 
+  color: #00E676 !important; 
+  background: rgba(0,230,118,0.1) !important;
+  border-radius: 8px;
+}
 
 /* Professional Sci-Fi Dashboard Theme */
 .reference-dashboard {
@@ -640,8 +701,18 @@
   border-radius: 12px;
 }
 
+.reference-dashboard .cyber-tiles .leaflet-tile {
+  filter: brightness(0.7) contrast(1.2) hue-rotate(100deg) !important;
+}
 
+.reference-dashboard .leaflet-container {
+  background: transparent !important;
+}
 
+.reference-dashboard .leaflet-control-attribution {
+  background: rgba(6, 19, 31, 0.85) !important;
+  border-color: #1a4054 !important;
+}
 
 .reference-dashboard .map-alerts-card {
   position: absolute;
@@ -765,7 +836,9 @@
 .vehicle-delete-confirmation > div { display: flex; gap: 5px; margin-top: 7px; }
 .vehicle-delete-confirmation button { flex: 1; min-height: 30px; }
 .vehicle-delete-confirmation .confirm-delete { color: #ffdfe2; background: #7b3040; border-color: #b34b5e; }
+.heading-arrow-pin { background: transparent !important; border: 0 !important; pointer-events: none; }
 .heading-arrow { color: #dffcff; font-size: 18px; line-height: 24px; text-shadow: 0 0 8px #17d9dc; transform-origin: 50% 50%; }
+.leaflet-marker-icon { transition: transform .65s cubic-bezier(.22,.61,.36,1); }
 .map-secondary-controls { display: flex; gap: 6px; align-items: center; padding: 6px; background: rgba(13,20,36,.9); border: 1px solid rgba(34,211,238,.3); border-radius: 10px; backdrop-filter: blur(14px); }
 .map-secondary-controls button { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 36px; min-height: 34px; padding: 0 8px; color: #67e8f9; border-radius: 6px; font-size: 10px; font-weight: 700; }
 .map-secondary-controls button:hover { background: rgba(34,211,238,.16); }
@@ -1057,6 +1130,19 @@
   }
 }
 
+/* Geofence polygon - enhanced glow effects */
+.geofence-polygon path {
+  stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px rgba(0,230,118,0.5)); 
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.geofence-polygon:hover path {
+  fill-opacity: 0.12 !important; stroke-opacity: 1 !important;
+  stroke-width: 2.5px !important; 
+  filter: drop-shadow(0 0 15px rgba(0,230,118,1)), drop-shadow(0 0 30px rgba(0,180,216,0.5));
+}
+
+.zone-label-icon { background: transparent !important; border: none !important; }
 
 /* Enhanced animations */
 @keyframes routeGlow { 
@@ -1213,6 +1299,21 @@
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
 }
 
+/* Mapa: neón cian sobre base oscura */
+.cmd-center .cyber-tiles .leaflet-tile {
+  filter: saturate(1.9) hue-rotate(158deg) brightness(0.88) contrast(1.28) !important;
+}
+
+/* Ruta a seguir animada (dash que fluye por la carretera) */
+.route-follow {
+  animation: cmd-route-flow 1.4s linear infinite;
+}
+@keyframes cmd-route-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
 /* Grid HUD decorativo */
 .cmd-grid {
   background-image:
@@ -1235,6 +1336,19 @@
   border-radius: 999px;
 }
 
+/* Leaflet en dark mode profundo */
+.cmd-center .leaflet-container {
+  background: #050811 !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+.cmd-center .leaflet-control-attribution {
+  background: rgba(5, 8, 17, 0.75) !important;
+  color: #334155 !important;
+  font-size: 9px !important;
+}
+.cmd-center .leaflet-control-attribution a {
+  color: #0e7490 !important;
+}
 
 /* Paneles glass */
 .cmd-glass {
@@ -1259,345 +1373,3 @@
     z-index: 99;
   }
 }
-
-/* ============================================================
-   Mapa MapLibre GL: contenedor, marcadores y popups
-   ============================================================ */
-
-/* Caja de layout: nosotros controlamos el tamaño.
-   El contenedor de MapLibre va dentro porque `.maplibregl-map { position: relative }`
-   (CSS de la librería) gana la cascada y colapsaba el alto del mapa. */
-.gps-map-shell {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-}
-
-.gps-map-canvas {
-  width: 100%;
-  height: 100%;
-  background: #eef1f4;
-  font-family: inherit;
-}
-
-.gps-map-canvas canvas {
-  outline: none;
-}
-
-/* Antes de que cargue el estilo vectorial evitamos el destello blanco del HUD */
-.gps-map-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, #eef1f4 0%, #dfe5ea 100%);
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.maplibregl-canvas:focus-visible { outline: 2px solid #22d3ee; outline-offset: -2px; }
-
-/* Los marcadores no deben arrastrar el mapa: sólo el lienzo rota. */
-.maplibregl-marker { will-change: transform; }
-.fleet-marker, .alert-marker, .zone-marker, .waypoint-marker, .origin-marker, .user-location-marker {
-  cursor: pointer;
-}
-.fleet-heading { pointer-events: none; }
-.heading-arrow {
-  color: #dffcff;
-  font-size: 18px;
-  line-height: 18px;
-  text-shadow: 0 0 8px #17d9dc;
-  transform-origin: 50% 50%;
-}
-
-/* Punto azul del usuario */
-.user-location-dot {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  border: 3px solid #ffffff;
-  border-radius: 50%;
-  background: #168ca4;
-  box-shadow: 0 0 0 6px rgba(22, 140, 164, 0.18), 0 2px 10px rgba(22, 140, 164, 0.45);
-}
-.user-location-dot span {
-  display: block;
-  width: 6px;
-  height: 6px;
-  margin: 4px auto;
-  border-radius: 50%;
-  background: #ffffff;
-}
-
-/* Punto de partida manual */
-.origin-flag { position: relative; width: 26px; height: 34px; }
-.origin-flag::before {
-  content: '';
-  position: absolute;
-  left: 10px;
-  top: 0;
-  width: 16px;
-  height: 18px;
-  background: linear-gradient(180deg, rgba(34,211,238,0.5) 0%, rgba(6,182,212,0.5) 100%);
-  border: 1px solid rgba(165,243,252,0.55);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 74%, 0 100%);
-  filter: drop-shadow(0 0 6px rgba(34,211,238,0.7));
-}
-.origin-flag::after {
-  content: '';
-  position: absolute;
-  left: 12px;
-  top: 16px;
-  width: 2px;
-  height: 18px;
-  background: rgba(165,243,252,0.9);
-  box-shadow: 0 0 6px rgba(34,211,238,0.8);
-}
-
-/* Pin del vehículo seleccionado */
-.pin-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: max-content;
-}
-.pin-hero-card {
-  padding: 5px 12px;
-  margin-bottom: 8px;
-  text-align: center;
-  white-space: nowrap;
-  background: linear-gradient(135deg, rgba(16, 23, 38, 0.98) 0%, rgba(10, 15, 26, 0.95) 100%);
-  border: 1px solid rgba(0, 240, 255, 0.6);
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 15px rgba(0, 240, 255, 0.3);
-  backdrop-filter: blur(10px);
-}
-.pin-hero-name {
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.2;
-  color: #ffffff;
-  text-shadow: 0 0 10px rgba(0,240,255,0.5);
-}
-.pin-hero-id {
-  font-family: monospace;
-  font-size: 9px;
-  letter-spacing: 0.5px;
-  color: #94a3b8;
-}
-.pin-hero-marker {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-}
-.pin-pulse {
-  position: absolute;
-  border-radius: 50%;
-}
-.pin-pulse-a {
-  width: 52px;
-  height: 52px;
-  background: radial-gradient(circle, rgba(0, 240, 255, 0.25) 0%, rgba(0,230,118, 0.1) 70%, transparent 100%);
-  box-shadow: 0 0 25px rgba(0,230,118,0.4);
-  animation: gpsPulse 2s infinite;
-}
-.pin-pulse-b {
-  width: 44px;
-  height: 44px;
-  background: rgba(0, 240, 255, 0.15);
-  box-shadow: 0 0 20px rgba(0,240,255,0.3);
-  animation: gpsPulse 2s infinite 0.5s;
-}
-.pin-hero-body {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  background: linear-gradient(135deg, #00E676 0%, #00B4D8 50%, #0096C9 100%);
-  border: 2px solid #ffffff;
-  border-radius: 50% 50% 50% 0;
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.9), 0 0 40px rgba(0,230,118,0.4);
-  transform: rotate(-45deg);
-}
-.pin-hero-body svg { width: 18px; height: 18px; transform: rotate(45deg); }
-
-@keyframes gpsPulse {
-  0% { transform: scale(0.85); opacity: 0.9; }
-  70% { transform: scale(1.25); opacity: 0; }
-  100% { transform: scale(1.25); opacity: 0; }
-}
-
-/* Pins de flota */
-.fleet-pin {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-}
-.fleet-pin-glow {
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  animation: gpsPulse 3s infinite;
-}
-.fleet-pin-halo {
-  position: absolute;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 1px solid currentColor;
-}
-.fleet-pin-core {
-  position: relative;
-  width: 16px;
-  height: 16px;
-  border: 2px solid #ffffff;
-  border-radius: 50%;
-}
-
-/* Alertas */
-.alert-pin {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-}
-.alert-pin-ping {
-  position: absolute;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  animation: gpsPing 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-.alert-pin-core {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: #0D1424;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 800;
-  color: #ffffff;
-}
-
-@keyframes gpsPing {
-  0% { transform: scale(0.7); opacity: 0.85; }
-  100% { transform: scale(1.6); opacity: 0; }
-}
-
-/* Waypoints y etiquetas de zona */
-.waypoint-pin {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: linear-gradient(135deg, #0D1424 0%, #0A0F1A 100%);
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 800;
-}
-.waypoint-pin span { position: relative; z-index: 1; text-shadow: 0 0 10px currentColor; }
-.waypoint-pin-glow { position: absolute; inset: 0; border-radius: 50%; }
-
-.zone-label {
-  padding: 4px 10px;
-  white-space: nowrap;
-  background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(10, 15, 26, 0.9) 100%);
-  border: 1px dashed currentColor;
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  backdrop-filter: blur(8px);
-  cursor: default;
-}
-
-/* Popups: el wrapper de MapLibre usa .gps-popup */
-.maplibregl-popup.gps-popup .maplibregl-popup-content {
-  padding: 0;
-  background: linear-gradient(135deg, rgba(10,16,28,0.97) 0%, rgba(6,9,18,0.95) 100%);
-  border: 1px solid rgba(0,230,118,0.4);
-  border-radius: 16px;
-  box-shadow: 0 20px 40px -6px rgba(0,0,0,0.9), 0 0 25px rgba(0,230,118,0.15), inset 0 1px 1px rgba(255,255,255,0.1);
-  color: #f8fafc;
-  backdrop-filter: blur(24px) saturate(200%);
-}
-.maplibregl-popup.gps-popup .maplibregl-popup-tip { border-top-color: rgba(8,13,22,0.96); border-bottom-color: rgba(8,13,22,0.96); }
-.maplibregl-popup.gps-popup a { color: #00e676; }
-.maplibregl-popup-close-button {
-  z-index: 2;
-  padding: 2px 8px;
-  color: #64748b;
-  font-size: 18px;
-  line-height: 1;
-  transition: color 0.2s ease;
-}
-.maplibregl-popup-close-button:hover { color: #00e676; background: transparent; }
-
-.popup-card { min-width: 170px; padding: 14px 16px; }
-.popup-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-}
-.popup-title { font-size: 13px; font-weight: 700; color: #ffffff; }
-.popup-time { font-family: monospace; font-size: 10px; color: #94a3b8; }
-.popup-alert-icon { font-size: 16px; }
-.popup-body { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #94a3b8; }
-.popup-body strong { color: #ffffff; font-family: monospace; }
-.popup-desc { margin: 6px 0; font-size: 11px; line-height: 1.4; color: #cbd5e1; }
-.popup-meta { margin-top: 6px; font-family: monospace; font-size: 10px; color: #00e676; }
-.popup-accent { color: #00e676; font-family: monospace; }
-.zone-dot { width: 8px; height: 8px; border-radius: 50%; }
-
-.badge {
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.badge-active { background: rgba(0,230,118,0.15); color: #00e676; }
-.badge-stopped { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.badge-offline { background: rgba(244,63,94,0.15); color: #fb7185; }
-
-.popup-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.popup-btn {
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid;
-  font-size: 10px;
-  font-weight: 700;
-  transition: background 0.15s ease;
-}
-.popup-btn-block { width: 100%; margin-top: 12px; }
-.popup-btn-cyan { background: rgba(34,211,238,0.1); border-color: rgba(34,211,238,0.3); color: #a5f3fc; }
-.popup-btn-cyan:hover { background: rgba(34,211,238,0.2); }
-.popup-btn-emerald { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.3); color: #a7f3d0; }
-.popup-btn-emerald:hover { background: rgba(52,211,153,0.2); }
-.popup-btn:not(.popup-btn-cyan):not(.popup-btn-emerald) { background: rgba(0,230,118,0.2); border-color: rgba(0,230,118,0.4); color: #00e676; }
-.popup-btn:not(.popup-btn-cyan):not(.popup-btn-emerald):hover { background: rgba(0,230,118,0.3); }

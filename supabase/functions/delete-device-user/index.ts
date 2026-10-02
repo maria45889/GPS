@@ -254,13 +254,8 @@ serve(async (req) => {
   if (targetAuthUserId) {
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetAuthUserId)
     if (deleteError) {
-      // Ignorar error si el usuario ya no existe en Auth (404 Not Found)
-      if (deleteError.status === 404 || (deleteError.message && deleteError.message.toLowerCase().includes('not found'))) {
-        console.warn(`User ${targetAuthUserId} already deleted or not found in Auth, continuing...`)
-      } else {
-        console.error(`Error deleting user ${targetAuthUserId}:`, deleteError)
-        return json({ error: 'Failed to delete auth user, aborting vehicle deletion' }, 500)
-      }
+      console.error(`Error deleting user ${targetAuthUserId}:`, deleteError)
+      return json({ error: 'Failed to delete auth user, aborting vehicle deletion' }, 500)
     }
   }
 
