@@ -150,3 +150,39 @@ export const routeDistanceKm = (points = []) => {
   }
   return total / 1000
 }
+export const getGeofenceType = (geofence) => {
+  if (!geofence) return 'allowed'
+  if (geofence.mode) return geofence.mode
+  if (geofence.zoneType) return geofence.zoneType
+  const ruleStr = String(geofence.rule || '').toLowerCase()
+  if (ruleStr.includes('prohibid') || ruleStr.includes('inside') || ruleStr.includes('ingreso no autoriz')) return 'forbidden'
+  if (ruleStr.includes('entrada') || ruleStr.includes('ingreso')) return 'entry'
+  if (ruleStr.includes('salida') || ruleStr.includes('egreso')) return 'exit'
+  return 'allowed'
+}
+
+export const isVehicleInsideGeofence = (vehicle, geofence) => {
+  if (!vehicle?.position || !geofence) return false
+  if (geofence.type === 'polygon') {
+    return isVehicleInsidePolygon(vehicle.position, geofence.positions || geofence.coordinates || [])
+  }
+  if (!geofence.center) return false
+  return isVehicleInsideCircle(vehicle.position, geofence.center, Number(geofence.radius || 600))
+}
+
+export const isGeofenceBreach = (vehicle, geofence) => {
+  const inside = isVehicleInsideGeofence(vehicle, geofence)
+  const type = getGeofenceType(geofence)
+  if (type === 'forbidden' || type === 'entry') return inside
+  if (type === 'exit') return !inside
+  return !inside
+}
+
+export const geofenceStatusText = (geofence, isBreach) => {
+  if (!isBreach) return ''
+  const type = getGeofenceType(geofence)
+  if (type === 'forbidden') return ' · Intrusión: vehículo en zona prohibida'
+  if (type === 'entry') return ' · Entrada registrada'
+  if (type === 'exit') return ' · Salida registrada'
+  return ' · Intrusión: vehículo fuera de zona permitida'
+}

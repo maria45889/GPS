@@ -1,9 +1,35 @@
-import React from 'react';
-import { Marker, Tooltip, Popup, Circle } from 'react-leaflet';
-import { sanitizeAccuracy, normalizeBattery } from '../../lib/queries';
-import { createHeadingIcon, createHeroPinIcon, createFleetPinIcon, createAlertIncidentIcon } from './MapIcons';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { circleFeature, featureCollection, quantize, toLngLat } from '../../lib/mapGeo';
+import { ensureGeoJsonSource, ensureLayer, scheduleGeoJsonUpdate } from './geoLayer';
+import {
+  alertIncidentHtml,
+  alertPopupHtml,
+  fleetPinHtml,
+  headingHtml,
+  heroPinHtml,
+  vehiclePopupHtml,
+} from './MapIcons';
+import { classesOf } from '../../lib/maplibreLoader';
+import { useMapEffect } from './MapContext';
 
-export const MapFleetLayer = React.memo(({
+const ACCURACY_SOURCE = 'gps-fleet-accuracy';
+const ACCURACY_FILL = 'gps-fleet-accuracy-fill';
+const ACCURACY_LINE = 'gps-fleet-accuracy-line';
+
+const buildElement = (className, html) => {
+  const element = document.createElement('div');
+  element.className = className;
+  element.innerHTML = html;
+  return element;
+};
+
+const samePosition = (a, b) => a && b && quantize(a[1]) === quantize(b[1]) && quantize(a[0]) === quantize(b[0]);
+
+/**
+ * Marcadores de la flota como nodos DOM reciclados. Sólo se toca lo que cambia
+ * (posición redondeada, estado, rumbo) y el resto del mapa no se repinta.
+ */
+export const MapFleetLayer = ({
   vehicles,
   category,
   selectedVehicle,
@@ -16,142 +42,210 @@ export const MapFleetLayer = React.memo(({
   routeColor,
   alertMarkerRefs,
 }) => {
-  const createVehicleEventHandlers = React.useCallback((v) => ({
-    click: () => onSelectVehicle?.(v),
-  }), [onSelectVehicle]);
+  // Almacén perezoso de marcadores: se crea una vez y se reutiliza entre renders.
+  const [store] = useState(() => ({ entries: new Map(), vehicles: new Map(), alerts: new Map() }));
+  const callbacksRef = useRef({});
 
-  const createAlertEventHandlers = React.useCallback((alert) => ({
-    click: () => onSelectAlert?.(alert),
-  }), [onSelectAlert]);
+  useEffect(() => {
+    callbacksRef.current = { onSelectVehicle, onSelectAlert, onToggleRouteFollow, onShareRoute };
+  }, [onSelectVehicle, onSelectAlert, onToggleRouteFollow, onShareRoute]);
 
-  return (
-    <>
-      {/* Selected Primary Vehicle Pulsing Target Halo */}
-      {selectedVehicle?.position && (
-        <Circle 
-          center={selectedVehicle.position}
-          radius={80}
-          pathOptions={{
-            color: routeColor,
-            fillColor: routeColor,
-            fillOpacity: 0.12,
-            weight: 1.5,
-            dashArray: '4, 4',
-          }}
-        />
-      )}
-
-      {/* Fleet Vehicle Pins */}
-      {vehicles.filter((v) => v.position || v.historicalPosition).map((v) => {
-        const pos = v.position || v.historicalPosition;
-        const isSelected = selectedVehicle?.id === v.id;
-        const isOffline = !v.position;
-
-        return (
-          <React.Fragment key={v.id}>
-            {!isOffline && v.bearing !== undefined && (
-              <Marker position={pos} icon={createHeadingIcon(v.bearing)} interactive={false} />
-            )}
-            <Marker
-              position={pos}
-              icon={isSelected ? createHeroPinIcon(v.name, v.id) : createFleetPinIcon(isOffline ? 'offline' : v.status)}
-              eventHandlers={createVehicleEventHandlers(v)}
-            >
-              {isOffline ? (
-                <Tooltip direction="top" offset={[0, -18]} opacity={0.95}>
-                  <span>Sin señal · última posición conocida · {v.lastUpdate || '--'}</span>
-                </Tooltip>
-              ) : (
-                <Tooltip direction="top" offset={[0, -18]} opacity={0.95}>
-                  <span>{v.speed || 0} km/h · precisión {sanitizeAccuracy(v.accuracy) !== null ? `${sanitizeAccuracy(v.accuracy)} m` : '--'} · {v.lastUpdate || 'sin reporte'}</span>
-                </Tooltip>
-              )}
-            <Popup className="dark-popup">
-              <div className="text-xs min-w-[170px]">
-                <div className="flex items-center justify-between mb-1.5 pb-1.5 border-b border-white/10">
-                  <span className="font-bold text-white text-sm">{v.name}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                    v.status === 'active' ? 'bg-[#00E676]/15 text-[#00E676]' : 
-                    v.status === 'stopped' ? 'bg-amber-400/15 text-amber-400' : 'bg-rose-500/15 text-rose-400'
-                  }`}>
-                    {v.status === 'active' ? 'En ruta' : v.status === 'stopped' ? 'Detenido' : 'Offline'}
-                  </span>
-                </div>
-                <div className="space-y-1 text-[11px] text-[#94A3B8]">
-                  <p>Velocidad: <strong className="text-white font-mono">{v.speed} km/h</strong></p>
-                  <p>Batería: <strong className="text-white font-mono">{normalizeBattery(v.battery)}%</strong></p>
-                  {v.driver && <p>Conductor: <span className="text-white">{v.driver}</span></p>}
-                  <p>{category === 'vehicles' ? 'Placa:' : 'ID:'} <span className="text-[#00E676] font-mono">{v.plate}</span></p>
-                </div>
-                {!isSelected ? (
-                  <button
-                    type="button"
-                    onClick={() => onSelectVehicle?.(v)}
-                    aria-label={`Seleccionar ${v.name || v.plate || v.id}`}
-                    className="mt-3 w-full py-1.5 px-2 rounded-md bg-[#00E676]/20 hover:bg-[#00E676]/30 border border-[#00E676]/40 text-[#00E676] text-[10px] font-bold transition-colors"
-                  >
-                    Seleccionar {category === 'vehicles' ? 'moto' : 'dispositivo'}
-                  </button>
-                ) : (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onToggleRouteFollow?.()}
-                      aria-label={isFollowingRoute ? 'Dejar de seguir la ruta' : 'Seguir la ruta del dispositivo'}
-                      className="rounded-md border border-cyan-400/30 bg-cyan-400/10 px-2 py-1.5 text-[10px] font-bold text-cyan-200"
-                    >
-                      {isFollowingRoute ? 'Siguiendo' : 'Seguir ruta'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onShareRoute?.()}
-                      aria-label="Compartir ubicación y ruta"
-                      className="rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 py-1.5 text-[10px] font-bold text-emerald-200"
-                    >
-                      Compartir
-                    </button>
-                  </div>
-                )}
-              </div>
-            </Popup>
-            </Marker>
-          </React.Fragment>
-        );
-      })}
-
-      {/* Active Incident Alarms on Map */}
-      {alerts.filter(a => a.status !== 'resolved' && Number.isFinite(a.lat) && Number.isFinite(a.lng)).map((alert) => (
-        <Marker
-          key={alert.id}
-          ref={(marker) => { if (marker) alertMarkerRefs.current[alert.id] = marker; }}
-          position={[alert.lat, alert.lng]}
-          icon={createAlertIncidentIcon(alert.severity)}
-          eventHandlers={createAlertEventHandlers(alert)}
-        >
-          <Popup className="dark-popup">
-            <div className="text-xs min-w-[190px]">
-              <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
-                <span className="text-base">{alert.severity === 'critical' ? '!' : 'ALERTA'}</span>
-                <div>
-                  <span className="font-bold text-white text-xs block leading-tight">{alert.title}</span>
-                  <span className="text-[10px] text-slate-400 font-mono">{alert.timestamp}</span>
-                </div>
-              </div>
-              <p className="text-[11px] text-[#94A3B8] my-1 leading-snug">{alert.description}</p>
-              <div className="text-[10px] text-[#00E676] font-mono mt-1 mb-2">
-                {category === 'devices' ? 'Dispositivo' : 'Moto'}: {alert.vehicleName} - {alert.speed} km/h
-              </div>
-              <button
-                onClick={() => onSelectAlert && onSelectAlert(alert)}
-                aria-label={`Ver alerta: ${alert.title}`}
-                className="w-full py-1.5 px-2 rounded-lg bg-[#00E676]/15 hover:bg-[#00E676]/25 border border-[#00E676]/40 text-[#00E676] text-[11px] font-bold transition-all shadow-[0_0_10px_rgba(0,240,255,0.2)]"
-              >
-                Ver alerta
-              </button>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </>
+  const visible = useMemo(
+    () => (vehicles || []).filter((v) => v.position || v.historicalPosition),
+    [vehicles],
   );
-});
+  const activeAlerts = useMemo(
+    () => (alerts || []).filter(
+      (alert) => alert.status !== 'resolved' && Number.isFinite(Number(alert.lat)) && Number.isFinite(Number(alert.lng)),
+    ),
+    [alerts],
+  );
+  const selectedPosition = selectedVehicle?.position || null;
+
+  // Halo de precisión del vehículo seleccionado.
+  useMapEffect((map) => {
+    ensureGeoJsonSource(map, ACCURACY_SOURCE);
+    ensureLayer(map, {
+      id: ACCURACY_FILL,
+      type: 'fill',
+      source: ACCURACY_SOURCE,
+      paint: { 'fill-color': ['coalesce', ['get', 'color'], '#00E676'], 'fill-opacity': 0.1 },
+    });
+    ensureLayer(map, {
+      id: ACCURACY_LINE,
+      type: 'line',
+      source: ACCURACY_SOURCE,
+      paint: {
+        'line-color': ['coalesce', ['get', 'color'], '#00E676'],
+        'line-width': 1.6,
+        'line-dasharray': [3, 3],
+        'line-opacity': 0.85,
+      },
+    });
+    scheduleGeoJsonUpdate(
+      map,
+      ACCURACY_SOURCE,
+      featureCollection([selectedPosition ? circleFeature(selectedPosition, 80, { color: routeColor }) : null]),
+    );
+  }, [selectedPosition, routeColor]);
+
+  // Botones de los popups por delegación: un listener en vez de uno por marcador.
+  useMapEffect((map) => {
+    const container = map.getContainer?.();
+    if (!container) return undefined;
+
+    const onPopupClick = (event) => {
+      const button = event.target.closest?.('[data-action]');
+      if (!button) return;
+      const card = button.closest('[data-vehicle-id],[data-alert-id]');
+      if (!card) return;
+      event.stopPropagation();
+
+      const action = button.getAttribute('data-action');
+      if (action === 'alert') {
+        const alert = store.alerts.get(card.getAttribute('data-alert-id'));
+        if (alert) callbacksRef.current.onSelectAlert?.(alert);
+        return;
+      }
+
+      const vehicle = store.vehicles.get(card.getAttribute('data-vehicle-id'));
+      if (!vehicle) return;
+      if (action === 'select') callbacksRef.current.onSelectVehicle?.(vehicle);
+      if (action === 'follow') callbacksRef.current.onToggleRouteFollow?.();
+      if (action === 'share') callbacksRef.current.onShareRoute?.();
+    };
+
+    container.addEventListener('click', onPopupClick);
+    return () => container.removeEventListener('click', onPopupClick);
+  }, []);
+
+  // Marcadores de dispositivos, motos y alertas.
+  useMapEffect((map) => {
+    const classes = classesOf(map);
+    const liveVehicles = new Map();
+    const liveAlerts = new Map();
+
+    visible.forEach((vehicle) => {
+      const position = vehicle.position || vehicle.historicalPosition;
+      const lngLat = toLngLat(position);
+      if (!lngLat) return;
+
+      const isSelected = selectedVehicle?.id === vehicle.id;
+      const isOffline = !vehicle.position;
+      const status = isOffline ? 'offline' : vehicle.status;
+      const signature = [
+        vehicle.id,
+        isSelected ? 'hero' : 'fleet',
+        status,
+        Math.round(Number(vehicle.bearing) || 0),
+        isSelected ? vehicle.name : '',
+      ].join('|');
+
+      liveVehicles.set(vehicle.id, vehicle);
+
+      let entry = store.entries.get(vehicle.id);
+      if (!entry) {
+        const element = buildElement('fleet-marker');
+        const marker = new classes.Marker({ element, anchor: 'center', pitchAlignment: 'map', rotationAlignment: 'map' })
+          .setLngLat(lngLat)
+          .addTo(map);
+        const headingElement = buildElement('fleet-heading', headingHtml(vehicle.bearing));
+        const headingMarker = new classes.Marker({
+          element: headingElement,
+          anchor: 'center',
+          pitchAlignment: 'map',
+          rotationAlignment: 'map',
+        })
+          .setLngLat(lngLat)
+          .addTo(map);
+        entry = { marker, headingMarker, headingElement, signature: null, position: null };
+        store.entries.set(vehicle.id, entry);
+      }
+
+      if (entry.signature !== signature) {
+        entry.signature = signature;
+        entry.marker.getElement().innerHTML = isSelected ? heroPinHtml(vehicle.name, vehicle.id) : fleetPinHtml(status);
+        entry.headingElement.innerHTML = headingHtml(vehicle.bearing);
+        entry.marker.setPopup(
+          new classes.Popup({
+            offset: isSelected ? 44 : 16,
+            className: 'gps-popup',
+            maxWidth: '280px',
+            focusAfterOpen: false,
+          }).setHTML(vehiclePopupHtml(vehicle, { category, isSelected, isOffline, isFollowingRoute })),
+        );
+      }
+
+      if (!samePosition(entry.position, lngLat)) {
+        entry.position = lngLat;
+        entry.marker.setLngLat(lngLat);
+        entry.headingMarker.setLngLat(lngLat);
+      }
+
+      entry.headingElement.style.display = !isOffline && !isSelected && vehicle.bearing !== undefined ? '' : 'none';
+    });
+
+    activeAlerts.forEach((alert) => {
+      const key = `alert::${alert.id}`;
+      const severity = alert.severity || 'warning';
+      const signature = `${key}|${severity}`;
+      const lngLat = [Number(alert.lng), Number(alert.lat)];
+
+      liveAlerts.set(alert.id, alert);
+
+      let entry = store.entries.get(key);
+      if (!entry) {
+        const element = buildElement('alert-marker');
+        const marker = new classes.Marker({ element, anchor: 'center' })
+          .setLngLat(lngLat)
+          .addTo(map);
+        entry = { marker, signature: null };
+        store.entries.set(key, entry);
+      }
+
+      if (entry.signature !== signature) {
+        entry.signature = signature;
+        entry.marker.getElement().innerHTML = alertIncidentHtml(severity);
+        entry.marker.setPopup(
+          new classes.Popup({ offset: 18, className: 'gps-popup', maxWidth: '280px', focusAfterOpen: false })
+            .setHTML(alertPopupHtml(alert, category)),
+        );
+      }
+
+      if (!samePosition(entry.position, lngLat)) {
+        entry.position = lngLat;
+        entry.marker.setLngLat(lngLat);
+      }
+
+      if (alertMarkerRefs?.current) alertMarkerRefs.current[alert.id] = entry.marker;
+    });
+
+    store.entries.forEach((entry, key) => {
+      if (liveVehicles.has(key) || liveAlerts.has(key.split('::').slice(1).join('::'))) return;
+      if (key.startsWith('alert::') && liveAlerts.has(key.slice(7))) return;
+      entry.marker.remove();
+      entry.headingMarker?.remove();
+      store.entries.delete(key);
+    });
+
+    liveVehicles.forEach((value, key) => store.vehicles.set(key, value));
+    liveAlerts.forEach((value, key) => store.alerts.set(key, value));
+
+    return () => {
+      /* los marcadores viven más que este efecto: se limpian al desmontar el mapa */
+    };
+  }, [visible, selectedVehicle?.id, activeAlerts, category, isFollowingRoute]);
+
+  // Limpieza al desmontar.
+  useMapEffect(() => () => {
+    store.entries.forEach((entry) => {
+      entry.marker?.remove();
+      entry.headingMarker?.remove();
+    });
+    store.entries.clear();
+  }, []);
+
+  return null;
+};
+
+export default MapFleetLayer;

@@ -1,134 +1,9 @@
-import L from 'leaflet';
-
-const iconCache = new Map();
-
-export const getCachedIcon = (key, factory) => {
-  if (!iconCache.has(key)) {
-    iconCache.set(key, factory());
-  }
-  return iconCache.get(key);
-};
-
-export const createUserLocationIcon = () => getCachedIcon('user-location', () => new L.DivIcon({
-  className: 'user-location-pin',
-  html: '<div class="user-location-dot"><span></span></div>',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-}));
-
-export const createOriginIcon = () => getCachedIcon('origin-pin', () => new L.DivIcon({
-  className: 'origin-pin',
-  html: '<div class="origin-flag"><span></span></div>',
-  iconSize: [26, 34],
-  iconAnchor: [13, 32],
-}));
+// Marcadores y popups como HTML plano: MapLibre los monta como nodos del DOM, así que
+// el mismo marcado sirve para los pines del mapa y para los popups.
 
 export const escapeHtml = (str) => {
-  if (typeof str !== 'string') return String(str || '');
+  if (typeof str !== 'string') return String(str ?? '');
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-};
-
-export const createHeroPinIcon = (name, id) => getCachedIcon(`hero-${id}-${name}`, () => new L.DivIcon({
-  className: 'custom-vehicle-pin',
-  html: `
-    <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
-      <div style="
-        background: linear-gradient(135deg, rgba(16, 23, 38, 0.98) 0%, rgba(10, 15, 26, 0.95) 100%);
-        border: 1px solid rgba(0, 240, 255, 0.6);
-        padding: 5px 12px;
-        border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 15px rgba(0, 240, 255, 0.3), 0 0 30px rgba(0,230,118,0.15);
-        text-align: center;
-        margin-bottom: 8px;
-        white-space: nowrap;
-        backdrop-filter: blur(10px);
-      ">
-        <div style="font-size: 12px; font-weight: 800; color: #ffffff; line-height: 1.2; text-shadow: 0 0 10px rgba(0,240,255,0.5);">${escapeHtml(name)}</div>
-        <div style="font-size: 9px; color: #475569; font-family: monospace; letter-spacing: 0.5px;">ID: ${escapeHtml(id)}</div>
-      </div>
-      <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
-        <div style="
-          position: absolute; width: 52px; height: 52px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(0, 240, 255, 0.25) 0%, rgba(0,230,118, 0.1) 70%, transparent 100%);
-          box-shadow: 0 0 25px rgba(0,230,118,0.4), 0 0 50px rgba(0,240,255,0.2); animation: pulse 2s infinite;
-        "></div>
-        <div style="
-          position: absolute; width: 44px; height: 44px; border-radius: 50%;
-          background: rgba(0, 240, 255, 0.15); box-shadow: 0 0 20px rgba(0,240,255,0.3); animation: pulse 2s infinite 0.5s;
-        "></div>
-        <div style="
-          width: 34px; height: 34px; background: linear-gradient(135deg, #00E676 0%, #00B4D8 50%, #0096C9 100%);
-          border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 0 20px rgba(0, 240, 255, 0.9), 0 0 40px rgba(0,230,118,0.4);
-          border: 2px solid #ffffff; display: flex; align-items: center; justify-content: center; position: relative;
-        ">
-          <div style="
-            position: absolute; inset: 0; border-radius: 50% 50% 50% 0;
-            background: linear-gradient(135deg, rgba(255,255,255,0.3) 0%, transparent 50%); transform: rotate(-45deg);
-          "></div>
-          <svg style="transform: rotate(45deg); width: 18px; height: 18px; fill: none; stroke: #0A0F1A; stroke-width: 2.5;" viewBox="0 0 24 24">
-            <circle cx="18.5" cy="17.5" r="3.5" />
-            <circle cx="5.5" cy="17.5" r="3.5" />
-            <circle cx="15" cy="5" r="1" />
-            <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
-          </svg>
-        </div>
-      </div>
-    </div>
-  `,
-  iconSize: [120, 95],
-  iconAnchor: [60, 85],
-}));
-
-export const createFleetPinIcon = (status) => {
-  const color = status === 'active' ? '#00E676' : status === 'stopped' ? '#F59E0B' : '#64748B';
-  const glowColor = status === 'active' ? 'rgba(0,230,118,0.3)' : status === 'stopped' ? 'rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.2)';
-  return getCachedIcon(`fleet-${status}`, () => new L.DivIcon({
-    className: 'mini-vehicle-pin',
-    html: `
-      <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-        <div style="
-          position: absolute; width: 32px; height: 32px; border-radius: 50%;
-          background: radial-gradient(circle, ${glowColor} 0%, transparent 70%);
-          box-shadow: 0 0 15px ${glowColor}; animation: pulse 3s infinite;
-        "></div>
-        <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: ${color}25; border: 1px solid ${color}70;"></div>
-        <div style="
-          width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(135deg, ${color} 0%, ${color}CC 100%);
-          border: 2px solid #ffffff; box-shadow: 0 0 12px ${color}, 0 0 24px ${glowColor}; position: relative;
-        ">
-          <div style="position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4) 0%, transparent 70%);"></div>
-        </div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  }));
-};
-
-export const createWaypointIcon = (label, color = '#00E676') => getCachedIcon(`waypoint-${label}-${color}`, () => new L.DivIcon({
-  className: 'route-waypoint-pin',
-  html: `
-    <div style="
-      width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #0D1424 0%, #0A0F1A 100%);
-      border: 2px solid ${color}; color: ${color}; display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 800; box-shadow: 0 0 15px ${color}, 0 0 30px ${color}40; position: relative;
-    ">
-      <div style="position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, ${color}20 0%, transparent 70%);"></div>
-      <span style="position: relative; z-index: 1; text-shadow: 0 0 10px ${color};">${label}</span>
-    </div>
-  `,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-}));
-
-export const createHeadingIcon = (bearing = 0) => {
-  const roundedBearing = Math.round(Number(bearing) || 0);
-  return getCachedIcon(`heading-${roundedBearing}`, () => new L.DivIcon({
-    className: 'heading-arrow-pin',
-    html: `<div class="heading-arrow" style="transform: rotate(${roundedBearing}deg)">▲</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-  }));
 };
 
 export const sanitizeColorSafe = (color) => {
@@ -140,44 +15,130 @@ export const sanitizeColorSafe = (color) => {
   return '#00E676';
 };
 
-export const createZoneLabel = (name, rawColor = '#00E676') => {
-  const color = sanitizeColorSafe(rawColor);
-  return getCachedIcon(`zone-${name}-${color}`, () => new L.DivIcon({
-    className: 'zone-label-icon',
-    html: `
-      <div style="
-        background: linear-gradient(135deg, rgba(16, 23, 38, 0.95) 0%, rgba(10, 15, 26, 0.9) 100%);
-        border: 1px dashed ${color}; color: ${color}; padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 700;
-        white-space: nowrap; box-shadow: 0 0 15px ${color}40, 0 0 30px ${color}20; backdrop-filter: blur(8px); letter-spacing: 0.5px;
-      ">
-        ${escapeHtml(name)}
-      </div>
-    `,
-    iconSize: [90, 28],
-    iconAnchor: [45, 14],
-  }));
+export const STATUS_COLOR = {
+  active: '#00E676',
+  stopped: '#F59E0B',
+  offline: '#64748B',
 };
 
-export const createAlertIncidentIcon = (severity) => {
+export const userLocationHtml = () => '<div class="user-location-dot"><span></span></div>';
+
+export const originHtml = () => '<div class="origin-flag"><span></span></div>';
+
+export const heroPinHtml = (name, id) => `
+  <div class="pin-stack">
+    <div class="pin-hero-card">
+      <div class="pin-hero-name">${escapeHtml(name)}</div>
+      <div class="pin-hero-id">ID: ${escapeHtml(id)}</div>
+    </div>
+    <div class="pin-hero-marker">
+      <div class="pin-pulse pin-pulse-a"></div>
+      <div class="pin-pulse pin-pulse-b"></div>
+      <div class="pin-hero-body">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#0A0F1A" stroke-width="2.5">
+          <circle cx="18.5" cy="17.5" r="3.5" />
+          <circle cx="5.5" cy="17.5" r="3.5" />
+          <circle cx="15" cy="5" r="1" />
+          <path d="M12 17.5V14l-3-3 4-3 2 3h2" />
+        </svg>
+      </div>
+    </div>
+  </div>`;
+
+export const fleetPinHtml = (status) => {
+  const color = STATUS_COLOR[status] || STATUS_COLOR.offline;
+  return `
+    <div class="fleet-pin" data-status="${escapeHtml(status || 'offline')}">
+      <div class="fleet-pin-glow" style="box-shadow: 0 0 15px ${color}66"></div>
+      <div class="fleet-pin-halo" style="background: ${color}25; border-color: ${color}70"></div>
+      <div class="fleet-pin-core" style="background: linear-gradient(135deg, ${color} 0%, ${color}CC 100%); box-shadow: 0 0 12px ${color}, 0 0 24px ${color}55"></div>
+    </div>`;
+};
+
+export const waypointHtml = (label, color = '#00E676') => `
+  <div class="waypoint-pin" style="border-color: ${color}; color: ${color}; box-shadow: 0 0 15px ${color}, 0 0 30px ${color}40">
+    <div class="waypoint-pin-glow" style="background: radial-gradient(circle, ${color}20 0%, transparent 70%)"></div>
+    <span>${escapeHtml(label)}</span>
+  </div>`;
+
+export const headingHtml = (bearing = 0) => {
+  const rounded = Math.round(Number(bearing) || 0);
+  return `<div class="heading-arrow" style="transform: rotate(${rounded}deg)">▲</div>`;
+};
+
+export const zoneLabelHtml = (name, rawColor = '#00E676') => {
+  const color = sanitizeColorSafe(rawColor);
+  return `
+    <div class="zone-label" style="border-color: ${color}; color: ${color}; box-shadow: 0 0 15px ${color}40, 0 0 30px ${color}20">
+      ${escapeHtml(name)}
+    </div>`;
+};
+
+export const alertIncidentHtml = (severity) => {
   const isCritical = severity === 'critical';
   const color = isCritical ? '#FF3366' : '#F59E0B';
-  return getCachedIcon(`alert-${severity}`, () => new L.DivIcon({
-    className: 'alert-incident-pin',
-    html: `
-      <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-        <div style="
-          position: absolute; width: 34px; height: 34px; border-radius: 50%;
-          background: ${color}35; box-shadow: 0 0 16px ${color}; animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
-        "></div>
-        <div style="
-          width: 24px; height: 24px; border-radius: 50%; background: #0D1424; border: 2px solid ${color};
-          display: flex; align-items: center; justify-content: center; box-shadow: 0 0 12px ${color}; font-size: 11px;
-        ">
-          ${isCritical ? '!' : 'ALERTA'}
-        </div>
+  return `
+    <div class="alert-pin">
+      <div class="alert-pin-ping" style="background: ${color}35; box-shadow: 0 0 16px ${color}"></div>
+      <div class="alert-pin-core" style="border-color: ${color}; box-shadow: 0 0 12px ${color}">
+        ${isCritical ? '!' : 'ALERTA'}
       </div>
-    `,
-    iconSize: [38, 38],
-    iconAnchor: [19, 19],
-  }));
+    </div>`;
 };
+
+const statusBadge = (status) => {
+  if (status === 'active') return '<span class="badge badge-active">En ruta</span>';
+  if (status === 'stopped') return '<span class="badge badge-stopped">Detenido</span>';
+  return '<span class="badge badge-offline">Offline</span>';
+};
+
+export const vehiclePopupHtml = (vehicle, { category = 'devices', isSelected = false, isOffline = false, isFollowingRoute = false } = {}) => {
+  const battery = Number(vehicle.battery);
+  const batteryLabel = Number.isFinite(battery) ? `${Math.round(battery)}%` : '--';
+  const actions = isSelected
+    ? `<div class="popup-actions">
+        <button type="button" class="popup-btn popup-btn-cyan" data-action="follow" aria-label="${isFollowingRoute ? 'Dejar de seguir la ruta' : 'Seguir la ruta del dispositivo'}">${isFollowingRoute ? 'Siguiendo' : 'Seguir ruta'}</button>
+        <button type="button" class="popup-btn popup-btn-emerald" data-action="share" aria-label="Compartir ubicación y ruta">Compartir</button>
+      </div>`
+    : `<button type="button" class="popup-btn popup-btn-block" data-action="select" aria-label="Seleccionar ${escapeHtml(vehicle.name || vehicle.plate || vehicle.id)}">Seleccionar ${category === 'vehicles' ? 'moto' : 'dispositivo'}</button>`;
+
+  return `
+    <div class="popup-card" data-vehicle-id="${escapeHtml(vehicle.id)}">
+      <div class="popup-head">
+        <span class="popup-title">${escapeHtml(vehicle.name || vehicle.id)}</span>
+        ${statusBadge(vehicle.status)}
+      </div>
+      <div class="popup-body">
+        ${isOffline ? '<p class="popup-desc">Sin señal · última posición conocida</p>' : ''}
+        <p>Velocidad: <strong>${escapeHtml(String(vehicle.speed ?? 0))} km/h</strong></p>
+        <p>Batería: <strong>${batteryLabel}</strong></p>
+        ${vehicle.driver ? `<p>Conductor: <span>${escapeHtml(vehicle.driver)}</span></p>` : ''}
+        <p>${category === 'vehicles' ? 'Placa' : 'ID'}: <span class="popup-accent">${escapeHtml(vehicle.plate || vehicle.id || '--')}</span></p>
+      </div>
+      ${actions}
+    </div>`;
+};
+
+export const alertPopupHtml = (alert, category = 'devices') => `
+  <div class="popup-card" data-alert-id="${escapeHtml(alert.id)}">
+    <div class="popup-head">
+      <span class="popup-alert-icon">${alert.severity === 'critical' ? '!' : 'ALERTA'}</span>
+      <div>
+        <span class="popup-title">${escapeHtml(alert.title)}</span>
+        <span class="popup-time">${escapeHtml(alert.timestamp || '')}</span>
+      </div>
+    </div>
+    <p class="popup-desc">${escapeHtml(alert.description || '')}</p>
+    <div class="popup-meta">${category === 'devices' ? 'Dispositivo' : 'Moto'}: ${escapeHtml(alert.vehicleName || '--')} · ${escapeHtml(String(alert.speed ?? 0))} km/h</div>
+    <button type="button" class="popup-btn popup-btn-block" data-action="alert" aria-label="Ver alerta: ${escapeHtml(alert.title)}">Ver alerta</button>
+  </div>`;
+
+export const geofencePopupHtml = ({ name, color = '#00E676', detail = '', rule = 'Supervision' }) => `
+  <div class="popup-card">
+    <div class="popup-head">
+      <span class="zone-dot" style="background:${color}; box-shadow:0 0 8px ${color}"></span>
+      <span class="popup-title">${escapeHtml(name)}</span>
+    </div>
+    <div class="popup-body"><p>${escapeHtml(detail)}</p></div>
+    <div class="popup-meta">Regla: ${escapeHtml(rule)}</div>
+  </div>`;
