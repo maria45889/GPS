@@ -119,9 +119,6 @@ const MapArea = ({
           maxZoom={19}
           maxNativeZoom={19}
           subdomains="abcd"
-          keepBuffer={6}
-          updateWhenZooming={false}
-          updateInterval={150}
         />
 
         <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} onMapHover={onMapHover} />

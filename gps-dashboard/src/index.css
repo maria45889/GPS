@@ -1338,7 +1338,7 @@
 
 /* Leaflet en dark mode profundo */
 .cmd-center .leaflet-container {
-  background: #050811 !important;
+  background: #eef1f4 !important;
   font-family: 'Inter', system-ui, sans-serif !important;
 }
 .cmd-center .leaflet-control-attribution {

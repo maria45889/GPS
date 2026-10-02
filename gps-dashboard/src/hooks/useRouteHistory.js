@@ -16,9 +16,12 @@ export const useRouteHistory = (entity) => {
   const [loading, setLoading] = useState(false)
   const fetchedIdRef = useRef(null)
 
-  // Dispositivos sin ruta embebida o vehículos: pedir historial real de gps_locations
-  const targetDeviceId = isVehicle ? entity?.device_id : entityId;
-  const wantsTelemetry = Boolean(targetDeviceId && embedded.length < 2);
+  // Dispositivos sin ruta embebida o vehículos: pedir historial real de gps_locations.
+  // Ojo: normalizeEntity expone el id del dispositivo como `deviceId` (camelCase), nunca
+  // como `device_id`. Leer la columna cruda aquí dejaba `targetDeviceId` en undefined y
+  // los vehículos sin_historial, en silencio.
+  const targetDeviceId = isVehicle ? entity?.deviceId : entityId
+  const wantsTelemetry = Boolean(targetDeviceId && embedded.length < 2)
 
   useEffect(() => {
     if (fetchedIdRef.current !== targetDeviceId) {
