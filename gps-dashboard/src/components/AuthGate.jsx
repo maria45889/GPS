@@ -15,11 +15,20 @@ export const AuthGate = ({ children }) => {
   const verifyingRef = useRef(false);
 
   const [initError, setInitError] = useState('');
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const verifyProfile = async (currentSession) => {
     if (!currentSession || currentSession.isDevelopment || !supabase) {
-      setHasProfile(true);
-      setProfileError('');
+      if (mountedRef.current) {
+        setHasProfile(true);
+        setProfileError('');
+      }
       return;
     }
 
@@ -28,7 +37,7 @@ export const AuthGate = ({ children }) => {
 
     if (verifyingRef.current) return;
     verifyingRef.current = true;
-    setIsCheckingProfile(true);
+    if (mountedRef.current) setIsCheckingProfile(true);
 
     try {
       const { data, error: profileErr } = await supabase
@@ -36,6 +45,8 @@ export const AuthGate = ({ children }) => {
         .select('user_id, organization_id, role')
         .eq('user_id', targetUserId)
         .maybeSingle();
+
+      if (!mountedRef.current) return;
 
       const activeUser = (await supabase.auth.getSession()).data.session?.user?.id;
       if (activeUser !== targetUserId) return;
@@ -51,10 +62,14 @@ export const AuthGate = ({ children }) => {
         setProfileError('');
       }
     } catch (err) {
-      setHasProfile(false);
-      setProfileError(err?.message || 'Error de conexión al verificar el perfil');
+      if (mountedRef.current) {
+        setHasProfile(false);
+        setProfileError(err?.message || 'Error de conexión al verificar el perfil');
+      }
     } finally {
-      setIsCheckingProfile(false);
+      if (mountedRef.current) {
+        setIsCheckingProfile(false);
+      }
       verifyingRef.current = false;
     }
   };

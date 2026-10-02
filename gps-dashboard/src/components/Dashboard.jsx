@@ -91,16 +91,26 @@ const DashboardInner = () => {
     if (resolvedCategory && category !== resolvedCategory) {
       handleCategoryChange(resolvedCategory);
     }
+
     if (targetEntity) {
       selectEntity(targetEntity);
       hasCenteredOnVehicle.current = true;
-
       const url = new URL(window.location);
       url.searchParams.delete('vehicle');
       url.searchParams.delete('category');
+      url.searchParams.delete('follow');
       window.history.replaceState({}, '', url);
+    } else if (!data.fleetLoading) {
+      // Si ya cargó la flota y no encontró el vehículo, limpiamos la URL
+      // para evitar que en futuros renders siga intentando buscar un ID inválido.
+      const url = new URL(window.location);
+      url.searchParams.delete('vehicle');
+      url.searchParams.delete('category');
+      url.searchParams.delete('follow');
+      window.history.replaceState({}, '', url);
+      hasCenteredOnVehicle.current = true; // Prevenir múltiples ejecuciones
     }
-  }, [sharedVehicleId, vehiclesList, devicesList, category, handleCategoryChange, selectEntity]);
+  }, [sharedVehicleId, vehiclesList, devicesList, category, handleCategoryChange, selectEntity, data.fleetLoading]);
 
   return (
     <div className="relative flex w-full flex-col bg-[#0b0f19] h-[100dvh] overflow-hidden">

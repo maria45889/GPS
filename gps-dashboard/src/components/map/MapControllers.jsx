@@ -69,8 +69,14 @@ export const AlertFocusHandler = ({ focusTrigger, markerRefs }) => {
   useEffect(() => {
     if (!focusTrigger?.coords) return;
     map.flyTo(focusTrigger.coords, focusTrigger.zoom || 16, { animate: true, duration: 1 });
+    
+    let timerId;
     const marker = markerRefs.current[focusTrigger.id];
-    if (marker) window.setTimeout(() => marker.openPopup(), 700);
+    if (marker) timerId = window.setTimeout(() => marker.openPopup(), 700);
+    
+    return () => {
+      if (timerId) window.clearTimeout(timerId);
+    };
   }, [focusTrigger, map, markerRefs]);
 
   return null;
