@@ -112,10 +112,10 @@ const MapArea = ({
         <TileLayer
           url={baseLayer === 'satellite'
             ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'}
+            : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'}
           attribution={baseLayer === 'satellite'
-            ? '&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
-            : '&copy; <a href="https://carto.com/attributions">CARTO</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}
+            ? '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics'
+            : '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a> &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'}
           maxZoom={19}
           maxNativeZoom={19}
           subdomains="abcd"
