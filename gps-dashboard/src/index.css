@@ -97,7 +97,7 @@
 }
 
 /* Leaflet map styling */
-.leaflet-container { background: #04060a !important; font-family: inherit !important; }
+.leaflet-container { background: #eef1f4 !important; font-family: inherit !important; }
 
 .user-location-pin { background: transparent !important; border: 0 !important; }
 .user-location-dot {
