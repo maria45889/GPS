@@ -115,9 +115,11 @@ const RouteHistoryCard = ({ route = [], loading = false, onFocusRoute }) => {
           <button
             type="button"
             onClick={() => onFocusRoute?.()}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#06b6d4]/90 px-2 py-2 text-[10px] font-extrabold uppercase tracking-wider text-[#0b0f19] shadow-[0_0_14px_rgba(6,182,212,0.35)] transition-all hover:bg-[#22d3ee]"
+            disabled={loading}
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#06b6d4]/90 px-2 py-2 text-[10px] font-extrabold uppercase tracking-wider text-[#0b0f19] shadow-[0_0_14px_rgba(6,182,212,0.35)] transition-all hover:bg-[#22d3ee] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Navigation size={12} /> Ver en el mapa
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Navigation size={12} />}
+            {loading ? 'Cargando...' : 'Ver en el mapa'}
           </button>
         </>
       )}

@@ -331,11 +331,16 @@ export const fetchLatestLocations = async () => {
     const isMissingRelation = errCode === 'PGRST202' || errCode === '42P01' || errMsg.includes('relation') || errMsg.includes('does not exist')
 
     if (!isMissingRelation) {
-      console.warn('⚠️ Error al consultar vista latest_gps_locations (se relanza):', error)
+      console.warn('⚠️ Error al consultar vista latest_gps_locations:', error)
+      if (locationsCache && locationsCache.rows) {
+        console.warn('⚠️ Usando caché antigua de latest_gps_locations como fallback por fallo transitorio.');
+        return locationsCache.rows;
+      }
       throw error
     }
 
     console.warn('⚠️ Vista latest_gps_locations no disponible (PGRST202/42P01).', error?.message || error)
+    if (locationsCache && locationsCache.rows) return locationsCache.rows;
     throw error
   }).finally(() => {
     locationsInFlight = null
