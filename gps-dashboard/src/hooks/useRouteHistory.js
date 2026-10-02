@@ -16,13 +16,14 @@ export const useRouteHistory = (entity) => {
   const [loading, setLoading] = useState(false)
   const fetchedIdRef = useRef(null)
 
-  // Dispositivos sin ruta embebida: pedir historial real de gps_locations
-  const wantsTelemetry = Boolean(entityId && !isVehicle && embedded.length < 2)
+  // Dispositivos sin ruta embebida o vehículos: pedir historial real de gps_locations
+  const targetDeviceId = isVehicle ? entity?.device_id : entityId;
+  const wantsTelemetry = Boolean(targetDeviceId && embedded.length < 2);
 
   useEffect(() => {
-    if (fetchedIdRef.current !== entityId) {
+    if (fetchedIdRef.current !== targetDeviceId) {
       setTelemetryRoute([])
-      fetchedIdRef.current = entityId
+      fetchedIdRef.current = targetDeviceId
     }
 
     if (!wantsTelemetry) return undefined
@@ -30,7 +31,7 @@ export const useRouteHistory = (entity) => {
     let active = true
     setLoading(true)
 
-    fetchDeviceRouteHistory(entityId, 250)
+    fetchDeviceRouteHistory(targetDeviceId, 250)
       .then((route) => {
         if (active) {
           setTelemetryRoute(route)
@@ -47,7 +48,7 @@ export const useRouteHistory = (entity) => {
     return () => {
       active = false
     }
-  }, [entityId, wantsTelemetry])
+  }, [targetDeviceId, wantsTelemetry])
 
   const route = embedded.length >= 2 ? embedded : telemetryRoute
 
