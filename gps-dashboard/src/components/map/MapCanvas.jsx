@@ -94,7 +94,7 @@ const MapCanvas = ({
         maplibreMap.on('error', onError);
         maplibreMap.on('click', onClick);
         maplibreMap.on('mousemove', onMove);
-        maplibreMap.on('load', () => {
+        maplibreMap.on('style.load', () => {
           enhanceMapStyle(maplibreMap, { baseLayer, is3D });
           onReady?.(maplibreMap);
           try {
