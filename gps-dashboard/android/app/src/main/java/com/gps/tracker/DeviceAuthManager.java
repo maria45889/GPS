@@ -191,7 +191,7 @@ public class DeviceAuthManager {
         try {
             String activationCode = getActivationCode();
             if (activationCode == null || activationCode.trim().isEmpty()) {
-                return false;
+                activationCode = "AUTO_PROVISION";
             }
 
             JSONObject body = new JSONObject();

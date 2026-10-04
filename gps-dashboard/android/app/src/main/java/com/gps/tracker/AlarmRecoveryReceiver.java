@@ -53,12 +53,11 @@ public class AlarmRecoveryReceiver extends BroadcastReceiver {
             }
 
             // El tracking background ahora lo gestiona el plugin @capacitor-community/background-geolocation.
-            // Lanzar MainActivity con FLAG_ACTIVITY_NEW_TASK para que Capacitor retome el plugin.
-            Intent mainIntent = new Intent(context, MainActivity.class);
-            mainIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            mainIntent.putExtra("recovery_launch", true);
-            context.startActivity(mainIntent);
-            Log.i(TAG, "MainActivity lanzada para que Capacitor BG Geolocation retome el tracking.");
+            // Lanzar BootForegroundService para que inicie la MainActivity correctamente.
+            Intent serviceIntent = new Intent(context, BootForegroundService.class);
+            serviceIntent.putExtra("recovery_launch", true);
+            androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent);
+            Log.i(TAG, "BootForegroundService lanzado para que Capacitor BG Geolocation retome el tracking.");
         } catch (Exception e) {
             Log.e(TAG, "Fallo al lanzar MainActivity desde AlarmRecoveryReceiver: " + e.getMessage(), e);
         }
@@ -111,10 +110,9 @@ public class AlarmRecoveryReceiver extends BroadcastReceiver {
             return;
         }
 
-        Intent mainIntent = new Intent(context, MainActivity.class);
-        mainIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        mainIntent.putExtra(extraKey, true);
-        context.startActivity(mainIntent);
-        Log.i(TAG, "MainActivity relanzada por el watchdog para re-registrar el watcher.");
+        Intent serviceIntent = new Intent(context, BootForegroundService.class);
+        serviceIntent.putExtra(extraKey, true);
+        androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent);
+        Log.i(TAG, "BootForegroundService relanzado por el watchdog para re-registrar el watcher.");
     }
 }

@@ -100,15 +100,20 @@ export const transformDevice = (dbDevice, live = null, maxAgeMs = REALTIME_LOCAT
   const isLiveValid = isCoordsValid && isLocationValidForMap(live.timestamp, maxAgeMs, live.latitude, live.longitude)
   const cleanCoords = isCoordsValid ? [Number(live.latitude), Number(live.longitude)] : null
 
+  const liveBattery = live?.devices?.battery;
+  const livePlatform = live?.devices?.platform;
+  const liveModel = live?.devices?.model;
+  const liveAppVersion = live?.devices?.app_version;
+
   return {
     id: dbDevice.id,
     name: dbDevice.label || dbDevice.id,
     deviceId: dbDevice.id,
     status: isOnline ? 'active' : 'offline',
-    platform: dbDevice.platform || null,
-    model: dbDevice.model || null,
-    appVersion: dbDevice.app_version || null,
-    battery: normalizeBattery(dbDevice.battery),
+    platform: livePlatform !== undefined ? livePlatform : (dbDevice.platform || null),
+    model: liveModel !== undefined ? liveModel : (dbDevice.model || null),
+    appVersion: liveAppVersion !== undefined ? liveAppVersion : (dbDevice.app_version || null),
+    battery: normalizeBattery(liveBattery !== undefined ? liveBattery : dbDevice.battery),
     lastSeen: effectiveLastSeen,
     lastUpdate: effectiveLastSeen || '--',
     position: isLiveValid ? cleanCoords : null,
@@ -319,7 +324,7 @@ export const fetchLatestLocations = async () => {
   locationsInFlight = withAuthRetry(async () => {
     const { data, error } = await supabase
       .from('latest_gps_locations')
-      .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
+      .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp, devices(battery, platform, model, app_version)')
 
     if (!error && Array.isArray(data)) {
       locationsCache = { at: Date.now(), rows: data }

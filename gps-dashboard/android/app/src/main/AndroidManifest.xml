@@ -103,6 +103,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- BootForegroundService: servicio puente para lanzar MainActivity en Android 10+ -->
+        <service
+            android:name=".BootForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
 
         <provider
             android:name="androidx.core.content.FileProvider"

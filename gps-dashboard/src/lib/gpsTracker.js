@@ -5,16 +5,27 @@ const BackgroundGeolocation = registerPlugin('BackgroundGeolocation');
 
 const getCacheKey = (deviceId = getDeviceId()) => (deviceId ? `gps_tracker_cache_${deviceId}` : 'gps_tracker_cache');
 
-// B10: Generador de event_id estable a partir de los campos de la posición.
-// Permite idempotencia: reintentos con el mismo evento no crean duplicados en Supabase
-// si existe la restricción única ON (device_id, event_id).
-function generateEventId(deviceId, timestamp, latitude, longitude) {
-  // Bug #11: Usar UUID v4 en vez de FNV-1a de 32 bits que generaba colisiones
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
+const cyrb53 = (str, seed = 0) => {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0, ch; i < str.length; i++) {
+    ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
   }
-  // Fallback si crypto no está disponible
-  return 'evt-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+};
+
+export function generateEventId(deviceId, timestamp, latitude, longitude) {
+  // S4: Normalizar precisión de las coordenadas a 6 decimales para evitar diferencias ínfimas 
+  // y generar un hash corto y determinista (cyrb53 - 53 bits).
+  const latStr = Number(latitude).toFixed(6);
+  const lngStr = Number(longitude).toFixed(6);
+  const payload = `${deviceId}|${timestamp}|${latStr}|${lngStr}`;
+  return 'evt-' + cyrb53(payload).toString(36);
 }
 
 export const getCachedLocations = (deviceId = getDeviceId()) => {
@@ -391,11 +402,37 @@ class GPSTracker {
     }
   }
 
-  nativeHeartbeat() {
+  async nativeHeartbeat() {
     try {
       window.CapacitorTracking?.heartbeat?.();
     } catch (err) {
       console.warn('[GPS] No se pudo enviar heartbeat al watchdog nativo:', err);
+    }
+    
+    // Enviar telemetría a Supabase
+    if (supabase) {
+      const deviceId = getDeviceId();
+      if (deviceId) {
+        try {
+          // Intentamos obtener batería genérica web (si Capacitor Device no está disponible globalmente)
+          let batteryLevel = 0;
+          if (typeof navigator !== 'undefined' && navigator.getBattery) {
+            const bat = await navigator.getBattery();
+            batteryLevel = Math.round(bat.level * 100);
+          }
+          
+          await supabase.rpc('update_device_telemetry', {
+            p_device_id: deviceId,
+            p_battery: batteryLevel,
+            p_platform: Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web',
+            p_model: navigator.userAgent.slice(0, 50), // Usamos UA temporalmente
+            p_app_version: '1.0.0', // versión base
+            p_location_status: 'active'
+          });
+        } catch (e) {
+          console.warn('[GPS] Error actualizando telemetría:', e);
+        }
+      }
     }
   }
 

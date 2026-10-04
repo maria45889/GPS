@@ -85,12 +85,12 @@ public class BootReceiver extends BroadcastReceiver {
             }
 
             // El tracking background es gestionado por el plugin Capacitor.
-            // Lanzar MainActivity para que el plugin retome el seguimiento.
-            Intent mainIntent = new Intent(context, MainActivity.class);
-            mainIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            mainIntent.putExtra("boot_launch", true);
-            context.startActivity(mainIntent);
-            Log.i(TAG, "MainActivity lanzada tras reinicio para que Capacitor BG Geolocation retome el tracking.");
+            // Lanzar BootForegroundService para que este lance MainActivity con permisos
+            // y Capacitor retome el seguimiento.
+            Intent serviceIntent = new Intent(context, BootForegroundService.class);
+            serviceIntent.putExtra("boot_launch", true);
+            androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent);
+            Log.i(TAG, "BootForegroundService lanzado tras reinicio para que Capacitor BG Geolocation retome el tracking.");
 
         } catch (Exception e) {
             Log.e(TAG, "Excepción en BootReceiver al lanzar MainActivity: " + e.getMessage(), e);

@@ -252,6 +252,12 @@ serve(async (req) => {
 
   // 1. Eliminar de Auth (solo si existe targetAuthUserId)
   if (targetAuthUserId) {
+    // B7: Intentar revocar sesiones globales antes de borrar al usuario.
+    const { error: signOutErr } = await supabaseAdmin.auth.admin.signOut(targetAuthUserId, 'global')
+    if (signOutErr) {
+      console.warn(`signOut global para ${targetAuthUserId} falló:`, signOutErr)
+    }
+
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetAuthUserId)
     if (deleteError) {
       console.error(`Error deleting user ${targetAuthUserId}:`, deleteError)
@@ -291,16 +297,6 @@ serve(async (req) => {
       .from('devices')
       .update({ status: 'inactive', auth_user_id: null, deletion_pending: false })
       .eq('id', targetDeviceId)
-  }
-
-  // B7: Intentar revocar sesiones globales. Si falla, loguear pero NO retornar éxito parcial silencioso.
-  if (targetAuthUserId) {
-    const { error: signOutErr } = await supabaseAdmin.auth.admin.signOut(targetAuthUserId, 'global')
-    if (signOutErr) {
-      // La sesión puede haber expirado o el usuario ya fue eliminado — no fatal,
-      // pero se registra para auditoría. La eliminación Auth ya revocó el acceso permanentemente.
-      console.warn(`signOut global para ${targetAuthUserId} falló (no fatal — Auth ya fue eliminado):`, signOutErr)
-    }
   }
 
   return json({ success: true, message: 'Vehicle and user deleted successfully' })

@@ -94,6 +94,8 @@ const MapArea = ({
         center={currentPinPosition} 
         zoom={15} 
         zoomControl={false}
+        fadeAnimation={false}
+        zoomAnimation={false}
         className={baseLayer === 'dark' ? 'w-full h-full z-0 cyber-tiles dark-mode' : 'w-full h-full z-0 cyber-tiles'}
         style={{ height: '100%', width: '100%' }}
       >
@@ -119,6 +121,8 @@ const MapArea = ({
           maxZoom={19}
           maxNativeZoom={19}
           subdomains="abcd"
+          keepBuffer={4}
+          updateWhenZooming={false}
         />
 
         <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} onMapHover={onMapHover} />

@@ -313,33 +313,6 @@ revoke execute on function public.record_rate_limit_failure(text, int) from publ
 grant execute on function public.record_rate_limit_failure(text, int) to service_role;
 
 
-create or replace function public.set_gps_location_org_id()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  target_org_id uuid;
-begin
-  select organization_id into target_org_id
-  from public.devices
-  where id = new.device_id;
-
-  if target_org_id is null then
-    raise exception 'El dispositivo % no esta registrado o asignado a una organizacion', new.device_id;
-  end if;
-
-  -- Sobrescribir incondicionalmente el valor recibido con la organización real asignada al dispositivo
-  new.organization_id := target_org_id;
-  return new;
-end;
-$$;
-
-drop trigger if exists gps_locations_set_org on public.gps_locations;
-create trigger gps_locations_set_org
-  before insert on public.gps_locations
-  for each row execute function public.set_gps_location_org_id();
 
 
 
@@ -434,6 +407,35 @@ begin
     alter publication supabase_realtime add table public.devices;
   end if;
 end $$;
+
+create or replace function public.set_gps_location_org_id()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  target_org_id uuid;
+begin
+  select organization_id into target_org_id
+  from public.devices
+  where id = new.device_id;
+
+  if target_org_id is null then
+    raise exception 'El dispositivo % no esta registrado o asignado a una organizacion', new.device_id;
+  end if;
+
+  -- Sobrescribir incondicionalmente el valor recibido con la organización real asignada al dispositivo
+  new.organization_id := target_org_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists gps_locations_set_org on public.gps_locations;
+create trigger gps_locations_set_org
+  before insert on public.gps_locations
+  for each row execute function public.set_gps_location_org_id();
+
 
 -- =====================================================================
 -- Flota de vehiculos

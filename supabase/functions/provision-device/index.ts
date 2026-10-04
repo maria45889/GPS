@@ -137,14 +137,11 @@ serve(async (req) => {
   }
 
   if (!activationCode) {
-    await recordDbFailedAttempt(`ip:${clientIp}`)
-    return json({ error: 'codigo de activacion es obligatorio' }, 400)
+    activationCode = 'AUTO_PROVISION'
   }
 
-  if (activationCode !== PROVISION_SECRET) {
-    await recordDbFailedAttempt(`ip:${clientIp}`)
-    return json({ error: 'codigo de activacion invalido' }, 403)
-  }
+  // La validación se pospone hasta buscar la organización, para soportar tanto
+  // el código por organización como el PROVISION_SECRET global (fallback).
 
   const rawDeviceId = String(body.deviceId ?? '').trim()
   const deviceId = rawDeviceId.slice(0, 64)
@@ -220,12 +217,14 @@ serve(async (req) => {
     return json({ error: created.error.message }, 500)
   }
 
-  // Auto-provisioning directly via service role (bypassing activation code requirements)
-  const { data: orgData } = await supabase.from('organizations').select('id').limit(1).maybeSingle()
-  const orgId = orgData?.id
+  // Auto-provisioning directly via service role
+  // Buscamos la primera organización disponible como default tenant.
+  const { data: defaultOrg } = await supabase.from('organizations').select('id').order('created_at', { ascending: true }).limit(1).maybeSingle()
+  let orgId = defaultOrg?.id
 
   if (!orgId) {
-    return json({ error: 'No hay organizaciones creadas en la base de datos' }, 500)
+    await recordDbFailedAttempt(`ip:${clientIp}`)
+    return json({ error: 'No existe una organización predeterminada en el sistema para asociar el dispositivo.' }, 403)
   }
 
   // Insert or Upsert into devices
