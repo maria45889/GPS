@@ -111,14 +111,11 @@ const MapArea = ({
         
         <TileLayer
           url={baseLayer === 'satellite'
-            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'}
-          attribution={baseLayer === 'satellite'
-            ? '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics'
-            : '&copy; <a href="https://www.esri.com/" target="_blank">Esri</a> &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'}
-          maxZoom={19}
-          maxNativeZoom={19}
-          subdomains="abcd"
+            ? 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
+            : 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'}
+          attribution='&copy; <a href="https://www.google.com/maps">Google Maps</a>'
+          maxZoom={21}
+          maxNativeZoom={20}
         />
 
         <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} onMapHover={onMapHover} />
