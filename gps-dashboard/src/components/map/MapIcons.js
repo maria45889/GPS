@@ -86,6 +86,7 @@ export const createHeroPinIcon = (name, id, baseLayer = 'satellite') => {
   iconSize: [120, 95],
   iconAnchor: [60, 85],
 }));
+};
 
 export const createFleetPinIcon = (status, baseLayer = 'satellite') => {
   const isDark = baseLayer === 'satellite' || baseLayer === 'dark';
