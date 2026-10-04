@@ -368,6 +368,27 @@ class GPSTracker {
           );
           this.nativeSetTrackingEnabled(true);
   
+          // Fuerza el envío de la primera ubicación instantánea sin esperar a que el dispositivo se mueva
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              async (pos) => {
+                this.nativeHeartbeat();
+                const locationPayload = {
+                  coords: {
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                    speed: pos.coords.speed || 0,
+                    accuracy: pos.coords.accuracy || 0,
+                    heading: pos.coords.heading || 0
+                  }
+                };
+                await this.sendCurrentLocation(locationPayload);
+              },
+              (err) => console.warn("Error capturando ubicación instantánea inicial", err),
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+          }
+
           // Bucle de liveness: El distanceFilter impide que el plugin emita posiciones si el
           // vehiculo esta estacionado. Esto asegura que el watchdog no nos mate por falta de latidos.
           this.livenessTimer = setInterval(() => {
