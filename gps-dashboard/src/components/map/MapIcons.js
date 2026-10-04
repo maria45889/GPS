@@ -28,37 +28,45 @@ export const escapeHtml = (str) => {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 };
 
-export const createHeroPinIcon = (name, id) => getCachedIcon(`hero-${id}-${name}`, () => new L.DivIcon({
+export const createHeroPinIcon = (name, id, baseLayer = 'satellite') => {
+  const isDark = baseLayer === 'satellite' || baseLayer === 'dark';
+  const primary = isDark ? '#00E676' : '#EF4444'; // Green on dark, Red on light
+  const secondary = isDark ? '#00B4D8' : '#DC2626';
+  const tertiary = isDark ? '#0096C9' : '#991B1B';
+  const glow = isDark ? 'rgba(0, 240, 255' : 'rgba(239, 68, 68'; // For rgb() injections
+  const greenGlow = isDark ? 'rgba(0,230,118' : 'rgba(220,38,38';
+
+  return getCachedIcon(`hero-${id}-${name}-${baseLayer}`, () => new L.DivIcon({
   className: 'custom-vehicle-pin',
   html: `
     <div style="position: relative; display: flex; flex-direction: column; align-items: center; cursor: pointer;">
       <div style="
         background: linear-gradient(135deg, rgba(16, 23, 38, 0.98) 0%, rgba(10, 15, 26, 0.95) 100%);
-        border: 1px solid rgba(0, 240, 255, 0.6);
+        border: 1px solid ${glow}, 0.6);
         padding: 5px 12px;
         border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 15px rgba(0, 240, 255, 0.3), 0 0 30px rgba(0,230,118,0.15);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 15px ${glow}, 0.3), 0 0 30px ${greenGlow},0.15);
         text-align: center;
         margin-bottom: 8px;
         white-space: nowrap;
         backdrop-filter: blur(10px);
       ">
-        <div style="font-size: 12px; font-weight: 800; color: #ffffff; line-height: 1.2; text-shadow: 0 0 10px rgba(0,240,255,0.5);">${escapeHtml(name)}</div>
+        <div style="font-size: 12px; font-weight: 800; color: #ffffff; line-height: 1.2; text-shadow: 0 0 10px ${glow},0.5);">${escapeHtml(name)}</div>
         <div style="font-size: 9px; color: #475569; font-family: monospace; letter-spacing: 0.5px;">ID: ${escapeHtml(id)}</div>
       </div>
       <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;">
         <div style="
           position: absolute; width: 52px; height: 52px; border-radius: 50%;
-          background: radial-gradient(circle, rgba(0, 240, 255, 0.25) 0%, rgba(0,230,118, 0.1) 70%, transparent 100%);
-          box-shadow: 0 0 25px rgba(0,230,118,0.4), 0 0 50px rgba(0,240,255,0.2); animation: pulse 2s infinite;
+          background: radial-gradient(circle, ${glow}, 0.25) 0%, ${greenGlow}, 0.1) 70%, transparent 100%);
+          box-shadow: 0 0 25px ${greenGlow},0.4), 0 0 50px ${glow},0.2); animation: pulse 2s infinite;
         "></div>
         <div style="
           position: absolute; width: 44px; height: 44px; border-radius: 50%;
-          background: rgba(0, 240, 255, 0.15); box-shadow: 0 0 20px rgba(0,240,255,0.3); animation: pulse 2s infinite 0.5s;
+          background: ${glow}, 0.15); box-shadow: 0 0 20px ${glow},0.3); animation: pulse 2s infinite 0.5s;
         "></div>
         <div style="
-          width: 34px; height: 34px; background: linear-gradient(135deg, #00E676 0%, #00B4D8 50%, #0096C9 100%);
-          border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 0 20px rgba(0, 240, 255, 0.9), 0 0 40px rgba(0,230,118,0.4);
+          width: 34px; height: 34px; background: linear-gradient(135deg, ${primary} 0%, ${secondary} 50%, ${tertiary} 100%);
+          border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 0 20px ${glow}, 0.9), 0 0 40px ${greenGlow},0.4);
           border: 2px solid #ffffff; display: flex; align-items: center; justify-content: center; position: relative;
         ">
           <div style="
@@ -79,10 +87,22 @@ export const createHeroPinIcon = (name, id) => getCachedIcon(`hero-${id}-${name}
   iconAnchor: [60, 85],
 }));
 
-export const createFleetPinIcon = (status) => {
-  const color = status === 'active' ? '#00E676' : status === 'stopped' ? '#F59E0B' : '#64748B';
-  const glowColor = status === 'active' ? 'rgba(0,230,118,0.3)' : status === 'stopped' ? 'rgba(245,158,11,0.3)' : 'rgba(100,116,139,0.2)';
-  return getCachedIcon(`fleet-${status}`, () => new L.DivIcon({
+export const createFleetPinIcon = (status, baseLayer = 'satellite') => {
+  const isDark = baseLayer === 'satellite' || baseLayer === 'dark';
+  
+  // High contrast palette depending on map brightness
+  let color;
+  if (isDark) {
+    color = status === 'active' ? '#00E676' : status === 'stopped' ? '#F59E0B' : '#64748B';
+  } else {
+    color = status === 'active' ? '#EF4444' : status === 'stopped' ? '#D97706' : '#475569'; // Red for active in Light Mode
+  }
+
+  const glowColor = status === 'active' ? (isDark ? 'rgba(0,230,118,0.3)' : 'rgba(239,68,68,0.3)') 
+                  : status === 'stopped' ? (isDark ? 'rgba(245,158,11,0.3)' : 'rgba(217,119,6,0.3)') 
+                  : 'rgba(100,116,139,0.2)';
+
+  return getCachedIcon(`fleet-${status}-${baseLayer}`, () => new L.DivIcon({
     className: 'mini-vehicle-pin',
     html: `
       <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;">

@@ -117,6 +117,9 @@ const MapArea = ({
           attribution="&copy; Google Maps"
           maxZoom={21}
           maxNativeZoom={20}
+          keepBuffer={6}
+          updateWhenIdle={false}
+          updateWhenZooming={true}
         />
 
         <MapClickHandler isPlacingOnMap={isPlacingOnMap} onMapClick={onMapClick} onMapHover={onMapHover} />
@@ -174,6 +177,7 @@ const MapArea = ({
           onShareRoute={onShareRoute}
           routeColor={routeColor}
           alertMarkerRefs={alertMarkerRefs}
+          baseLayer={baseLayer}
         />
 
       </MapContainer>

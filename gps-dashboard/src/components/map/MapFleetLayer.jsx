@@ -15,6 +15,7 @@ export const MapFleetLayer = React.memo(({
   onShareRoute,
   routeColor,
   alertMarkerRefs,
+  baseLayer,
 }) => {
   const createVehicleEventHandlers = React.useCallback((v) => ({
     click: () => onSelectVehicle?.(v),
@@ -54,7 +55,7 @@ export const MapFleetLayer = React.memo(({
             )}
             <Marker
               position={pos}
-              icon={isSelected ? createHeroPinIcon(v.name, v.id) : createFleetPinIcon(isOffline ? 'offline' : v.status)}
+              icon={isSelected ? createHeroPinIcon(v.name, v.id, baseLayer) : createFleetPinIcon(isOffline ? 'offline' : v.status, baseLayer)}
               eventHandlers={createVehicleEventHandlers(v)}
             >
               {isOffline ? (
