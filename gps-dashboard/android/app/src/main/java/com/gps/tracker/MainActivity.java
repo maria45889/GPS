@@ -34,6 +34,23 @@ public class MainActivity extends BridgeActivity {
         if (!activationInProgress) {
             startOnboardingSequence();
         }
+        // Aprovisionar ya en el primer arranque (sin esperar a que la webview pida
+        // el token) y lanzar el servicio nativo en cuanto haya credenciales. Sin esto,
+        // tras reinstalar/borrar, isProvisioned() era false y el servicio nunca arrancaba.
+        new Thread(() -> {
+            try {
+                DeviceAuthManager authManager = new DeviceAuthManager(getApplicationContext());
+                String token = authManager.getAccessToken();
+                if (token != null) {
+                    Log.i(TAG, "Aprovisionamiento OK en arranque; iniciando rastreo nativo.");
+                    NativeTrackingService.startNativeTracking(getApplicationContext());
+                } else {
+                    Log.w(TAG, "Aprovisionamiento no disponible aun: " + authManager.getNextAuthRetrySeconds());
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Error en aprovisionamiento de arranque", e);
+            }
+        }, "boot-provisioning").start();
     }
 
     private void setupWebviewBridge() {
