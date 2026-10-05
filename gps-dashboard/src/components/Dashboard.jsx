@@ -10,7 +10,7 @@ import { useDashboardContext } from '../context/dashboard-context';
 const DashboardInner = () => {
   const { state, dispatch, data } = useDashboardContext();
   const { category, geofenceRadius, pendingGeofenceConfirm, entityToEdit, operationMessage } = state;
-  const { vehiclesList, devicesList, activeNetworkError, refetchVehicles, refetchGeofences } = data;
+  const { vehiclesList, devicesList, activeNetworkError, refetchVehicles, refetchDevices, refetchGeofences } = data;
 
   const sharedVehicleId = new URLSearchParams(window.location.search).get('vehicle');
 
@@ -68,6 +68,7 @@ const DashboardInner = () => {
     if (result.error) throw new Error(result.error.message || 'Error al guardar los cambios');
     dispatch({ type: 'SET_OPERATION_MESSAGE', payload: 'Cambios guardados con éxito' });
     if (currentCategory === 'vehicles' && refetchVehicles) refetchVehicles();
+    if (currentCategory === 'devices' && refetchDevices) refetchDevices();
   };
 
   const hasCenteredOnVehicle = useRef(false);
