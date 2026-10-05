@@ -54,6 +54,12 @@ public class MainActivity extends BridgeActivity {
     public class TrackingBridge {
         @android.webkit.JavascriptInterface
         public void setTrackingEnabled(boolean enabled) {
+            if (enabled) {
+                // El webview asume el envio de posiciones: el servicio nativo se apaga
+                // para no duplicar muestras. Si el webview muere, los receivers del
+                // watchdog vuelven a levantar el servicio nativo.
+                NativeTrackingService.stopNativeTracking(MainActivity.this);
+            }
             TrackingWatchdog.setTrackingEnabled(MainActivity.this, enabled);
             // Deliberadamente no se restaura aqui el icono: gpsTracker.start() llama
             // a stop() antes de arrancar, asi que este puente recibe false en cada

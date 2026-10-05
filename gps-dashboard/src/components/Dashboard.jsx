@@ -4,7 +4,8 @@ import CommandCenter from './command/CommandCenter';
 import { updateEntity } from '../lib/vehicleActions';
 import { createGeofence } from '../lib/queries';
 import { EditEntityModal } from './EditEntityModal';
-import { DashboardProvider, useDashboardContext } from '../context/DashboardContext';
+import { DashboardProvider } from '../context/DashboardContext';
+import { useDashboardContext } from '../context/dashboard-context';
 
 const DashboardInner = () => {
   const { state, dispatch, data } = useDashboardContext();

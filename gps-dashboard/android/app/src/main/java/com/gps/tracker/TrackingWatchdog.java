@@ -12,24 +12,37 @@ import android.util.Log;
 /**
  * Watchdog de seguimiento en background.
  *
- * El tracking lo sostiene el foreground service de
- * @capacitor-community/background-geolocation, que vive en el proceso de la app.
- * Si Android mata ese proceso (low memory, "Don't keep activities", un bug del
- * fabricante), el servicio muere con él y un started service NO se reinicia solo:
- * el dispositivo quedaría sin reportar posición hasta que el usuario abra la app
- * manualmente. Para acortar esa ventana, este watchdog programa una alarma exacta
- * y, cuando detecta que el seguimiento está muerto, relanza MainActivity para que
- * el plugin se registre de nuevo.
+ * Hay DOS caminos de rastreo y este watchdog los cubre a los dos:
+ *
+ * 1. Con la app abierta, el WebView registra un watcher en
+ *    @capacitor-community/background-geolocation.
+ * 2. Sin WebView (tras un reinicio, con la app en background o en Doze), el
+ *    seguimiento lo sostiene NativeTrackingService, un foreground service propio
+ *    de tipo location que no depende del plugin.
+ *
+ * Si Android mata cualquiera de los dos procesos, el started service NO se
+ * reinicia solo y el dispositivo quedaría sin reportar posición hasta que el
+ * usuario abra la app. Para acortar esa ventana, este watchdog programa una alarma
+ * exacta que, cuando detecta el seguimiento muerto, lanza AlarmRecoveryReceiver,
+ * que a su vez rearrange NativeTrackingService (nunca una Activity: ver abajo).
  *
  * Por qué una alarma EXACTA: en Android 10+ una app no puede lanzar Activities
  * desde background, pero las alarmas setExactAndAllowWhileIdle/setAndAllowWhileIdle
- * conceden un Power Allowlist temporal que sí lo permite. Es la misma razón por la
- * que el manifest declara SCHEDULE_EXACT_ALARM. Una alarma inexacta no concede
- * allowlist y el relanzamiento sería descartado por el sistema.
+ * conceden un Power Allowlist temporal. Es la misma razón por la que el manifest
+ * declara SCHEDULE_EXACT_ALARM.
  *
- * El watchdog se arma SOLO cuando el webview confirma que el seguimiento está
- * activo (setTrackingEnabled(true)), para no despertar el dispositivo cada 15
- * minutos en dispositivos que nunca han iniciado el rastreo.
+ * Nótese que el allowlist ya no es lo que habilita el relanzamiento: el receptor
+ * arranca un foreground service, no una Activity. La versión anterior de este
+ * watchdog sí relanzaba MainActivity, y en Android 10+ esa llamada se descartaba
+ * en silencio cuando el proceso no estaba en foreground: el watchdog "funcionaba"
+ * sin recuperar nunca el rastreo. La alarma exacta se conserva porque mantiene el
+ * dispositivo despierto para que el servicio arranque antes de que el sistema lo
+ * vuelva a suspender.
+ *
+ * El watchdog se arma SOLO cuando el rastreo está confirmado como activo, ya sea
+ * por el WebView (setTrackingEnabled(true)) o por NativeTrackingService, para no
+ * despertar el dispositivo cada 15 minutos en dispositivos que nunca han iniciado
+ * el rastreo.
  */
 public final class TrackingWatchdog {
 

@@ -103,9 +103,14 @@
             </intent-filter>
         </receiver>
 
-        <!-- BootForegroundService: servicio puente para lanzar MainActivity en Android 10+ -->
+        <!--
+            NativeTrackingService: rastreo GPS real en foreground, independiente del
+            WebView. Android 10+ bloquea abrir MainActivity desde background, asi que
+            el servicio tiene que emitir las posiciones por su cuenta. Este es el
+            unico camino que sobrevive a un reinicio del dispositivo.
+        -->
         <service
-            android:name=".BootForegroundService"
+            android:name=".NativeTrackingService"
             android:exported="false"
             android:foregroundServiceType="location" />
 

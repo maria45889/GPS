@@ -13,4 +13,8 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    // NativeTrackingService usa FusedLocationProviderClient. El plugin de background
+    // geolocation declara esta dependencia como `implementation`, que no es visible en
+    // tiempo de compilacion para el modulo app, asi que hay que declararla aqui.
+    playServicesLocationVersion = '21.0.1'
 }

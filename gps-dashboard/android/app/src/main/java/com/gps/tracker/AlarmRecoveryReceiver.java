@@ -10,14 +10,15 @@ import android.util.Log;
 /**
  * Receptor de transmisión dedicado para alarmas de recuperación (Doze / reinicios).
  *
- * A partir de la migración a @capacitor-community/background-geolocation, el tracking
- * ya no depende de LocationService.java. Este receiver simplemente lanza MainActivity
- * en modo background-friendly para que el plugin de Capacitor retome el seguimiento.
+ * El tracking lo sostiene NativeTrackingService, un ForegroundService de tipo location
+ * que no necesita Activity. Antes este receiver lanzaba MainActivity desde background,
+ * algo que Android 10+ bloquea de forma silenciosa: el sistema registra "Background
+ * activity launch blocked" en logcat y NO lanza excepcion, por lo que el codigo
+ * reportaba "MainActivity lanzada exitosamente" mientras el rastreo seguia detenido.
  *
- * En Android 12+ (API 31+), iniciar un servicio Foreground desde PendingIntent.getService()
- * puede causar ForegroundServiceStartNotAllowedException. Usar un BroadcastReceiver dedicado
- * con PendingIntent.getBroadcast() permite iniciar la Activity dentro de la ventana
- * de ejecución permitida del broadcast.
+ * Este receiver usa PendingIntent.getBroadcast() porque Android 12+ (API 31+) puede
+ * lanzar ForegroundServiceStartNotAllowedException al iniciar un FGS desde un
+ * PendingIntent.getService() disparado en background.
  */
 public class AlarmRecoveryReceiver extends BroadcastReceiver {
     private static final String TAG = "AlarmRecoveryReceiver";
@@ -52,12 +53,8 @@ public class AlarmRecoveryReceiver extends BroadcastReceiver {
                 return;
             }
 
-            // El tracking background ahora lo gestiona el plugin @capacitor-community/background-geolocation.
-            // Lanzar BootForegroundService para que inicie la MainActivity correctamente.
-            Intent serviceIntent = new Intent(context, BootForegroundService.class);
-            serviceIntent.putExtra("recovery_launch", true);
-            androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent);
-            Log.i(TAG, "BootForegroundService lanzado para que Capacitor BG Geolocation retome el tracking.");
+            NativeTrackingService.startNativeTracking(context);
+            Log.i(TAG, "NativeTrackingService lanzado por la alarma de recuperacion.");
         } catch (Exception e) {
             Log.e(TAG, "Fallo al lanzar MainActivity desde AlarmRecoveryReceiver: " + e.getMessage(), e);
         }
@@ -83,14 +80,22 @@ public class AlarmRecoveryReceiver extends BroadcastReceiver {
                 return;
             }
 
-            Log.w(TAG, "Watchdog: sin heartbeat reciente. El servicio de foreground murió; relanzando MainActivity.");
-            relaunchMainActivity(context, "watchdog_launch");
+            Log.w(TAG, "Watchdog: sin heartbeat reciente. El servicio de rastreo murió; relanzandolo.");
+            restartTracking(context, "watchdog_launch");
         } catch (Exception e) {
             Log.e(TAG, "Watchdog: fallo comprobando salud del seguimiento: " + e.getMessage(), e);
         }
     }
 
-    private void relaunchMainActivity(Context context, String extraKey) {
+    /**
+     * Recupera el rastreo tras una muerte del servicio.
+     *
+     * Antes esto relanzaba MainActivity. Android 10+ bloquea los background activity
+     * launches y lo hace en silencio (solo un aviso en logcat), de modo que el codigo
+     * creia haber recuperado el tracking cuando no habia recuperado nada. Se arranca
+     * NativeTrackingService, que si esta permitido arrancar desde una alarma exacta.
+     */
+    private void restartTracking(Context context, String reason) {
         android.os.UserManager userManager =
                 (android.os.UserManager) context.getSystemService(Context.USER_SERVICE);
         if (userManager != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !userManager.isUserUnlocked()) {
@@ -110,9 +115,7 @@ public class AlarmRecoveryReceiver extends BroadcastReceiver {
             return;
         }
 
-        Intent serviceIntent = new Intent(context, BootForegroundService.class);
-        serviceIntent.putExtra(extraKey, true);
-        androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent);
-        Log.i(TAG, "BootForegroundService relanzado por el watchdog para re-registrar el watcher.");
+        NativeTrackingService.startNativeTracking(context);
+        Log.i(TAG, "NativeTrackingService relanzado por el watchdog (" + reason + ").");
     }
 }

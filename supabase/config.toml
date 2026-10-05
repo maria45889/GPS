@@ -384,6 +384,20 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+[functions.provision-device]
+# verify_jwt = false hace falta porque esta funcion la llama el dispositivo ANTES de
+# tener sesion: todavia no existe usuario ni JWT. La autenticacion la hace la propia
+# funcion comparando el codigo de activacion con organizations.activation_code o con
+# PROVISION_SECRET (comparacion por digest en tiempo constante), mas el rate limit.
+# Sin esta linea el gateway rechazaba el alta del dispositivo con 401.
+verify_jwt = false
+
+[functions.delete-device-user]
+# Esta si exige JWT: el panel de administracion la invoca con la sesion del usuario.
+# El default del proyecto es true y se deja explicito para que nadie lo relaje por
+# error creyendo que es pareja de la anterior.
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

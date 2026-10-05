@@ -135,7 +135,12 @@ class GPSTracker {
   constructor() {
     this.intervalId = null;
     this.watcherId = null;
+    // isRunning = el seguimiento esta activo (lo consulta appRestored).
     this.isRunning = false;
+    // tickInFlight = hay una llamada a getCurrentPosition en curso. Es un estado
+    // distinto: solapar dos getCurrentPosition a la vez produce callbacks fuera de
+    // orden y posiciones descartadas.
+    this.tickInFlight = false;
     this.intervalMs = 30000;
     this.currentRunId = 0;
     this.wakeLock = null;
@@ -270,9 +275,13 @@ class GPSTracker {
 
   async tick(runId = this.currentRunId) {
     if (runId !== this.currentRunId) return;
-    // Evita la ejecución solapada dentro de la misma carrera
-    if (this.isRunning) return;
-    this.isRunning = true;
+    // Evita la ejecución solapada dentro de la misma carrera.
+    //
+    // El guard usa tickInFlight y NO isRunning: start() marca isRunning=true porque
+    // el seguimiento esta activo, y con el flag compartido el primer tick se
+    // cancelaba solo, dejando el dashboard sin posicion hasta 30 s despues.
+    if (this.tickInFlight) return;
+    this.tickInFlight = true;
 
     try {
       if (navigator.geolocation) {
@@ -315,9 +324,9 @@ class GPSTracker {
         }
       }
     } finally {
-      if (runId === this.currentRunId) {
-        this.isRunning = false;
-      }
+      // Se libera siempre, incluso con runId obsoleto: si no, el flag quedaria
+      // trabado y ningun tick futuro volveria a ejecutarse.
+      this.tickInFlight = false;
     }
   }
 
@@ -329,6 +338,7 @@ class GPSTracker {
     this.intervalMs = intervalMs;
     this.currentRunId++;
     const runId = this.currentRunId;
+
     this.isRunning = true;
 
     if (Capacitor.isNativePlatform()) {
@@ -409,6 +419,7 @@ class GPSTracker {
         }
       }
     } else {
+      this.isRunning = true;
       this.requestWakeLock();
       this.tick(runId);
       this.intervalId = setInterval(() => this.tick(runId), this.intervalMs);
@@ -435,21 +446,28 @@ class GPSTracker {
       const deviceId = getDeviceId();
       if (deviceId) {
         try {
-          // Intentamos obtener batería genérica web (si Capacitor Device no está disponible globalmente)
-          let batteryLevel = 0;
+          // Battery Status API: no existe en WebView de Android ni en la mayoria de
+          // navegadores moviles. Antes se mandaba batteryLevel=0 cuando faltaba, y el
+          // RPC hace coalesce(p_battery, battery), es decir 0 pisaba la ultima lectura
+          // real. Ahora, si no se puede leer, se OMITE el campo.
+          let batteryLevel = null;
           if (typeof navigator !== 'undefined' && navigator.getBattery) {
             const bat = await navigator.getBattery();
-            batteryLevel = Math.round(bat.level * 100);
+            if (bat && Number.isFinite(bat.level)) {
+              batteryLevel = Math.round(bat.level * 100);
+            }
           }
-          
-          await supabase.rpc('update_device_telemetry', {
+
+          const telemetry = {
             p_device_id: deviceId,
-            p_battery: batteryLevel,
             p_platform: Capacitor.isNativePlatform() ? Capacitor.getPlatform() : 'web',
-            p_model: navigator.userAgent.slice(0, 50), // Usamos UA temporalmente
-            p_app_version: '1.0.0', // versión base
+            // Sin modelo ni version en web no se miente: se omiten y NativeTrackingService
+            // los rellena con los valores reales del dispositivo.
             p_location_status: 'active'
-          });
+          };
+          if (batteryLevel !== null) telemetry.p_battery = batteryLevel;
+
+          await supabase.rpc('update_device_telemetry', telemetry);
         } catch (e) {
           console.warn('[GPS] Error actualizando telemetría:', e);
         }
@@ -473,6 +491,7 @@ class GPSTracker {
     this.releaseWakeLock();
     this.currentRunId++;
     this.isRunning = false;
+    this.tickInFlight = false;
     this.nativeSetTrackingEnabled(false);
   }
 }

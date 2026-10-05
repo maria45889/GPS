@@ -14,16 +14,27 @@ if (!CORS_ORIGIN) {
     'Defina el secret antes de desplegar: supabase secrets set ALLOWED_ORIGIN=https://tu-dominio.com'
   )
 }
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': CORS_ORIGIN,
+const CORS_ORIGIN_LIST = CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+
+const BASE_CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  Vary: 'Origin',
 }
 
-const json = (data: unknown, status = 200) =>
+// Mismo criterio que en provision-device: se responde con el origin que realmente
+// coincide. Enviar siempre el primero de la lista hacia que el panel fuese
+// inaccesible si ALLOWED_ORIGIN contenia mas de un valor.
+const corsHeaders = (requestOrigin: string | null): Record<string, string> => {
+  const allowed =
+    requestOrigin && CORS_ORIGIN_LIST.includes(requestOrigin) ? requestOrigin : CORS_ORIGIN_LIST[0]
+  return { ...BASE_CORS_HEADERS, 'Access-Control-Allow-Origin': allowed ?? CORS_ORIGIN }
+}
+
+const json = (data: unknown, status = 200, requestOrigin: string | null = null) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(requestOrigin), 'Content-Type': 'application/json' },
   })
 
 /**
@@ -68,21 +79,23 @@ async function resolveVehicleId(
 }
 
 serve(async (req) => {
+  const origin = req.headers.get('Origin')
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS })
+    return new Response('ok', { headers: corsHeaders(origin) })
   }
   
-  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
+  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, origin)
 
   // Autenticación: Verificar JWT administrativo u operador
   const authHeader = req.headers.get('Authorization')
-  if (!authHeader) return json({ error: 'Missing Authorization header' }, 401)
+  if (!authHeader) return json({ error: 'Missing Authorization header' }, 401, origin)
 
   const token = authHeader.replace('Bearer ', '')
   const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
   
   if (authError || !user) {
-    return json({ error: 'Unauthorized' }, 401)
+    return json({ error: 'Unauthorized' }, 401, origin)
   }
 
   // Verificar que el llamador sea un admin
@@ -93,19 +106,19 @@ serve(async (req) => {
     .single()
     
   if (profile?.role !== 'admin' && profile?.role !== 'owner') {
-    return json({ error: 'Forbidden: Requires admin role' }, 403)
+    return json({ error: 'Forbidden: Requires admin role' }, 403, origin)
   }
 
   let body: { auth_user_id?: string, vehicle_id?: string, device_id?: string }
   try {
     body = await req.json()
   } catch {
-    return json({ error: 'Invalid JSON' }, 400)
+    return json({ error: 'Invalid JSON' }, 400, origin)
   }
 
   const { auth_user_id, vehicle_id, device_id } = body
   if (!auth_user_id && !vehicle_id && !device_id) {
-    return json({ error: 'auth_user_id, vehicle_id or device_id is required' }, 400)
+    return json({ error: 'auth_user_id, vehicle_id or device_id is required' }, 400, origin)
   }
 
   let targetAuthUserId: string | null = auth_user_id ?? null
@@ -123,7 +136,7 @@ serve(async (req) => {
       .single()
 
     if (vehicleError || !vehicleData) {
-      return json({ error: 'Vehicle not found or could not read device' }, 404)
+      return json({ error: 'Vehicle not found or could not read device' }, 404, origin)
     }
     targetDeviceId = vehicleData.device_id
 
@@ -136,13 +149,13 @@ serve(async (req) => {
         .maybeSingle()
 
       if (deviceError) {
-        return json({ error: 'Could not fetch device details' }, 500)
+        return json({ error: 'Could not fetch device details' }, 500, origin)
       }
       if (!deviceData) {
-        return json({ error: 'Device not found' }, 404)
+        return json({ error: 'Device not found' }, 404, origin)
       }
       if (deviceData.organization_id !== profile?.organization_id) {
-        return json({ error: 'Forbidden: Device organization mismatch' }, 403)
+        return json({ error: 'Forbidden: Device organization mismatch' }, 403, origin)
       }
       // Resolver auth_user_id solo si no fue enviado en el body
       if (!targetAuthUserId && deviceData) {
@@ -160,13 +173,13 @@ serve(async (req) => {
       .maybeSingle()
 
     if (deviceError) {
-      return json({ error: 'Could not fetch device details to verify organization' }, 500)
+      return json({ error: 'Could not fetch device details to verify organization' }, 500, origin)
     }
     if (!deviceData) {
-      return json({ error: 'Device not found' }, 404)
+      return json({ error: 'Device not found' }, 404, origin)
     }
     if (deviceData.organization_id !== profile?.organization_id) {
-      return json({ error: 'Forbidden: Device organization mismatch' }, 403)
+      return json({ error: 'Forbidden: Device organization mismatch' }, 403, origin)
     }
     targetDeviceId = deviceData?.id ?? null
 
@@ -185,13 +198,13 @@ serve(async (req) => {
       .maybeSingle()
 
     if (deviceError) {
-      return json({ error: 'Could not fetch device details to verify organization' }, 500)
+      return json({ error: 'Could not fetch device details to verify organization' }, 500, origin)
     }
     if (!deviceData) {
-      return json({ error: 'Device not found' }, 404)
+      return json({ error: 'Device not found' }, 404, origin)
     }
     if (deviceData.organization_id !== profile?.organization_id) {
-      return json({ error: 'Forbidden: Device organization mismatch' }, 403)
+      return json({ error: 'Forbidden: Device organization mismatch' }, 403, origin)
     }
     if (!targetAuthUserId && deviceData) targetAuthUserId = deviceData.auth_user_id;
 
@@ -210,7 +223,7 @@ serve(async (req) => {
       .single()
       
     if (!deviceByAuth || deviceByAuth.id !== targetDeviceId) {
-       return json({ error: 'Conflicto: device_id y auth_user_id no corresponden al mismo dispositivo' }, 409)
+       return json({ error: 'Conflicto: device_id y auth_user_id no corresponden al mismo dispositivo' }, 409, origin)
     }
   }
   
@@ -222,7 +235,7 @@ serve(async (req) => {
       .single()
       
     if (!vehicleData || vehicleData.device_id !== targetDeviceId) {
-       return json({ error: 'Conflicto: vehicle_id y device_id no corresponden al mismo dispositivo' }, 409)
+       return json({ error: 'Conflicto: vehicle_id y device_id no corresponden al mismo dispositivo' }, 409, origin)
     }
   }
 
@@ -261,7 +274,7 @@ serve(async (req) => {
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetAuthUserId)
     if (deleteError) {
       console.error(`Error deleting user ${targetAuthUserId}:`, deleteError)
-      return json({ error: 'Failed to delete auth user, aborting vehicle deletion' }, 500)
+      return json({ error: 'Failed to delete auth user, aborting vehicle deletion' }, 500, origin)
     }
   }
 
@@ -284,7 +297,7 @@ serve(async (req) => {
         success: false, 
         error: rpcError?.message || rpcData?.error || 'Auth deleted, but failed to delete vehicle',
         warning: 'Device is permanently disconnected but vehicle record remains.'
-      }, 500)
+      }, 500, origin)
     }
 
     if (targetDeviceId) {
@@ -299,5 +312,5 @@ serve(async (req) => {
       .eq('id', targetDeviceId)
   }
 
-  return json({ success: true, message: 'Vehicle and user deleted successfully' })
+  return json({ success: true, message: 'Vehicle and user deleted successfully' }, 200, origin)
 })

@@ -8,7 +8,7 @@ import OriginCard from './OriginCard'
 import { useSimulatedFleet } from './useSimulatedFleet'
 import { useRouteHistory } from '../../hooks'
 import { normalizeEntity } from './normalize'
-import { useDashboardContext } from '../../context/DashboardContext'
+import { useDashboardContext } from '../../context/dashboard-context'
 import { deleteVehicle } from '../../lib/vehicleActions'
 
 const toMapShape = (e, original = null) => ({

@@ -13,6 +13,23 @@ export const useLiveCollection = ({ fetchFn, subscribeTables = [] }) => {
   const lastSyncTimeRef = useRef(null)
   const [refetchTrigger, setRefetchTrigger] = useState(0)
 
+  // fetchFn llega como closure nueva en cada render del consumidor. Meterlo en las
+  // dependencias del effect lo reiniciaria en cada render, resuscribiendo el canal
+  // realtime y relanzando el poll sin parar. Se guarda en un ref para que el effect
+  // use siempre la version mas reciente sin depender de su identidad.
+  // El ref se escribe en un effect declarado ANTES del efecto principal: React ejecuta
+  // los effects en orden, asi que cuando arranque la carga el ref ya esta actualizado.
+  const fetchFnRef = useRef(fetchFn)
+  const tablesRef = useRef(subscribeTables)
+  useEffect(() => {
+    fetchFnRef.current = fetchFn
+    tablesRef.current = subscribeTables
+  })
+
+  // Las tablas si se suscriben de verdad cuando cambian, asi que van en las deps.
+  // Se comparan por valor (un array nuevo con el mismo contenido no debe resuscribir).
+  const tablesKey = subscribeTables.join('\u0000')
+
   useEffect(() => {
     let cancelled = false
     let debounceTimer = null
@@ -26,7 +43,7 @@ export const useLiveCollection = ({ fetchFn, subscribeTables = [] }) => {
       const currentSeq = ++reqSeqRef.current
       setIsLoading(true)
       try {
-        const result = await fetchFn()
+        const result = await fetchFnRef.current()
 
         if (!cancelled && currentSeq === reqSeqRef.current) {
           setData(result)
@@ -86,9 +103,10 @@ export const useLiveCollection = ({ fetchFn, subscribeTables = [] }) => {
     }
 
     let channel = null
-    if (hasSupabaseConfig && supabase && subscribeTables.length > 0) {
+    const tables = tablesRef.current
+    if (hasSupabaseConfig && supabase && tables.length > 0) {
       channel = supabase.channel(`live-collection-${Math.random().toString(36).substr(2, 9)}`)
-      subscribeTables.forEach(table => {
+      tables.forEach(table => {
         channel.on('postgres_changes', { event: '*', schema: 'public', table }, debouncedLoad)
       })
       channel.subscribe((status) => {
@@ -113,7 +131,7 @@ export const useLiveCollection = ({ fetchFn, subscribeTables = [] }) => {
         supabase.removeChannel(channel)
       }
     }
-  }, [refetchTrigger]) // fetchFn and subscribeTables are stable by convention
+  }, [refetchTrigger, tablesKey])
 
   const refetch = useCallback(() => setRefetchTrigger(t => t + 1), [])
 

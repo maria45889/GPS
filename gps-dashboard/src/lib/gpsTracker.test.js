@@ -35,15 +35,15 @@ describe('gpsTracker & offline cache', () => {
     expect(getCachedLocations('device-202')).toHaveLength(0);
   });
 
-  it('evita solapamientos de intervalos con la bandera isRunning', async () => {
-    expect(gpsTracker.isRunning).toBe(false);
+  it('evita solapamientos de intervalos con la bandera tickInFlight', async () => {
+    expect(gpsTracker.tickInFlight).toBe(false);
 
-    gpsTracker.isRunning = true;
+    gpsTracker.tickInFlight = true;
     await gpsTracker.tick();
 
-    // Como isRunning era true, tick no debe ejecutar doble proceso
-    expect(gpsTracker.isRunning).toBe(true);
-    gpsTracker.isRunning = false;
+    // Con tickInFlight activo, tick no debe ejecutar un segundo proceso.
+    expect(gpsTracker.tickInFlight).toBe(true);
+    gpsTracker.tickInFlight = false;
   });
 
   it('invalida ejecuciones previas al llamar a stop()', async () => {
@@ -57,5 +57,26 @@ describe('gpsTracker & offline cache', () => {
     // Un tick invocación con el runId viejo debe retornar inmediatamente sin alterar isRunning
     await gpsTracker.tick(initialRunId);
     expect(gpsTracker.isRunning).toBe(false);
+  });
+
+  it('no cancela el primer tick por usar un flag distinto al de seguimiento', async () => {
+    // Regresión: start() ponía isRunning=true y tick() usaba ese mismo flag como
+    // guard, así que el primer tick se cancelaba solo y el dashboard se quedaba sin
+    // posición hasta el siguiente intervalo (30 s).
+    const getCurrentPosition = vi.fn((success) => {
+      success({ coords: { latitude: 4.61, longitude: -74.08, accuracy: 5 }, timestamp: Date.now() });
+    });
+    vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } });
+    const sendSpy = vi.spyOn(gpsTracker, 'sendCurrentLocation').mockResolvedValue(undefined);
+
+    gpsTracker.start(30000);
+
+    expect(gpsTracker.isRunning).toBe(true);
+    // El primer tick se dispara de inmediato y no se autodescarta.
+    expect(getCurrentPosition).toHaveBeenCalled();
+
+    gpsTracker.stop();
+    vi.unstubAllGlobals();
+    sendSpy.mockRestore();
   });
 });

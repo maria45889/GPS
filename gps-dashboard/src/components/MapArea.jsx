@@ -264,12 +264,15 @@ const MapArea = ({
           </div>
         )}
 
+        {/* Atribucion: las tiles de arriba son de Google (vt/lyrs=m y vt/lyrs=y), no de
+            Esri ni de OSM. Antes se acreditaba a Esri/OpenStreetMap mientras se servian
+            tiles de Google, que es una atribucion falsa. Leaflet ya pinta su propia
+            atribucion, aqui solo se replica el enlace para que siga siendo visible con
+            los estilos del panel. */}
         <div className="absolute bottom-2 right-4 pointer-events-auto">
           <div />
           <div className="text-gray-500 text-xs">
-            <span>© Esri / </span>
-            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">OpenStreetMap</a>
-            <span> contributors</span>
+            <a href="https://developers.google.com/maps/documentation/javascript" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Google Maps</a>
           </div>
         </div>
       </div>

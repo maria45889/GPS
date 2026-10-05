@@ -1,26 +1,23 @@
-import React, { useState } from 'react'
-import { Gauge, Compass, Navigation, Satellite, Flame, Users, Battery, CircleDot, FileText } from 'lucide-react'
+import React from 'react'
+import { Gauge, Compass, Navigation, Satellite, Battery, Signal, FileText } from 'lucide-react'
 import { signalFor } from './normalize'
 
+// Solo se declara 'satellite' porque es la unica capa que el mapa renderiza de verdad:
+// se traduce a baseLayer en CommandCenter/MapArea. 'traffic' y 'heat' figuraban aqui
+// pero ningun componente los leia, asi que los botones solo cambiaban su propio color
+// sin afectar al mapa.
 const LAYERS = [
-  { id: 'traffic', label: 'Tráfico', icon: Flame },
-  { id: 'heat', label: 'Calor', icon: Users },
   { id: 'satellite', label: 'Satélite', icon: Satellite },
 ]
 
 const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, onBaseLayerChange, onShowDetail }) => {
-  const [extraLayers, setExtraLayers] = useState([])
-
   const toggleLayer = (layerId) => {
     if (layerId === 'satellite') {
       onBaseLayerChange(baseLayer === 'satellite' ? 'dark' : 'satellite')
-      return
     }
-    setExtraLayers((prev) => (prev.includes(layerId) ? prev.filter((l) => l !== layerId) : [...prev, layerId]))
   }
 
-  const isLayerActive = (layerId) =>
-    layerId === 'satellite' ? baseLayer === 'satellite' : extraLayers.includes(layerId)
+  const isLayerActive = (layerId) => (layerId === 'satellite' ? baseLayer === 'satellite' : false)
 
   const hasPosition = Boolean(entity?.position)
   const heading = Math.round(entity?.bearing ?? 0)
@@ -80,9 +77,9 @@ const BottomBar = ({ entity, onToggleRouteFollow, isFollowingRoute, baseLayer, o
         />
         <Divider className="hidden md:block" />
         <MetricCell
-          icon={<CircleDot size={13} />}
-          label="Precisión"
-          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{accuracy ?? '—'}<span className="text-[9px] text-slate-500"> m</span></span>}
+          icon={<Signal size={13} />}
+          label="Velocidad"
+          value={<span className="font-mono text-[16px] font-extrabold text-slate-100">{hasPosition ? speed : '—'}<span className="text-[9px] text-slate-500"> km/h</span></span>}
           className="hidden md:flex"
         />
         <Divider className="hidden md:block" />

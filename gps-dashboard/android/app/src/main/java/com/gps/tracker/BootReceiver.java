@@ -16,9 +16,10 @@ import androidx.core.app.NotificationCompat;
 /**
  * Se registra para BOOT_COMPLETED, USER_UNLOCKED y MY_PACKAGE_REPLACED.
  *
- * Con la migración a @capacitor-community/background-geolocation, este receiver
- * ya NO inicia LocationService (eliminado). En cambio, lanza MainActivity para
- * que el plugin de Capacitor reanude el tracking en background.
+ * El tracking en background ya no depende del WebView de Capacitor (que solo
+ * funciona si hay Activity viva), sino de NativeTrackingService, un
+ * ForegroundService de tipo location. Es la unica via que Android permite arrancar
+ * desde BOOT_COMPLETED sin violar las restricciones de background activity launch.
  */
 public class BootReceiver extends BroadcastReceiver {
     private static final String TAG = "BootReceiver";
@@ -84,13 +85,13 @@ public class BootReceiver extends BroadcastReceiver {
                 return;
             }
 
-            // El tracking background es gestionado por el plugin Capacitor.
-            // Lanzar BootForegroundService para que este lance MainActivity con permisos
-            // y Capacitor retome el seguimiento.
-            Intent serviceIntent = new Intent(context, BootForegroundService.class);
-            serviceIntent.putExtra("boot_launch", true);
-            androidx.core.content.ContextCompat.startForegroundService(context, serviceIntent);
-            Log.i(TAG, "BootForegroundService lanzado tras reinicio para que Capacitor BG Geolocation retome el tracking.");
+            // Arranca el rastreo nativo. Abrir MainActivity desde aqui NO es una
+            // alternativa valida: Android 10+ bloquea el background activity launch
+            // y el bloqueo no lanza excepcion, asi que el intento reportaria exito sin
+            // hacer nada. Un ForegroundService de tipo location si puede iniciarse
+            // desde BOOT_COMPLETED.
+            NativeTrackingService.startNativeTracking(context);
+            Log.i(TAG, "NativeTrackingService lanzado tras reinicio.");
 
         } catch (Exception e) {
             Log.e(TAG, "Excepción en BootReceiver al lanzar MainActivity: " + e.getMessage(), e);

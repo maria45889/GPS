@@ -5,8 +5,6 @@ import { clearAllGpsCaches } from '../lib/gpsTracker';
 import { clearQueryCaches } from '../lib/queries';
 import { DashboardContext } from './dashboard-context';
 
-export { useDashboardContext } from './dashboard-context';
-
 const initialState = {
   category: 'devices',
   selectedEntity: null,
@@ -174,6 +172,12 @@ export const DashboardProvider = ({ children }) => {
     devicesSyncTime,
     hideEphemeral,
     refetchVehicles,
+    // refetchDevices faltaba en la lista aunque se expone en `data`. Sin esta
+    // dependencia, el valor del contexto podia quedar congelado en la primera
+    // version de `refetchDevices` y los reintentos de red no llegaban a los hooks.
+    // useLiveCollection lo envuelve en useCallback, asi que su identidad es estable
+    // y añadirlo no genera renders extra.
+    refetchDevices,
     refetchGeofences,
     signOut
   ]);

@@ -344,14 +344,59 @@ export const fetchLatestLocations = async () => {
       throw error
     }
 
-    console.warn('⚠️ Vista latest_gps_locations no disponible (PGRST202/42P01).', error?.message || error)
-    if (locationsCache && locationsCache.rows) return locationsCache.rows;
-    throw error
+    // latest_gps_locations es una VIEW. PostgREST deduce las relaciones embebidas
+    // de las FK que encuentra en el catalogo de la DB, y una vista no declara FK, asi
+    // que el embed devices(...) falla con PGRST202 aunque gps_locations y devices si
+    // esten relacionadas. Sin este fallback el mapa se queda vacio entero.
+    console.warn('⚠️ Embed devices(...) no resoluble sobre la vista; reintentando con consulta simple.', error?.message || error)
+    return fetchLatestLocationsWithoutEmbed()
   }).finally(() => {
     locationsInFlight = null
   })
 
   return locationsInFlight
+}
+
+// Consulta la vista sin embed y trae la telemetria de devices por separado, uniendo
+// ambas en memoria con la misma forma que produce el embed ({ devices: {...} }).
+// Asi transformDevice() no necesita cambios y el dashboard no se queda sin mapa.
+const fetchLatestLocationsWithoutEmbed = async () => {
+  const { data: locations, error: locErr } = await supabase
+    .from('latest_gps_locations')
+    .select('device_id, latitude, longitude, speed, accuracy, altitude, bearing, timestamp')
+
+  if (locErr) {
+    console.warn('⚠️ Vista latest_gps_locations no disponible (PGRST202/42P01).', locErr.message || locErr)
+    if (locationsCache && locationsCache.rows) return locationsCache.rows
+    throw locErr
+  }
+
+  const rows = Array.isArray(locations) ? locations : []
+  const deviceIds = [...new Set(rows.map((r) => r.device_id).filter(Boolean))]
+  const telemetryById = new Map()
+
+  if (deviceIds.length > 0) {
+    const { data: devices, error: devErr } = await supabase
+      .from('devices')
+      .select('id, battery, platform, model, app_version')
+      .in('id', deviceIds)
+
+    if (devErr) {
+      // La telemetria es opcional: sin ella el mapa sigue funcionando con la
+      // bateria y el modelo de la fila devices de cada dispositivo.
+      console.warn('⚠️ No se pudo leer la telemetria de devices; se devuelve la ubicacion sin metadatos.', devErr.message || devErr)
+    } else if (Array.isArray(devices)) {
+      for (const device of devices) telemetryById.set(device.id, device)
+    }
+  }
+
+  const merged = rows.map((row) => {
+    const telemetry = telemetryById.get(row.device_id)
+    return telemetry ? { ...row, devices: telemetry } : row
+  })
+
+  locationsCache = { at: Date.now(), rows: merged }
+  return merged
 }
 
 export const latestLocationsByDevice = (locations = []) => {

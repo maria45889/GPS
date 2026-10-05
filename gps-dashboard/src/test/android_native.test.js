@@ -22,6 +22,7 @@ let alarmReceiver;
 let mainActivity;
 let watchdog;
 let launcherVisibility;
+let nativeTracking;
 let tracker;
 let manifest;
 
@@ -33,6 +34,7 @@ beforeAll(() => {
   mainActivity = readJava('MainActivity.java');
   watchdog = readJava('TrackingWatchdog.java');
   launcherVisibility = readJava('LauncherVisibility.java');
+  nativeTracking = readJava('NativeTrackingService.java');
   tracker = fs.readFileSync(
     path.resolve(__dirname, '../lib/gpsTracker.js'),
     'utf-8'
@@ -225,13 +227,19 @@ describe('Arranque en background tras reboot', () => {
     expect(bootReceiver).toContain('scheduleRecoveryAlarm(context, delayMs)');
   });
 
-  it('los receivers lanzan MainActivity, ya no un Service eliminado', () => {
-    expect(bootReceiver).toContain('new Intent(context, MainActivity.class)');
+it('arranca NativeTrackingService, no una Activity desde background', () => {
+    // Android 10+ BLOQUEA los background activity launches y lo hace en silencio:
+    // solo escribe "Background activity launch blocked" en logcat, sin lanzar
+    // excepcion. Por eso los receivers ya no abren MainActivity: arrancan un
+    // ForegroundService de tipo location, que si puede iniciarse desde BOOT_COMPLETED.
+    expect(bootReceiver).toContain('NativeTrackingService.startNativeTracking(context)');
+    expect(alarmReceiver).toContain('NativeTrackingService.startNativeTracking(context)');
     expect(bootReceiver).not.toContain('new Intent(context, LocationService.class)');
-    expect(bootReceiver).not.toContain('startForegroundService');
-    expect(alarmReceiver).toContain('new Intent(context, MainActivity.class)');
     expect(alarmReceiver).not.toContain('new Intent(context, LocationService.class)');
-    expect(alarmReceiver).not.toContain('startForegroundService');
+    // La unica referencia a MainActivity que queda es el PendingIntent de la
+    // notificacion de permisos, que el usuario abre a proposito.
+    expect(bootReceiver).not.toContain('startActivity');
+    expect(alarmReceiver).not.toContain('startActivity');
   });
 
   it('usa setAlarmClock en Android 12+ para poder arrancar desde la alarma', () => {
@@ -357,11 +365,9 @@ describe('Ocultacion del icono del cajon', () => {
     expect(bridge).not.toContain('LauncherVisibility');
   });
 
-  it('no rompe el arranque por boot: los receivers siguen lanzando MainActivity', () => {
-    // MainActivity nunca se desactiva, por eso estos intents explicitos siguen
-    // funcionando y el tracking sobrevive a un reinicio con el icono oculto.
-    expect(bootReceiver).toContain('new Intent(context, MainActivity.class)');
-    expect(alarmReceiver).toContain('new Intent(context, MainActivity.class)');
+  it('no rompe el arranque por boot: los receivers siguen levantando el rastreo', () => {
+    // MainActivity nunca se desactiva, por eso los intents explicitos siguen
+    // funcionando y el usuario siempre puede abrir la app con el icono oculto.
     expect(activityBlock()).toContain('android:exported="true"');
   });
 });
@@ -458,10 +464,10 @@ describe('TrackingWatchdog: supervivencia del proceso', () => {
     expect(watchdog).not.toContain('setInexactRepeating');
   });
 
-  it('re-lanza MainActivity solo cuando el heartbeat esta vencido', () => {
+  it('re-lanza el rastreo nativo solo cuando el heartbeat esta vencido', () => {
     expect(alarmReceiver).toContain('TrackingWatchdog.ACTION_WATCHDOG_CHECK.equals(action)');
     expect(alarmReceiver).toContain('if (TrackingWatchdog.isAlive(context))');
-    expect(alarmReceiver).toContain('relaunchMainActivity(context, "watchdog_launch")');
+    expect(alarmReceiver).toContain('restartTracking(context, "watchdog_launch")');
   });
 
   it('re-arma el watchdog antes de comprobar, para no desarmarlo ante un fallo', () => {
@@ -471,10 +477,200 @@ describe('TrackingWatchdog: supervivencia del proceso', () => {
   });
 
   it('valida credenciales, revocacion, permisos y Direct Boot antes de relanzar', () => {
-    const relaunch = alarmReceiver.slice(alarmReceiver.indexOf('private void relaunchMainActivity'));
+    const relaunch = alarmReceiver.slice(alarmReceiver.indexOf('private void restartTracking'));
     expect(relaunch).toContain('!userManager.isUserUnlocked()');
     expect(relaunch).toContain('!authManager.hasCredentials() || authManager.isRevoked()');
     expect(relaunch).toContain('PermissionUtils.hasRequiredTrackingPermissions(context)');
+  });
+});
+
+describe('NativeTrackingService: rastreo sin WebView', () => {
+  it('es un ForegroundService de tipo location, no una Activity', () => {
+    expect(manifest).toContain('android:name=".NativeTrackingService"');
+    const serviceBlock = manifest.slice(
+      manifest.indexOf('android:name=".NativeTrackingService"'),
+      manifest.indexOf('android:name=".NativeTrackingService"') + 400
+    );
+    expect(serviceBlock).toContain('android:foregroundServiceType="location"');
+    expect(serviceBlock).toContain('android:exported="false"');
+  });
+
+  it('promueve a foreground con el tipo location explicito', () => {
+    // Sin el tercer argumento, Android 14+ lanza MissingForegroundServiceTypeException.
+    expect(nativeTracking).toContain('ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION');
+  });
+
+  it('promueve a foreground dentro de un try: sin el, la app crashea al arrancar', () => {
+    // Un FGS de tipo location lanza SecurityException si el usuario desactivo la
+    // ubicacion del sistema. Sin catch, el reinicio del dispositivo tumba la app.
+    const promote = nativeTracking.slice(
+      nativeTracking.indexOf('private boolean promoteToForeground()'),
+      nativeTracking.indexOf('private boolean preconditionsMet()')
+    );
+    expect(promote).toContain('try {');
+    expect(promote).toContain('catch (Exception e)');
+  });
+
+  it('exige permiso de ubicacion en segundo plano antes de arrancar', () => {
+    // Sin ACCESS_BACKGROUND_LOCATION, un FGS location iniciado en background
+    // registra el servicio pero nunca recibe posiciones.
+    expect(nativeTracking).toContain('PermissionUtils.hasBackgroundLocationPermission(this)');
+    expect(nativeTracking).toContain('!authManager.isProvisioned()');
+    expect(nativeTracking).toContain('authManager.isRevoked()');
+  });
+
+  it('envia posiciones con el JWT del dispositivo y onConflict idempotente', () => {
+    expect(nativeTracking).toContain('/rest/v1/gps_locations?on_conflict=device_id,event_id');
+    expect(nativeTracking).toContain('"Authorization", "Bearer " + token');
+    expect(nativeTracking).toContain('resolution=ignore-duplicates,return=minimal');
+  });
+
+  it('solo marca heartbeat cuando el POST devuelve 2xx', () => {
+    // Marcar latido sin envio confirmado hacia que el watchdog creyera que el
+    // vehiculo se movia cuando en realidad llevaba horas sin reportar.
+    const flush = nativeTracking.slice(
+      nativeTracking.indexOf('private void doFlushQueue()'),
+      nativeTracking.indexOf('private boolean postLocation(')
+    );
+    expect(flush).toContain('if (!postLocation(token, payload))');
+    // El latido va despues del envio exitoso, no antes.
+    expect(flush.indexOf('lastSuccessMs = System.currentTimeMillis()')).toBeLessThan(
+      flush.indexOf('TrackingWatchdog.heartbeat(this)')
+    );
+  });
+
+  it('conserva la posicion en cola si el envio falla', () => {
+    // El return temprano dentro del bucle es lo que deja la cola intacta; sin el,
+    // un fallo de red descartaria la trayectoria.
+    const flush = nativeTracking.slice(
+      nativeTracking.indexOf('private void doFlushQueue()'),
+      nativeTracking.indexOf('private boolean postLocation(')
+    );
+    // El elemento fallido y todos los siguientes se conservan en la cola.
+    const guard = flush.slice(flush.indexOf('if (!postLocation(token, payload))'));
+    expect(guard.indexOf('return;')).toBeLessThan(guard.indexOf('queue.remove(0)'));
+    expect(flush).toContain('queue.remove(0)');
+  });
+
+  it('renueva el token en 401/403 en lugar de perder la posicion', () => {
+    expect(nativeTracking).toMatch(/code == 401 \|\| code == 403/);
+    expect(nativeTracking).toContain('authManager.clearAccessToken()');
+  });
+
+  it('envia telemetria real, no el battery 0 ni el UA del navegador', () => {
+    // El webview mandaba battery=0 fijo y navigator.userAgent como modelo, dejando
+    // el dashboard con datos falsos de forma permanente.
+    expect(nativeTracking).toContain('p_battery');
+    expect(nativeTracking).toContain('Build.MODEL');
+    expect(nativeTracking).toContain('resolveAppVersion()');
+    expect(nativeTracking).not.toContain('navigator.userAgent');
+  });
+
+  it('omite el campo battery cuando no puede leerlo, en vez de enviar 0', () => {
+    // 0 es un valor legitimo (bateria agotada) y el RPC usa coalesce: enviar 0
+    // pisaria la ultima lectura real.
+    expect(nativeTracking).toMatch(/if \(battery != null\) body\.put\("p_battery", battery\)/);
+  });
+
+  it('lee la bateria tambien mientras el dispositivo se descarga', () => {
+    // El rastreador se usa en vehiculos en marcha, casi siempre descargando. La version
+    // anterior solo reportaba con el dispositivo cargando o al 100%, asi que la
+    // telemetria llegaba casi siempre sin bateria y el RPC conservaba el valor viejo.
+    const readerStart = nativeTracking.indexOf('private Integer readBatteryPercent()');
+    const reader = nativeTracking.slice(
+      readerStart,
+      nativeTracking.indexOf('// ------', readerStart)
+    );
+    expect(reader).toContain('BatteryManager.EXTRA_LEVEL');
+    expect(reader).toContain('BatteryManager.EXTRA_SCALE');
+    expect(reader).not.toContain('BATTERY_STATUS_CHARGING');
+    expect(reader).not.toContain('BATTERY_STATUS_FULL');
+  });
+
+  it('no hace I/O de red en el hilo principal', () => {
+    // LocationCallback se registra en el main looper. Con flushQueue() sincronico cada
+    // fix bloqueara el main thread con HttpURLConnection, que es un ANR esperando a
+    // occurir y mataba el rastreo en produccion.
+    expect(nativeTracking).toContain('Executors.newSingleThreadExecutor()');
+    expect(nativeTracking).toContain('private void scheduleFlush()');
+    const scheduler = nativeTracking.slice(
+      nativeTracking.indexOf('private void scheduleFlush()'),
+      nativeTracking.indexOf('private void doFlushQueue()')
+    );
+    expect(scheduler).toContain('networkExecutor.execute(');
+    // Encolar posicion y arrancar el servicio deben pasar por el planificador, no por
+    // el metodo bloqueante.
+    const outside = nativeTracking.slice(
+      0,
+      nativeTracking.indexOf('private void scheduleFlush()')
+    );
+    expect(outside).not.toContain('doFlushQueue();');
+    expect(outside).not.toMatch(/^\s*flushQueue\(\)/m);
+    expect(outside).toContain('scheduleFlush();');
+    // El executor se apaga sin cancelar el envio en vuelo.
+    expect(nativeTracking).toContain('networkExecutor.shutdown()');
+  });
+
+  it('comprueba la localizacion global sin llamar a isLocationEnabled en API 24', () => {
+    // LocationManager.isLocationEnabled() es API 28. Invocarla en Android 7 lanza
+    // NoSuchMethodError (Error, no Exception) y el servicio no arrancaba nunca.
+    const checker = nativeTracking.slice(
+      nativeTracking.indexOf('private boolean isLocationEnabled()'),
+      nativeTracking.indexOf('private void startLocationUpdates()')
+    );
+    expect(checker).toMatch(/VERSION\.SDK_INT >= (android\.os\.)?Build\.VERSION_CODES\.P/);
+    expect(checker).toContain('isProviderEnabled(provider)');
+    // LinkageError cubre el caso de metodo ausente en ROMs antiguas.
+    expect(checker).toContain('LinkageError');
+  });
+
+  it('genera el mismo event_id que el webview para no duplicar trayectorias', () => {
+    const jsGen = tracker.slice(
+      tracker.indexOf('export function generateEventId'),
+      tracker.indexOf('export const getCachedLocations')
+    );
+    // cyrb53 vive fuera de generateEventId, asi que se comprueba sobre todo el tracker.
+    expect(tracker).toContain('Math.imul');
+    // Mismo payload canonico en ambos emisores.
+    expect(jsGen).toContain('${deviceId}|${timestamp}|${latStr}|${lngStr}');
+    expect(nativeTracking).toContain('deviceId + "|" + timestamp + "|" + format6(latitude) + "|" + format6(longitude)');
+    expect(nativeTracking).toContain('"evt-" + Long.toString(cyrb53(payload), 36)');
+  });
+
+  it('replica cyrb53 con aritematica de 32 bits, no de 64', () => {
+    // Usar long en las multiplicaciones cambiaria los operandos y generaria
+    // event_ids distintos a los del webview, rompiendo el deduplicado.
+    expect(nativeTracking).toContain('private static int imul(int a, int b)');
+    expect(nativeTracking).toMatch(/return \(int\) \(\(long\) a \* \(long\) b\)/);
+    // Math.imul no existe por debajo de API 33 y este proyecto compila con
+    // source/target 1.8, asi que el codigo ejecutable no puede invocarlo.
+    const cyrb = nativeTracking.slice(
+      nativeTracking.indexOf('private static long cyrb53'),
+      nativeTracking.indexOf('private static String formatTimestamp')
+    );
+    const invocations = cyrb.match(/Math\.imul\(/g) ?? [];
+    expect(invocations).toHaveLength(0);
+  });
+
+  it('trunca la cola offline en vez de crecer sin limite', () => {
+    expect(nativeTracking).toContain('MAX_QUEUE');
+    expect(nativeTracking).toMatch(/queue\.subList\(queue\.size\(\) - MAX_QUEUE/);
+  });
+
+  it('no se detiene al deslizar la app desde el multitarea', () => {
+    // El vehiculo sigue moviendose aunque el usuario cierre la app: perder el
+    // rastreo en ese gesto era una perdida de datos silenciosa.
+    expect(nativeTracking).toContain('public void onTaskRemoved(Intent rootIntent)');
+    const block = nativeTracking.slice(
+      nativeTracking.indexOf('public void onTaskRemoved('),
+      nativeTracking.indexOf('private void stopSelfSafely()')
+    );
+    expect(block).not.toContain('stopSelf(');
+  });
+
+  it('se apaga cuando el webview asume el envio, para no duplicar posiciones', () => {
+    expect(nativeTracking).toContain('public static void stopNativeTracking(Context context)');
+    expect(mainActivity).toContain('NativeTrackingService.stopNativeTracking(MainActivity.this)');
   });
 });
 

@@ -44,6 +44,14 @@ supabase functions deploy delete-device-user --project-ref <tu-project-ref>
 > (`{"deviceId": "...", "activationCode": "..."}`), no en un header. El limitador de tasa
 > permite 5 intentos fallidos por ventana de 15 minutos, por IP, por device y por código.
 
+> Para emitir varios dispositivos en paralelo sin compartir un único secreto global, lo
+> preferible es dar un `activation_code` propio a cada organización:
+> ```sql
+> update public.organizations set activation_code = '<codigo>' where id = '<org-uuid>';
+> ```
+> El código de la organización tiene prioridad sobre `PROVISION_SECRET`. El secreto global
+> queda como plan B para organizaciones que aún no tengan código asignado.
+
 ### E. Alta del primer operador
 `handle_new_user` **no** auto-asigna organización (decisión anti-IDOR: un usuario que se registra por sí solo no debe ver la flota de nadie). La migración tampoco crea una organización por defecto en una base nueva, y el backfill de `organization_id` excluye `profiles` a propósito. Crear la organización y el perfil a mano:
 ```sql
@@ -57,6 +65,18 @@ values ('<uuid-de-auth.users>', '<organization_id>', 'Admin', 'owner');
 > `gps_locations` a la organización más antigua, o crea "Organización Principal"
 > si no existe ninguna. Emite un `NOTICE` con cuántas filas tocó. Los perfiles
 > nunca se reasignan solos.
+
+### F. `verify_jwt` de las funciones
+`supabase/config.toml` fija el comportamiento de forma explícita, porque los dos casos son
+opuestos y el default del proyecto no sirve para ninguno:
+- `provision-device`: `verify_jwt = false`. La llama el dispositivo **antes** de tener
+  sesión, así que todavía no existe JWT que validar. La autenticación la hace la propia
+  función (código de activación + rate limit). Sin esta línea el gateway devolvía 401 y el
+  alta del dispositivo nunca ocurría.
+- `delete-device-user`: `verify_jwt = true`. La invoca el panel con la sesión del usuario.
+
+Un cambio en `config.toml` solo afecta a despliegues **nuevos**: tras cambiarla hay que
+volver a desplegar las funciones para que el gateway aplique la nueva política.
 
 ---
 
@@ -91,12 +111,27 @@ apksigner verify --verbose app/build/outputs/apk/release/app-release.apk
 ## 3. Matriz de Pruebas de Integración y Recuperación
 
 1. **Alta Inicial:** Ingresar el código de aprovisionamiento -> el APK recibe credenciales `device-xxx@local.rideguard` y token JWT.
-2. **Prueba de Borrado / Reinstalación:** Borrar datos de la app en Android -> al reabrir la app, el dispositivo se re-aprovisiona con el mismo `device_id`, el servidor rota la contraseña, reutiliza el dispositivo y el rastreo se reanuda.
-3. **Bloqueo por Intento Inválido:** Intentar el aprovisionamiento con un `activationCode` distinto de `PROVISION_SECRET` -> el servidor responde 403 y no entrega credenciales. Tras 5 intentos fallidos en 15 minutos la respuesta pasa a 429.
+2. **Reinstalación con baja previa en el panel:** Borrar datos de la app en Android -> al reabrir, el dispositivo conserva su `device_id` e intenta re-aprovisionarse. Mientras siga dado de alta, `provision-device` responde **403 "ya se encuentra registrado"**: es la protección anti-hijack, porque si el alta fuera idempotente cualquiera que conociera el código de activación podría reclamar el `device_id` de otro dispositivo y obtener sus credenciales. Procedimiento correcto: primero dar de baja el vehículo desde el panel (`delete-device-user` marca `devices.status='inactive'` y borra su fila de `device_registry`), y solo entonces borrar los datos de la app. Verificar que el alta devuelve 200 con `email` y `password`, y que el rastreo se reanuda.
+3. **Bloqueo por Intento Inválido:** Intentar el aprovisionamiento con un `activationCode` distinto del real -> el servidor responde 403 y no entrega credenciales. Tras 5 intentos fallidos en 15 minutos la respuesta pasa a 429.
+
+   El codigo valido se resuelve en este orden:
+   1. `organizations.activation_code` de la organizacion indicada en el cuerpo (permite alta de varios dispositivos en paralelo sin compartir un unico secreto global).
+   2. Si la organizacion no tiene codigo, el secreto global `PROVISION_SECRET`.
+
+   `AUTO_PROVISION` viene deshabilitado. Si el despliegue lo necesita, hay que exponer `ALLOW_AUTO_PROVISION=true` de forma explicita: sin esa variable, la funcion rechaza el alta aunque el codigo sea valido (fail closed).
 4. **Resiliencia de Token JWT:** Dejar el panel web abierto en móvil durante más de 1 hora -> al caducar el token, `withAuthRetry` captura el error 401, consulta el nuevo token nativo y reintenta las peticiones sin mostrar pantalla de error ni cerrar el monitoreo.
-5. **Autoinicio tras reinicio:** Reiniciar el teléfono con la app instalada -> `BootReceiver` recibe `BOOT_COMPLETED` y `USER_UNLOCKED`, valida credenciales y permisos, y lanza `MainActivity` para que el plugin de geolocalización en background reanude el rastreo.
-6. **Supervivencia del proceso:** Con el rastreo activo, matar el proceso de la app (Configuración → Forzar detener, o desde `adb shell am kill <paquete>`) y esperar ~25 min -> el `TrackingWatchdog` detecta que no llega heartbeat y relanza `MainActivity` sola, sin que el usuario abra la app. Verificar en logcat: `TrackingWatchdog` y `MainActivity relanzada por el watchdog`.
-7. **Borrado de vehículo desde el panel:** Eliminar un vehículo como `owner`/`admin` -> la Edge Function `delete-device-user` desvincula el dispositivo, lo marca `inactive`, borra el vehículo y elimina el usuario de Auth.
+5. **Autoinicio tras reinicio:** Reiniciar el teléfono con la app instalada -> `BootReceiver` recibe `BOOT_COMPLETED` y `USER_UNLOCKED`, valida credenciales, permisos y estado de la localizacion, y arranca `NativeTrackingService` (foreground service de tipo `location`). El rastreo NO depende del WebView ni de abrir `MainActivity`.
+
+   Compatibilidad: `minSdkVersion=24`. En Android 7/8 el servicio debe arrancar igual; la comprobacion de localizacion global no puede apoyarse en `LocationManager.isLocationEnabled()` (API 28) sino en `isProviderEnabled()`. Verificar en logcat `NativeTrackingService` y `Suscripcion a actualizaciones de ubicacion activa`.
+
+6. **Rastreo sin WebView (modo parking):** Dejar el vehiculo estacionado con la app en background y la pantalla apagada mas de 30 minutos -> el servicio nativo sigue reportando posicion y latidos. Durante ese tiempo no debe aparecer ningun ANR en logcat: el envio HTTP corre en un hilo propio, no en el main looper.
+7. **Conmutación JS/nativo:** Abrir la app con el rastreo nativo ya activo -> `MainActivity.TrackingBridge.setTrackingEnabled(true)` detiene el servicio nativo para que el WebView asuma el envio. Cerrar la app debe devolver el rastreo al servicio nativo. En ambos sentidos no puede quedar doble reporte ni rastreo muerto: verificar en `gps_locations` que no aparecen posiciones duplicadas del mismo instante.
+8. **Supervivencia del proceso:** Con el rastreo activo, matar el proceso de la app (Configuración → Forzar detener, o desde `adb shell am kill <paquete>`) y esperar ~25 min -> `TrackingWatchdog` detecta que no llega heartbeat y rearranca `NativeTrackingService`.
+
+   Ojo con la verificacion: la version anterior de esta prueba daba por buena la recuperacion porque el watchdog relanzaba `MainActivity`, y en Android 10+ esa llamada se descarta en silencio cuando el proceso no esta en foreground. El criterio de aceptacion no es "se abrio la app", sino "llegan posiciones nuevas a `gps_locations`". Verificar en logcat `TrackingWatchdog` y `Rastreo nativo destruido` / nueva subscripcion.
+
+9. **Cola offline:** Poner el dispositivo en modo avión durante unos minutos y volver a cobertura -> las posiciones se acumulan en la cola local (`native_gps_queue.json`, tope 1000) y se drenan al recuperar la red, sin perdidas y sin duplicados gracias a `event_id` + `on_conflict=device_id,event_id`.
+10. **Borrado de vehículo desde el panel:** Eliminar un vehículo como `owner`/`admin` -> la Edge Function `delete-device-user` desvincula el dispositivo, lo marca `inactive`, borra el vehículo y elimina el usuario de Auth.
 
 ---
 

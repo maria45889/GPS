@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { fetchDeviceRouteHistory, sanitizeRoute } from '../lib/queries'
 
 export const useRouteHistory = (entity) => {
@@ -12,40 +12,36 @@ export const useRouteHistory = (entity) => {
     return sanitizeRoute(raw)
   }, [entity?.route])
 
-  const [telemetryRoute, setTelemetryRoute] = useState([])
-  const [loading, setLoading] = useState(false)
-  const fetchedIdRef = useRef(null)
-
   // Dispositivos sin ruta embebida o vehículos: pedir historial real de gps_locations.
   // Ojo: normalizeEntity expone el id del dispositivo como `deviceId` (camelCase), nunca
   // como `device_id`. Leer la columna cruda aquí dejaba `targetDeviceId` en undefined y
-  // los vehículos sin_historial, en silencio.
+  // los vehículos sin historial, en silencio.
   const targetDeviceId = isVehicle ? entity?.deviceId : entityId
   const wantsTelemetry = Boolean(targetDeviceId && embedded.length < 2)
 
-  useEffect(() => {
-    if (fetchedIdRef.current !== targetDeviceId) {
-      setTelemetryRoute([])
-      fetchedIdRef.current = targetDeviceId
-    }
+  // El estado guarda el id del dispositivo al que pertenece cada resultado, en lugar
+  // de vaciarse con setState dentro de un efecto.
+  //
+  // Antes, un efecto limpiaba telemetryRoute al cambiar de dispositivo. Eso costaba un
+  // render en cascada y, sobre todo, dejaba la ruta del dispositivo ANTERIOR visible
+  // durante el frame en que el fetch del nuevo aun no habia resuelto: el mapa dibujaba
+  // la trayectoria equivocada. Comparando el id en render, el cambio es inmediato.
+  const [telemetry, setTelemetry] = useState({ deviceId: null, route: [] })
 
+  useEffect(() => {
     if (!wantsTelemetry) return undefined
 
     let active = true
-    setLoading(true)
 
     fetchDeviceRouteHistory(targetDeviceId, 250)
-      .then((route) => {
-        if (active) {
-          setTelemetryRoute(route)
-          setLoading(false)
-        }
+      .then((fetchedRoute) => {
+        if (!active) return
+        setTelemetry({ deviceId: targetDeviceId, route: fetchedRoute })
       })
       .catch(() => {
-        if (active) {
-          setTelemetryRoute([])
-          setLoading(false)
-        }
+        // Un fallo se trata como "sin historial" en vez de dejar la ruta anterior.
+        if (!active) return
+        setTelemetry({ deviceId: targetDeviceId, route: [] })
       })
 
     return () => {
@@ -53,7 +49,10 @@ export const useRouteHistory = (entity) => {
     }
   }, [targetDeviceId, wantsTelemetry])
 
-  const route = embedded.length >= 2 ? embedded : telemetryRoute
+  const hasEmbeddedRoute = embedded.length >= 2
+  // loading = hay un fetch en vuelo y aun no hay resultado para ESTE dispositivo.
+  const loading = wantsTelemetry && telemetry.deviceId !== targetDeviceId
+  const route = hasEmbeddedRoute ? embedded : (loading ? [] : telemetry.route)
 
-  return { route, loading, hasEmbeddedRoute: embedded.length >= 2 }
+  return { route, loading, hasEmbeddedRoute }
 }
