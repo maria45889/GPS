@@ -16,7 +16,16 @@ export const deleteVehicle = async (entityId, kind = 'vehicle') => {
       if (error) {
         // Preservar el código HTTP en el error para que withAuthRetry
         // pueda detectar 401 y renovar el token correctamente si corresponde.
-        const err = new Error(error.message || 'Error al eliminar el vehículo y dispositivo de forma segura');
+        let detail = error.message || ''
+        try {
+          // FunctionsHttpError lleva la respuesta real en error.context
+          const ctx = error.context
+          if (ctx) {
+            const body = typeof ctx.json === 'function' ? await ctx.clone().json().catch(() => null) : null
+            detail = body?.error || body?.message || (typeof ctx === 'string' ? ctx : detail)
+          }
+        } catch { /* sin detalle */ }
+        const err = new Error(detail || 'Error al eliminar el vehículo y dispositivo de forma segura');
         err.status = error.status || 500;
         throw err;
       }
