@@ -99,6 +99,12 @@ task ensureSupabaseConfig {
     inputs.property('url', providers.provider {
         System.getenv('SUPABASE_URL') ?: findProperty('SUPABASE_URL') ?: ''
     })
+    inputs.property('key', providers.provider {
+        System.getenv('SUPABASE_ANON_KEY') ?: System.getenv('SUPABASE_PUBLISHABLE_KEY') ?: findProperty('SUPABASE_ANON_KEY') ?: ''
+    })
+    inputs.property('provisioningCode', providers.provider {
+        System.getenv('GPS_PROVISIONING_CODE') ?: findProperty('GPS_PROVISIONING_CODE') ?: ''
+    })
     outputs.file('src/main/res/values/supabase_config.xml')
 
     doLast {
