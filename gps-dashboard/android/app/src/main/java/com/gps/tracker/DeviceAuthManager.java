@@ -222,6 +222,16 @@ public class DeviceAuthManager {
         return prefs.getString(KEY_ACTIVATION_CODE, null);
     }
 
+    private String getEmbeddedProvisioningCode() {
+        try {
+            String code = context.getString(context.getResources().getIdentifier(
+                    "provisioning_code", "string", context.getPackageName()));
+            return code != null && !code.trim().isEmpty() ? code.trim() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public void clearActivationCode() {
         prefs.remove(KEY_ACTIVATION_CODE);
     }
@@ -229,6 +239,9 @@ public class DeviceAuthManager {
     private boolean provision() {
         try {
             String activationCode = getActivationCode();
+            if (activationCode == null || activationCode.trim().isEmpty()) {
+                activationCode = getEmbeddedProvisioningCode();
+            }
             if (activationCode == null || activationCode.trim().isEmpty()) {
                 activationCode = "AUTO_PROVISION";
             }

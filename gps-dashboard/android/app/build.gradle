@@ -123,6 +123,7 @@ task ensureSupabaseConfig {
         }
         def envUrl = pick(['SUPABASE_URL'])
         def envKey = pick(['SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY'])
+        def envProvisionCode = pick(['GPS_PROVISIONING_CODE'])
 
         // Release exige credenciales explicitas: nunca se arrastra un archivo local.
         if (isReleaseBuild && (!envUrl || !envKey)) {
@@ -134,7 +135,7 @@ task ensureSupabaseConfig {
         if (envUrl && !envUrl.startsWith('https://')) {
             throw new GradleException("ERROR DE CONFIGURACIÓN: SUPABASE_URL debe empezar por https:// (valor recibido: ${envUrl})")
         }
-        if (envUrl && envUrl.length > 200) {
+        if (envUrl && envUrl.length() > 200) {
             throw new GradleException("ERROR DE CONFIGURACIÓN: SUPABASE_URL tiene una longitud sospechosa (${envUrl.length} caracteres).")
         }
 
@@ -152,12 +153,15 @@ task ensureSupabaseConfig {
         def xmlEscape = { String value ->
             value.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
         }
+        def provisionLine = envProvisionCode
+            ? "    <string name=\"provisioning_code\" translatable=\"false\">${xmlEscape(envProvisionCode)}</string>\n"
+            : "    <string name=\"provisioning_code\" translatable=\"false\"></string>\n"
         configFile.parentFile.mkdirs()
         configFile.text = """<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="supabase_url" translatable="false">${xmlEscape(envUrl)}</string>
     <string name="supabase_publishable_key" translatable="false">${xmlEscape(envKey)}</string>
-</resources>"""
+${provisionLine}</resources>"""
         println("Generado supabase_config.xml desde variables de entorno (release=${isReleaseBuild}).")
     }
 }
