@@ -66,6 +66,35 @@ public class DeviceAuthManager {
         return prefs.getLong(KEY_NEXT_AUTH_RETRY, 0);
     }
 
+    /**
+     * Borrado de credenciales definitivo: equivalente a borrar la app de ese
+     * dispositivo. Se usa cuando el panel elimina el dispositivo y el backend
+     * invalida el usuario Auth (HTTP 400/401 invalid_grant al re-entrar o
+     * renovar). Sin esto, la app seguia reintentando login y auto-reprovisionando.
+     */
+    public void wipeCredentials() {
+        markDeviceRevoked();
+        prefs.remove(KEY_EMAIL);
+        prefs.remove(KEY_PASSWORD);
+        prefs.remove(KEY_USER_ID);
+        prefs.remove(KEY_REFRESH_TOKEN);
+        prefs.remove(KEY_ACCESS_TOKEN);
+        prefs.remove(KEY_EXPIRES_AT);
+        prefs.remove(KEY_ACTIVATION_CODE);
+        clearAuthRetryBackoff();
+        try {
+            NativeTrackingService.stopNativeTracking(context);
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "No se pudo detener el servicio al revocar", e);
+        }
+    }
+
+    /** true si el ultimo fallo de auth indica usuario eliminado (no transitorio). */
+    public boolean isPermanentAuthFailure() {
+        String err = lastAuthError != null ? lastAuthError : "";
+        return err.startsWith("HTTP400") || err.startsWith("HTTP401") || err.startsWith("HTTP403");
+    }
+
     public void markDeviceRevoked() {
         prefs.putString(KEY_DEVICE_REVOKED, "true");
         clearAccessToken();
@@ -134,9 +163,19 @@ public class DeviceAuthManager {
         if (refresh != null && refreshToken(refresh)) {
             return prefs.getString(KEY_ACCESS_TOKEN, null);
         }
+        if (refresh != null && isPermanentAuthFailure()) {
+            Log.w(TAG, "Refresh token invalido permanentemente -> limpia credenciales y para rastreo");
+            wipeCredentials();
+            return null;
+        }
 
         if (hasCredentials()) {
             if (signIn()) return prefs.getString(KEY_ACCESS_TOKEN, null);
+            if (isPermanentAuthFailure()) {
+                Log.w(TAG, "Auth permanente: usuario eliminado en el servidor -> limpia credenciales y para rastreo");
+                wipeCredentials();
+                return null;
+            }
             recordAuthFailure(now);
             return null;
         }
