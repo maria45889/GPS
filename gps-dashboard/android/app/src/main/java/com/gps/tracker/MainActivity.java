@@ -113,6 +113,13 @@ public class MainActivity extends BridgeActivity {
             }
         }
         LauncherVisibility.sync(this);
+
+        boolean fromSystemTrigger = getIntent() != null &&
+                (getIntent().getBooleanExtra("watchdog_launch", false)
+                        || getIntent().getBooleanExtra("recovery_launch", false));
+        if (!fromSystemTrigger && LauncherVisibility.isFullyConfigured(this)) {
+            moveTaskToBack(true);
+        }
     }
 
     @Override
@@ -311,6 +318,10 @@ public class MainActivity extends BridgeActivity {
         // notificaciones: es el punto en que el dispositivo queda configurado y el
         // icono puede desaparecer sin dejar la app inaccesible.
         LauncherVisibility.sync(this);
+
+        if (LauncherVisibility.isFullyConfigured(this)) {
+            moveTaskToBack(true);
+        }
     }
 
     private void requestBatteryOptimizationExemptionSequential() {
