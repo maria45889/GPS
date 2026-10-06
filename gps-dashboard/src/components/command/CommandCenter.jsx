@@ -310,7 +310,7 @@ const CommandCenter = () => {
 
       {/* Panel izquierdo - Detalle (condicional render) */}
       {(isDesktop || (detailOpen && active)) && (
-        <div className={`pointer-events-none absolute ${isDesktop ? 'left-4 top-[150px] bottom-36 xl:block hidden' : 'inset-x-0 bottom-36 mx-auto w-[94%] max-w-md'} z-[45]`}>
+        <div className={`pointer-events-none absolute ${isDesktop ? 'left-4 top-[150px] bottom-36 xl:block hidden' : 'inset-x-0 top-[150px] bottom-36 mx-auto w-[94%] max-w-md'} z-[45]`}>
           <div className="pointer-events-auto max-h-full overflow-y-auto cmd-scroll">
             <div className={!isDesktop ? "relative rounded-2xl border border-cyan-500/25 bg-slate-900/90 p-3 shadow-[0_0_30px_rgba(6,182,212,0.25)] backdrop-blur-md" : ""}>
               {!isDesktop && (

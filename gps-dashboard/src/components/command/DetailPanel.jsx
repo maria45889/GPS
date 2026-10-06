@@ -37,7 +37,7 @@ const DetailPanel = ({
   }, [confirmingDelete])
 
   return (
-    <div className="flex w-[min(304px,calc(100vw - 48px))] flex-col rounded-2xl border border-cyan-500/20 bg-slate-900/60 p-4 shadow-[0_0_25px_rgba(6,182,212,0.12)] backdrop-blur-md">
+    <div className="flex w-full max-w-[304px] flex-col rounded-2xl border border-cyan-500/20 bg-slate-900/60 p-4 shadow-[0_0_25px_rgba(6,182,212,0.12)] backdrop-blur-md">
       {/* Header */}
       <div className="flex items-start justify-between gap-2 border-b border-cyan-500/10 pb-3">
         <div className="min-w-0">
