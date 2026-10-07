@@ -159,7 +159,7 @@
 
 /* El mapa base usará sus colores originales para máxima claridad y lectura de las calles. */
 .cyber-tiles.dark-mode .leaflet-tile-pane {
-  filter: brightness(0.9) contrast(1.05) !important;
+  filter: none !important;
 }
 
 .header-status,
@@ -705,7 +705,7 @@
 }
 
 .reference-dashboard .cyber-tiles .leaflet-tile {
-  filter: brightness(0.7) contrast(1.2) hue-rotate(100deg) !important;
+  filter: none !important;
 }
 
 .reference-dashboard .leaflet-container {
@@ -1304,7 +1304,7 @@
 
 /* Mapa: neón cian sobre base oscura */
 .cmd-center .cyber-tiles .leaflet-tile {
-  filter: saturate(1.9) hue-rotate(158deg) brightness(0.88) contrast(1.28) !important;
+  filter: none !important;
 }
 
 /* Ruta a seguir animada (dash que fluye por la carretera) */

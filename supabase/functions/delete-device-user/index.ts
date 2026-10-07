@@ -273,8 +273,18 @@ serve(async (req) => {
 
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetAuthUserId)
     if (deleteError) {
-      console.error(`Error deleting user ${targetAuthUserId}:`, deleteError)
-      return json({ error: 'Failed to delete auth user, aborting vehicle deletion' }, 500, origin)
+      const msg = String(deleteError?.message || '').toLowerCase()
+      const code = String((deleteError as { code?: string })?.code || '').toLowerCase()
+      const status = (deleteError as { status?: number })?.status
+      // Usuario Auth ya inexistente (p. ej. dispositivo fantasma cuya cuenta
+      // ya se borro pero quedo la fila en devices): no es fatal, hay que seguir
+      // con la limpieza de la fila para no dejar el dispositivo huerfano.
+      const yaNoExiste = status === 404 || code.includes('not_found') || msg.includes('not found') || msg.includes('user_not_found')
+      if (!yaNoExiste) {
+        console.error(`Error deleting user ${targetAuthUserId}:`, deleteError)
+        return json({ error: 'Failed to delete auth user, aborting vehicle deletion' }, 500, origin)
+      }
+      console.warn(`Auth user ${targetAuthUserId} ya no existia; se continua con la limpieza.`)
     }
   }
 

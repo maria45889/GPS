@@ -111,10 +111,14 @@ const MapArea = ({
         
         <TileLayer
           url={baseLayer === 'satellite'
-            ? 'https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
-            : 'https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'}
-          subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
-          attribution="&copy; Google Maps"
+            ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            : baseLayer === 'dark'
+              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'}
+          subdomains={['a', 'b', 'c', 'd']}
+          attribution={baseLayer === 'satellite'
+            ? '&copy; Esri, Maxar, Earthstar Geographics'
+            : '&copy; OpenStreetMap contributors &copy; CARTO'}
           maxZoom={21}
           maxNativeZoom={20}
           keepBuffer={6}
@@ -264,15 +268,10 @@ const MapArea = ({
           </div>
         )}
 
-        {/* Atribucion: las tiles de arriba son de Google (vt/lyrs=m y vt/lyrs=y), no de
-            Esri ni de OSM. Antes se acreditaba a Esri/OpenStreetMap mientras se servian
-            tiles de Google, que es una atribucion falsa. Leaflet ya pinta su propia
-            atribucion, aqui solo se replica el enlace para que siga siendo visible con
-            los estilos del panel. */}
         <div className="absolute bottom-2 right-4 pointer-events-auto">
           <div />
           <div className="text-gray-500 text-xs">
-            <a href="https://developers.google.com/maps/documentation/javascript" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">Google Maps</a>
+            <a href="https://carto.com/" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">CARTO</a>
           </div>
         </div>
       </div>

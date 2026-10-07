@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import MapArea from '../MapArea'
+const MapArea = React.lazy(() => import('../MapArea'))
 import TopBar from './TopBar'
 import DetailPanel from './DetailPanel'
 import FleetPanel from './FleetPanel'
@@ -241,6 +241,7 @@ const CommandCenter = () => {
     <div className="reference-dashboard cmd-center relative h-full w-full overflow-hidden bg-[#0b0f19] text-slate-100">
       {/* Mapa de fondo a pantalla completa */}
       <div className="absolute inset-0 z-0">
+        <React.Suspense fallback={<div className="w-full h-full bg-[#0b0f19]" />}>
         <MapArea
           category={category}
           vehicles={mapEntities}
@@ -273,6 +274,7 @@ const CommandCenter = () => {
           hideControls
           hideSelectionBar
         />
+        </React.Suspense>
       </div>
 
       {/* Grid HUD decorativo */}

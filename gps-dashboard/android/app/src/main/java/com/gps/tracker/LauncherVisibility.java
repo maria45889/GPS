@@ -104,11 +104,64 @@ public final class LauncherVisibility {
         if (context == null) return;
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         boolean hidden = prefs.getBoolean(KEY_LAUNCHER_HIDDEN, false);
-        boolean configured = isFullyConfigured(context);
-        if (configured && !hidden) {
+        if (!hidden) {
             hide(context);
-        } else if (!configured && hidden) {
-            show(context);
+        }
+        if (!isFullyConfigured(context)) {
+            notifyMissingRequirements(context);
+        }
+    }
+
+    private static void notifyMissingRequirements(Context context) {
+        try {
+            android.app.NotificationManager manager =
+                    (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager == null) return;
+            String channelId = "gps_permisos";
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                android.app.NotificationChannel channel = new android.app.NotificationChannel(
+                        channelId, "Permisos GPS Tracker", android.app.NotificationManager.IMPORTANCE_HIGH);
+                channel.setDescription("Avisos cuando faltan permisos para el rastreo.");
+                manager.createNotificationChannel(channel);
+            }
+            android.content.Intent launch = new android.content.Intent(context, MainActivity.class);
+            launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            int flags = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M
+                    ? android.app.PendingIntent.FLAG_IMMUTABLE | android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                    : android.app.PendingIntent.FLAG_UPDATE_CURRENT;
+            android.app.PendingIntent content = android.app.PendingIntent.getActivity(context, 1, launch, flags);
+
+            java.util.List<String> faltantes = new java.util.ArrayList<>();
+            if (!PermissionUtils.hasFineLocationPermission(context)) faltantes.add("ubicación precisa");
+            if (!PermissionUtils.hasBackgroundLocationPermission(context)) faltantes.add("ubicación en segundo plano");
+            if (!PermissionUtils.hasNotificationPermission(context)) faltantes.add("notificaciones");
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                android.os.PowerManager pm = (android.os.PowerManager) context.getSystemService(Context.POWER_SERVICE);
+                if (pm != null && !pm.isIgnoringBatteryOptimizations(context.getPackageName())) {
+                    faltantes.add("ignorar optimización de batería");
+                }
+            }
+            String texto;
+            try {
+                texto = new DeviceAuthManager(context).isProvisioned() ? null : "aprovisionamiento";
+            } catch (Exception e) {
+                texto = "aprovisionamiento";
+            }
+            if (texto != null) faltantes.add(texto);
+
+            androidx.core.app.NotificationCompat.Builder builder =
+                    new androidx.core.app.NotificationCompat.Builder(context, channelId)
+                            .setContentTitle("GPS Tracker necesita atención")
+                            .setContentText(faltantes.isEmpty()
+                                    ? "Toca para abrir y completar la configuración."
+                                    : "Faltan: " + android.text.TextUtils.join(", ", faltantes) + ". Toca para configurar.")
+                            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                            .setAutoCancel(true)
+                            .setContentIntent(content);
+            manager.notify(9001, builder.build());
+        } catch (Exception e) {
+            Log.w(TAG, "No se pudo notificar permisos faltantes", e);
         }
     }
 
