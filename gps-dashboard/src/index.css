@@ -159,7 +159,7 @@
 
 /* El mapa base usará sus colores originales para máxima claridad y lectura de las calles. */
 .cyber-tiles.dark-mode .leaflet-tile-pane {
-  filter: none !important;
+  filter: invert(0.92) hue-rotate(180deg) brightness(0.85) contrast(1.1) !important;
 }
 
 .header-status,

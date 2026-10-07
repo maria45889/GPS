@@ -112,13 +112,11 @@ const MapArea = ({
         <TileLayer
           url={baseLayer === 'satellite'
             ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            : baseLayer === 'dark'
-              ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-              : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'}
-          subdomains={['a', 'b', 'c', 'd']}
+            : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'}
+          subdomains={[]}
           attribution={baseLayer === 'satellite'
             ? '&copy; Esri, Maxar, Earthstar Geographics'
-            : '&copy; OpenStreetMap contributors &copy; CARTO'}
+            : '&copy; OpenStreetMap contributors'}
           maxZoom={21}
           maxNativeZoom={20}
           keepBuffer={6}
@@ -271,7 +269,7 @@ const MapArea = ({
         <div className="absolute bottom-2 right-4 pointer-events-auto">
           <div />
           <div className="text-gray-500 text-xs">
-            <a href="https://carto.com/" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">CARTO</a>
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">OpenStreetMap</a>
           </div>
         </div>
       </div>
